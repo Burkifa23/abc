@@ -26,6 +26,7 @@ labs: [<lab slugs that use this, optional>]
 ---
 import Quiz from "../../../components/Quiz.astro";
 import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./<NN-slug>";   {/* sidecar <NN-slug>.ts, see below */}
 
 <Hook paragraph: a concrete campus or civic situation the concept solves>
 
@@ -37,7 +38,16 @@ import CodeExercise from "../../../components/CodeExercise.astro";
 <CodeExercise id="ex1" {...exercises["ex1"]} />   {/* when the table names an exercise; literal id="…" stays FIRST */}
 
 ## Check your understanding
-<Quiz questions={[ /* ≥ 5: at least 2 "what does this code do", 1 "spot the bug", explanations for every option set */ ]} />
+<Quiz questions={quiz} />
+```
+
+Sidecar `<NN-slug>.ts` next to each lesson (quiz of ≥ 5: at least 2 "what does this code do", 1 "spot the bug", an `explain` for every question; `exercises` may be `{}`):
+
+```ts
+import type { Question } from "../../../lib/quiz";
+import type { Check } from "../../../lib/checks";
+export const quiz: Question[] = [ /* … */ ];
+export const exercises: Record<string, { starter: string; solution: string; checks: Check[] }> = { /* "ex1": { starter: `…`, solution: `…`, checks: [{ type: "compiles" }, …] } */ };
 ```
 
 - Every lesson passes `bun test src/content/lessons.test.ts` (quiz rules + exercises compiled with solc 0.8.38: starter fails, solution passes, `compiles` check present).
