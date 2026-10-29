@@ -88,21 +88,21 @@ The details, such as what `indexed` does, belong to the Contracts chapter.
 An *error* gives a failure a descriptive name and, optionally, typed data. You raise it with `revert`:
 
 ```solidity
-/// Not enough credit. Wanted `wanted`, but only `have` is left.
-error LowCredit(uint256 wanted, uint256 have);
+/// The meal costs `price` but the card holds only `balance`.
+error CardTooLow(uint256 price, uint256 balance);
 
 contract Canteen {
-    mapping(address => uint256) credit;
+    mapping(address => uint256) cardBalance;
 
     function pay(uint256 price) external {
-        uint256 have = credit[msg.sender];
-        if (have < price) revert LowCredit(price, have);
-        credit[msg.sender] = have - price;
+        uint256 balance = cardBalance[msg.sender];
+        if (balance < price) revert CardTooLow(price, balance);
+        cardBalance[msg.sender] = balance - price;
     }
 }
 ```
 
-Compared with a string message, a custom error is much cheaper and can carry data, such as what was asked and what was available. The comment above the error is NatSpec, which wallets can show to a user (the previous lesson covered NatSpec). Like events, errors can be declared at file level.
+Compared with a string message, a custom error is much cheaper and can carry data, such as the price and the balance. The comment above the error is NatSpec, which wallets can show to a user (the previous lesson covered NatSpec). Like events, errors can be declared at file level.
 
 ## Struct types
 

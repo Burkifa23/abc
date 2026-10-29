@@ -73,6 +73,8 @@ contract ClubRegister {
       { type: "regex", pattern: "chair\\s*=\\s*msg\\.sender\\s*;", message: "The deployer becomes chair" },
       { type: "regex", pattern: "emit\\s+Joined\\s*\\(", message: "join emits Joined" },
       { type: "regex", pattern: "memberCount\\s*(\\+\\+|\\+=)", message: "join increases memberCount" },
+      { type: "regex", pattern: "function\\s+join\\s*\\([^)]*\\)[^{]*\\bonlyChair\\b", message: "join is guarded by onlyChair" },
+      { type: "regex", pattern: "members\\s*\\[\\s*who\\s*\\]\\s*=", message: "join stores the member in members[who]" },
       { type: "abi", contract: "ClubRegister", kind: "error", name: "NotChair", inputs: [], message: "Has error NotChair()" },
       { type: "abi", contract: "ClubRegister", kind: "event", name: "Joined", inputs: ["address", "string"], message: "Has event Joined(address,string)" },
       { type: "abi", contract: "ClubRegister", kind: "function", name: "join", inputs: ["address", "string"], stateMutability: "nonpayable", message: "Has join(address,string)" },

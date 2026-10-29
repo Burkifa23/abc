@@ -58,6 +58,7 @@ contract Hostel {
     }
 
     /// @notice Number of rooms in each block
+    /// @dev Used by the allocator to size its lookup table
     function blockSize() external pure virtual returns (uint256) {
         return 10;
     }
@@ -106,7 +107,7 @@ An overriding function with no NatSpec of its own may inherit the docs of the fu
 - there is more than one base function, or
 - you wrote `@inheritdoc ContractName`, which makes you responsible for naming the source.
 
-In the example above, `AnnexHostel.blockSize` writes its own sentence and also says `@inheritdoc Hostel`, so any tag it does not state itself (here the `@notice`) is copied from `Hostel`.
+In the example above, `AnnexHostel.blockSize` writes its own sentence (an untagged line counts as its `@notice`) and also says `@inheritdoc Hostel`. `@inheritdoc` copies only the tags that are *missing*, so the annex keeps its own notice and picks up the `@dev` line from `Hostel`.
 
 ## What the compiler produces
 
@@ -141,7 +142,8 @@ The **developer documentation** carries the rest:
       "details": "Ten rooms per block, counting from zero",
       "params": { "room": "the room number" },
       "returns": { "block_": "the block index", "floor_": "the floor inside that block" }
-    }
+    },
+    "blockSize()": { "details": "Used by the allocator to size its lookup table" }
   }
 }
 ```
