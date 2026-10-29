@@ -1,0 +1,918 @@
+[
+ {
+  "id": "Getting Started",
+  "page": 7
+ },
+ {
+  "id": "Translations",
+  "page": 9
+ },
+ {
+  "id": "Introduction to Smart Contracts",
+  "page": 11
+ },
+ {
+  "id": "Introduction to Smart Contracts > A Simple Smart Contract",
+  "page": 11
+ },
+ {
+  "id": "Introduction to Smart Contracts > Blockchain Basics",
+  "page": 14
+ },
+ {
+  "id": "Introduction to Smart Contracts > The Ethereum Virtual Machine",
+  "page": 15
+ },
+ {
+  "id": "Solidity by Example",
+  "page": 20
+ },
+ {
+  "id": "Solidity by Example > Voting",
+  "page": 20
+ },
+ {
+  "id": "Solidity by Example > Blind Auction",
+  "page": 23
+ },
+ {
+  "id": "Solidity by Example > Safe Remote Purchase",
+  "page": 30
+ },
+ {
+  "id": "Solidity by Example > Micropayment Channel",
+  "page": 32
+ },
+ {
+  "id": "Solidity by Example > Modular Contracts",
+  "page": 41
+ },
+ {
+  "id": "Installing the Solidity Compiler",
+  "page": 42
+ },
+ {
+  "id": "Installing the Solidity Compiler > Versioning",
+  "page": 42
+ },
+ {
+  "id": "Installing the Solidity Compiler > Remix",
+  "page": 43
+ },
+ {
+  "id": "Installing the Solidity Compiler > npm / Node.js",
+  "page": 43
+ },
+ {
+  "id": "Installing the Solidity Compiler > Docker",
+  "page": 43
+ },
+ {
+  "id": "Installing the Solidity Compiler > Linux Packages",
+  "page": 44
+ },
+ {
+  "id": "Installing the Solidity Compiler > macOS Packages",
+  "page": 45
+ },
+ {
+  "id": "Installing the Solidity Compiler > Static Binaries",
+  "page": 45
+ },
+ {
+  "id": "Installing the Solidity Compiler > Building from Source",
+  "page": 47
+ },
+ {
+  "id": "Installing the Solidity Compiler > CMake Options",
+  "page": 50
+ },
+ {
+  "id": "Installing the Solidity Compiler > The Version String in Detail",
+  "page": 50
+ },
+ {
+  "id": "Installing the Solidity Compiler > Important Information About Versioning",
+  "page": 50
+ },
+ {
+  "id": "Layout of a Solidity Source File",
+  "page": 51
+ },
+ {
+  "id": "Layout of a Solidity Source File > SPDX License Identifier",
+  "page": 51
+ },
+ {
+  "id": "Layout of a Solidity Source File > Pragmas",
+  "page": 51
+ },
+ {
+  "id": "Layout of a Solidity Source File > Importing other Source Files",
+  "page": 53
+ },
+ {
+  "id": "Layout of a Solidity Source File > Comments",
+  "page": 54
+ },
+ {
+  "id": "Structure of a Contract",
+  "page": 54
+ },
+ {
+  "id": "Structure of a Contract > State Variables",
+  "page": 54
+ },
+ {
+  "id": "Structure of a Contract > Functions",
+  "page": 54
+ },
+ {
+  "id": "Structure of a Contract > Function Modifiers",
+  "page": 55
+ },
+ {
+  "id": "Structure of a Contract > Events",
+  "page": 55
+ },
+ {
+  "id": "Structure of a Contract > Errors",
+  "page": 56
+ },
+ {
+  "id": "Structure of a Contract > Struct Types",
+  "page": 56
+ },
+ {
+  "id": "Structure of a Contract > Enum Types",
+  "page": 57
+ },
+ {
+  "id": "Types",
+  "page": 57
+ },
+ {
+  "id": "Types > Value Types",
+  "page": 57
+ },
+ {
+  "id": "Types > Reference Types",
+  "page": 75
+ },
+ {
+  "id": "Types > Mapping Types",
+  "page": 87
+ },
+ {
+  "id": "Types > Operators",
+  "page": 91
+ },
+ {
+  "id": "Types > Conversions between Elementary Types",
+  "page": 93
+ },
+ {
+  "id": "Types > Conversions between Literals and Elementary Types",
+  "page": 95
+ },
+ {
+  "id": "Units and Globally Available Variables",
+  "page": 96
+ },
+ {
+  "id": "Units and Globally Available Variables > Ether Units",
+  "page": 96
+ },
+ {
+  "id": "Units and Globally Available Variables > Time Units",
+  "page": 96
+ },
+ {
+  "id": "Units and Globally Available Variables > Special Variables and Functions",
+  "page": 97
+ },
+ {
+  "id": "Units and Globally Available Variables > Reserved Keywords",
+  "page": 104
+ },
+ {
+  "id": "Expressions and Control Structures",
+  "page": 104
+ },
+ {
+  "id": "Expressions and Control Structures > Control Structures",
+  "page": 104
+ },
+ {
+  "id": "Expressions and Control Structures > Function Calls",
+  "page": 104
+ },
+ {
+  "id": "Expressions and Control Structures > Creating Contracts via new",
+  "page": 107
+ },
+ {
+  "id": "Expressions and Control Structures > Order of Evaluation of Expressions",
+  "page": 109
+ },
+ {
+  "id": "Expressions and Control Structures > Assignment",
+  "page": 109
+ },
+ {
+  "id": "Expressions and Control Structures > Scoping and Declarations",
+  "page": 110
+ },
+ {
+  "id": "Expressions and Control Structures > Checked or Unchecked Arithmetic",
+  "page": 112
+ },
+ {
+  "id": "Expressions and Control Structures > Error handling: Assert, Require, Revert and Exceptions",
+  "page": 113
+ },
+ {
+  "id": "Contracts",
+  "page": 118
+ },
+ {
+  "id": "Contracts > Creating Contracts",
+  "page": 118
+ },
+ {
+  "id": "Contracts > Visibility and Getters",
+  "page": 120
+ },
+ {
+  "id": "Contracts > Function Modifiers",
+  "page": 124
+ },
+ {
+  "id": "Contracts > Transient Storage",
+  "page": 126
+ },
+ {
+  "id": "Contracts > Composability of Smart Contracts and the Caveats of Transient Storage",
+  "page": 127
+ },
+ {
+  "id": "Contracts > Constant and Immutable State Variables",
+  "page": 128
+ },
+ {
+  "id": "Contracts > Custom Storage Layout",
+  "page": 130
+ },
+ {
+  "id": "Contracts > Functions",
+  "page": 131
+ },
+ {
+  "id": "Contracts > Events",
+  "page": 140
+ },
+ {
+  "id": "Contracts > Custom Errors",
+  "page": 142
+ },
+ {
+  "id": "Contracts > Inheritance",
+  "page": 144
+ },
+ {
+  "id": "Contracts > Abstract Contracts",
+  "page": 154
+ },
+ {
+  "id": "Contracts > Interfaces",
+  "page": 155
+ },
+ {
+  "id": "Contracts > Libraries",
+  "page": 156
+ },
+ {
+  "id": "Contracts > Using For",
+  "page": 161
+ },
+ {
+  "id": "Inline Assembly",
+  "page": 164
+ },
+ {
+  "id": "Inline Assembly > Example",
+  "page": 164
+ },
+ {
+  "id": "Inline Assembly > Access to External Variables, Functions and Libraries",
+  "page": 166
+ },
+ {
+  "id": "Inline Assembly > Things to Avoid",
+  "page": 167
+ },
+ {
+  "id": "Inline Assembly > Conventions in Solidity",
+  "page": 167
+ },
+ {
+  "id": "Inline Assembly > Advanced Safe Use of Memory",
+  "page": 170
+ },
+ {
+  "id": "Cheatsheet",
+  "page": 170
+ },
+ {
+  "id": "Cheatsheet > Order of Precedence of Operators",
+  "page": 170
+ },
+ {
+  "id": "Cheatsheet > ABI Encoding and Decoding Functions",
+  "page": 171
+ },
+ {
+  "id": "Cheatsheet > Members of bytes and string",
+  "page": 171
+ },
+ {
+  "id": "Cheatsheet > Members of address",
+  "page": 172
+ },
+ {
+  "id": "Cheatsheet > Block and Transaction Properties",
+  "page": 172
+ },
+ {
+  "id": "Cheatsheet > Validations and Assertions",
+  "page": 173
+ },
+ {
+  "id": "Cheatsheet > Mathematical and Cryptographic Functions",
+  "page": 173
+ },
+ {
+  "id": "Cheatsheet > Contract-related",
+  "page": 173
+ },
+ {
+  "id": "Cheatsheet > Type Information",
+  "page": 173
+ },
+ {
+  "id": "Cheatsheet > Function Visibility Specifiers",
+  "page": 174
+ },
+ {
+  "id": "Cheatsheet > Modifiers",
+  "page": 174
+ },
+ {
+  "id": "Language Grammar",
+  "page": 174
+ },
+ {
+  "id": "Using the Compiler",
+  "page": 202
+ },
+ {
+  "id": "Using the Compiler > Using the Commandline Compiler",
+  "page": 202
+ },
+ {
+  "id": "Using the Compiler > Setting the EVM Version to Target",
+  "page": 204
+ },
+ {
+  "id": "Using the Compiler > Compiler Input and Output JSON Description",
+  "page": 206
+ },
+ {
+  "id": "Using the Compiler > Experimental Mode",
+  "page": 218
+ },
+ {
+  "id": "Analysing the Compiler Output",
+  "page": 219
+ },
+ {
+  "id": "Solidity IR-based Codegen Changes",
+  "page": 222
+ },
+ {
+  "id": "Solidity IR-based Codegen Changes > Semantic Only Changes",
+  "page": 222
+ },
+ {
+  "id": "Solidity IR-based Codegen Changes > Internals",
+  "page": 226
+ },
+ {
+  "id": "Layout of State Variables in Storage and Transient Storage",
+  "page": 227
+ },
+ {
+  "id": "Layout of State Variables in Storage and Transient Storage > Mappings and Dynamic Arrays",
+  "page": 230
+ },
+ {
+  "id": "Layout of State Variables in Storage and Transient Storage > JSON Output",
+  "page": 231
+ },
+ {
+  "id": "Layout in Memory",
+  "page": 237
+ },
+ {
+  "id": "Layout in Memory > Differences to Layout in Storage",
+  "page": 237
+ },
+ {
+  "id": "Layout of Call Data",
+  "page": 238
+ },
+ {
+  "id": "Cleaning Up Variables",
+  "page": 238
+ },
+ {
+  "id": "Source Mappings",
+  "page": 239
+ },
+ {
+  "id": "The Optimizer",
+  "page": 240
+ },
+ {
+  "id": "The Optimizer > Benefits of Optimizing Solidity Code",
+  "page": 241
+ },
+ {
+  "id": "The Optimizer > Differences between Optimized and Non-Optimized Code",
+  "page": 241
+ },
+ {
+  "id": "The Optimizer > Optimizer Parameter Runs",
+  "page": 241
+ },
+ {
+  "id": "The Optimizer > Opcode-Based Optimizer Module",
+  "page": 241
+ },
+ {
+  "id": "The Optimizer > Yul-Based Optimizer Module",
+  "page": 244
+ },
+ {
+  "id": "The Optimizer > Codegen-Based Optimizer Module",
+  "page": 259
+ },
+ {
+  "id": "Contract Metadata",
+  "page": 260
+ },
+ {
+  "id": "Contract Metadata > Encoding of the Metadata Hash in the Bytecode",
+  "page": 264
+ },
+ {
+  "id": "Contract Metadata > Usage for Automatic Interface Generation and NatSpec",
+  "page": 264
+ },
+ {
+  "id": "Contract Metadata > Usage for Source Code Verification",
+  "page": 265
+ },
+ {
+  "id": "Contract ABI Specification",
+  "page": 265
+ },
+ {
+  "id": "Contract ABI Specification > Basic Design",
+  "page": 265
+ },
+ {
+  "id": "Contract ABI Specification > Function Selector",
+  "page": 265
+ },
+ {
+  "id": "Contract ABI Specification > Argument Encoding",
+  "page": 265
+ },
+ {
+  "id": "Contract ABI Specification > Types",
+  "page": 265
+ },
+ {
+  "id": "Contract ABI Specification > Design Criteria for the Encoding",
+  "page": 267
+ },
+ {
+  "id": "Contract ABI Specification > Formal Specification of the Encoding",
+  "page": 267
+ },
+ {
+  "id": "Contract ABI Specification > Function Selector and Argument Encoding",
+  "page": 268
+ },
+ {
+  "id": "Contract ABI Specification > Examples",
+  "page": 268
+ },
+ {
+  "id": "Contract ABI Specification > Use of Dynamic Types",
+  "page": 270
+ },
+ {
+  "id": "Contract ABI Specification > Events",
+  "page": 273
+ },
+ {
+  "id": "Contract ABI Specification > Errors",
+  "page": 274
+ },
+ {
+  "id": "Contract ABI Specification > JSON",
+  "page": 274
+ },
+ {
+  "id": "Contract ABI Specification > Strict Encoding Mode",
+  "page": 278
+ },
+ {
+  "id": "Contract ABI Specification > Non-standard Packed Mode",
+  "page": 278
+ },
+ {
+  "id": "Contract ABI Specification > Encoding of Indexed Event Parameters",
+  "page": 279
+ },
+ {
+  "id": "Security Considerations",
+  "page": 279
+ },
+ {
+  "id": "Security Considerations > Pitfalls",
+  "page": 280
+ },
+ {
+  "id": "Security Considerations > Recommendations",
+  "page": 285
+ },
+ {
+  "id": "List of Known Bugs",
+  "page": 286
+ },
+ {
+  "id": "Frequently Reported Non-Bugs",
+  "page": 313
+ },
+ {
+  "id": "Frequently Reported Non-Bugs > Non-canonical ABI-encoded calldata is accepted",
+  "page": 313
+ },
+ {
+  "id": "Frequently Reported Non-Bugs > Different results between the evmasm and the IR pipeline",
+  "page": 313
+ },
+ {
+  "id": "Frequently Reported Non-Bugs > Order of evaluation",
+  "page": 313
+ },
+ {
+  "id": "Frequently Reported Non-Bugs > Stale references into storage",
+  "page": 313
+ },
+ {
+  "id": "Solidity v0.5.0 Breaking Changes",
+  "page": 313
+ },
+ {
+  "id": "Solidity v0.5.0 Breaking Changes > Semantic Only Changes",
+  "page": 314
+ },
+ {
+  "id": "Solidity v0.5.0 Breaking Changes > Semantic and Syntactic Changes",
+  "page": 314
+ },
+ {
+  "id": "Solidity v0.5.0 Breaking Changes > Explicitness Requirements",
+  "page": 314
+ },
+ {
+  "id": "Solidity v0.5.0 Breaking Changes > Deprecated Elements",
+  "page": 315
+ },
+ {
+  "id": "Solidity v0.5.0 Breaking Changes > Interoperability With Older Contracts",
+  "page": 317
+ },
+ {
+  "id": "Solidity v0.5.0 Breaking Changes > Example",
+  "page": 318
+ },
+ {
+  "id": "Solidity v0.6.0 Breaking Changes",
+  "page": 321
+ },
+ {
+  "id": "Solidity v0.6.0 Breaking Changes > Changes the Compiler Might not Warn About",
+  "page": 321
+ },
+ {
+  "id": "Solidity v0.6.0 Breaking Changes > Explicitness Requirements",
+  "page": 321
+ },
+ {
+  "id": "Solidity v0.6.0 Breaking Changes > Semantic and Syntactic Changes",
+  "page": 322
+ },
+ {
+  "id": "Solidity v0.6.0 Breaking Changes > New Features",
+  "page": 322
+ },
+ {
+  "id": "Solidity v0.6.0 Breaking Changes > Interface Changes",
+  "page": 323
+ },
+ {
+  "id": "Solidity v0.6.0 Breaking Changes > How to update your code",
+  "page": 323
+ },
+ {
+  "id": "Solidity v0.7.0 Breaking Changes",
+  "page": 324
+ },
+ {
+  "id": "Solidity v0.7.0 Breaking Changes > Silent Changes of the Semantics",
+  "page": 324
+ },
+ {
+  "id": "Solidity v0.7.0 Breaking Changes > Changes to the Syntax",
+  "page": 324
+ },
+ {
+  "id": "Solidity v0.7.0 Breaking Changes > Removal of Unused or Unsafe Features",
+  "page": 325
+ },
+ {
+  "id": "Solidity v0.7.0 Breaking Changes > Interface Changes",
+  "page": 325
+ },
+ {
+  "id": "Solidity v0.7.0 Breaking Changes > How to update your code",
+  "page": 325
+ },
+ {
+  "id": "Solidity v0.8.0 Breaking Changes",
+  "page": 326
+ },
+ {
+  "id": "Solidity v0.8.0 Breaking Changes > Silent Changes of the Semantics",
+  "page": 326
+ },
+ {
+  "id": "Solidity v0.8.0 Breaking Changes > New Restrictions",
+  "page": 326
+ },
+ {
+  "id": "Solidity v0.8.0 Breaking Changes > Interface Changes",
+  "page": 328
+ },
+ {
+  "id": "Solidity v0.8.0 Breaking Changes > How to update your code",
+  "page": 328
+ },
+ {
+  "id": "NatSpec Format",
+  "page": 328
+ },
+ {
+  "id": "NatSpec Format > Documentation Example",
+  "page": 329
+ },
+ {
+  "id": "NatSpec Format > Tags",
+  "page": 330
+ },
+ {
+  "id": "NatSpec Format > Documentation Output",
+  "page": 331
+ },
+ {
+  "id": "SMTChecker and Formal Verification",
+  "page": 332
+ },
+ {
+  "id": "SMTChecker and Formal Verification > Tutorial",
+  "page": 334
+ },
+ {
+  "id": "SMTChecker and Formal Verification > SMTChecker Options and Tuning",
+  "page": 340
+ },
+ {
+  "id": "SMTChecker and Formal Verification > Abstraction and False Positives",
+  "page": 346
+ },
+ {
+  "id": "SMTChecker and Formal Verification > Real World Assumptions",
+  "page": 349
+ },
+ {
+  "id": "Yul",
+  "page": 349
+ },
+ {
+  "id": "Yul > Motivation and High-level Description",
+  "page": 350
+ },
+ {
+  "id": "Yul > Simple Example",
+  "page": 350
+ },
+ {
+  "id": "Yul > Stand-Alone Usage",
+  "page": 351
+ },
+ {
+  "id": "Yul > Informal Description of Yul",
+  "page": 351
+ },
+ {
+  "id": "Yul > Specification of Yul",
+  "page": 355
+ },
+ {
+  "id": "Yul > Specification of Yul Object",
+  "page": 365
+ },
+ {
+  "id": "Yul > Yul Optimizer",
+  "page": 367
+ },
+ {
+  "id": "Yul > Complete ERC20 Example",
+  "page": 367
+ },
+ {
+  "id": "Import Path Resolution",
+  "page": 371
+ },
+ {
+  "id": "Import Path Resolution > Virtual Filesystem",
+  "page": 371
+ },
+ {
+  "id": "Import Path Resolution > Imports",
+  "page": 373
+ },
+ {
+  "id": "Import Path Resolution > Base Path and Include Paths",
+  "page": 375
+ },
+ {
+  "id": "Import Path Resolution > Allowed Paths",
+  "page": 377
+ },
+ {
+  "id": "Import Path Resolution > Import Remapping",
+  "page": 378
+ },
+ {
+  "id": "Import Path Resolution > Using URLs in imports",
+  "page": 380
+ },
+ {
+  "id": "Style Guide",
+  "page": 381
+ },
+ {
+  "id": "Style Guide > Introduction",
+  "page": 381
+ },
+ {
+  "id": "Style Guide > Code Layout",
+  "page": 381
+ },
+ {
+  "id": "Style Guide > Order of Layout",
+  "page": 397
+ },
+ {
+  "id": "Style Guide > Naming Conventions",
+  "page": 398
+ },
+ {
+  "id": "Style Guide > NatSpec",
+  "page": 401
+ },
+ {
+  "id": "Common Patterns",
+  "page": 402
+ },
+ {
+  "id": "Common Patterns > Withdrawal from Contracts",
+  "page": 402
+ },
+ {
+  "id": "Common Patterns > Restricting Access",
+  "page": 404
+ },
+ {
+  "id": "Common Patterns > State Machine",
+  "page": 406
+ },
+ {
+  "id": "Resources",
+  "page": 408
+ },
+ {
+  "id": "Resources > General Resources",
+  "page": 408
+ },
+ {
+  "id": "Resources > Integrated (Ethereum) Development Environments",
+  "page": 409
+ },
+ {
+  "id": "Resources > Editor Integrations",
+  "page": 409
+ },
+ {
+  "id": "Resources > Solidity Tools",
+  "page": 410
+ },
+ {
+  "id": "Resources > Third-Party Solidity Parsers and Grammars",
+  "page": 411
+ },
+ {
+  "id": "Contributing",
+  "page": 411
+ },
+ {
+  "id": "Contributing > Team Calls",
+  "page": 412
+ },
+ {
+  "id": "Contributing > How to Report Issues",
+  "page": 412
+ },
+ {
+  "id": "Contributing > Workflow for Pull Requests",
+  "page": 412
+ },
+ {
+  "id": "Contributing > AI-Assisted Contributions",
+  "page": 413
+ },
+ {
+  "id": "Contributing > Running the Compiler Tests",
+  "page": 413
+ },
+ {
+  "id": "Contributing > Running the Fuzzer via AFL",
+  "page": 416
+ },
+ {
+  "id": "Contributing > Whiskers",
+  "page": 418
+ },
+ {
+  "id": "Contributing > Documentation Style Guide",
+  "page": 418
+ },
+ {
+  "id": "Contributing > Solidity Language Design",
+  "page": 419
+ },
+ {
+  "id": "Language Influences",
+  "page": 420
+ },
+ {
+  "id": "Solidity Brand Guide",
+  "page": 420
+ },
+ {
+  "id": "Solidity Brand Guide > The Solidity Brand",
+  "page": 420
+ },
+ {
+  "id": "Solidity Brand Guide > Solidity Brand Name",
+  "page": 420
+ },
+ {
+  "id": "Solidity Brand Guide > Solidity Logo License",
+  "page": 421
+ },
+ {
+  "id": "Solidity Brand Guide > Solidity Logo Guidelines",
+  "page": 421
+ },
+ {
+  "id": "Solidity Brand Guide > Credits",
+  "page": 422
+ }
+]
