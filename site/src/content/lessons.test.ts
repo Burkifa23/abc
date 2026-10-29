@@ -46,6 +46,24 @@ for (const file of mdxFiles) {
       expect(new Set(quiz.map((q: any) => q.answer)).size).toBeGreaterThan(1);
     });
 
+    test("quiz has no length or position tell", () => {
+      const quiz: any[] = mod.quiz;
+      const len = (o: string) => o.trim().length;
+      const longest: number[] = [], shortest: number[] = [];
+      quiz.forEach((q, i) => {
+        const L = q.options.map(len), a = L[q.answer];
+        const others = L.filter((_: number, j: number) => j !== q.answer);
+        if (a > Math.max(...others)) longest.push(i + 1);
+        if (a < Math.min(...others)) shortest.push(i + 1);
+      });
+      const counts = new Map<number, number[]>();
+      quiz.forEach((q, i) => counts.set(q.answer, [...(counts.get(q.answer) ?? []), i + 1]));
+      const crowded = [...counts].filter(([, qs]) => qs.length > quiz.length / 2);
+      expect(longest.length <= 2, `${file}: correct option strictly longest in Q${longest.join(", Q")}`).toBe(true);
+      expect(shortest.length <= 2, `${file}: correct option strictly shortest in Q${shortest.join(", Q")}`).toBe(true);
+      expect(crowded.length === 0, `${file}: answer index ${crowded.map(([a]) => a)} used by Q${crowded.flatMap(([, qs]) => qs).join(", Q")}`).toBe(true);
+    });
+
     test("exercise ids match mdx", () => {
       const ids = [...mdx.matchAll(/<CodeExercise\b[^>]*?\sid=["']([^"']+)["']/g)].map((m) => m[1]).sort();
       expect(Object.keys(mod.exercises).sort()).toEqual(ids);
