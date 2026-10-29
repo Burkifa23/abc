@@ -31,7 +31,8 @@ function failAll() {
   pending.clear();
 }
 
-export function compile(source: string): Promise<CompileResult> {
+// ponytail: timeout is per call; a hung load fails everything pending and resets the worker.
+export function compile(source: string, timeoutMs = 60_000): Promise<CompileResult> {
   if (!worker) {
     worker = new Worker(import.meta.env.BASE_URL + "solc-worker.js");
     worker.onerror = failAll;
@@ -46,7 +47,8 @@ export function compile(source: string): Promise<CompileResult> {
   }
   const id = nextId++;
   return new Promise((ok, fail) => {
-    pending.set(id, { ok, fail });
+    const t = setTimeout(failAll, timeoutMs);
+    pending.set(id, { ok: (r) => { clearTimeout(t); ok(r); }, fail: (e) => { clearTimeout(t); fail(e); } });
     worker!.postMessage({ id, url: `https://binaries.soliditylang.org/bin/${SOLC_BUILD}`, input: buildInput(source) });
   });
 }

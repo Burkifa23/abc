@@ -2,6 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import toc from "../../content/solidity-toc.json";
 import { coverage } from "../../lib/coverage";
+import { modules } from "../../content/modules";
 import { lessonsByModule } from "../../lib/lessons";
 
 const base = import.meta.env.BASE_URL;
@@ -26,14 +27,19 @@ if (process.env.STRICT_COVERAGE === "1" && missing.length > 0) {
       <h1>Learn Solidity</h1>
       <p class="lead">Lessons follow the official Solidity documentation, module by module.</p>
 
-      {groups.map((g) => (
-        <>
-          <h2 id={g.id}>{g.title}</h2>
-          <ul>
-            {g.lessons.map((l) => <li><a href={`${base}docs/${l.id}/`}>{l.data.title}</a>: {l.data.summary}</li>)}
-          </ul>
-        </>
-      ))}
+      {modules.map((m) => {
+        const lessons = groups.find((g) => g.id === m.id)?.lessons ?? [];
+        return (
+          <>
+            <h2 id={m.id}>{m.title}</h2>
+            {lessons.length ? (
+              <ul>
+                {lessons.map((l) => <li><a href={`${base}docs/${l.id}/`}>{l.data.title}</a>: {l.data.summary}</li>)}
+              </ul>
+            ) : <p style="color:var(--muted-fg)">Coming soon</p>}
+          </>
+        );
+      })}
 
       <h2 id="coverage">Reference coverage</h2>
       <table>

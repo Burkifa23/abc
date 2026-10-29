@@ -52,15 +52,10 @@ const { id, starter, checks, solution } = Astro.props as { id: string; starter: 
     const label = "Run checks";
     run.disabled = true; run.textContent = "Loading editor…";
     let monaco: Awaited<ReturnType<typeof loader.init>>;
-    const load = async () => {
-      try { monaco = await loader.init(); return true; } catch { return false; }
-    };
-    if (!(await load())) {
-      run.disabled = false; run.textContent = "Editor failed to load. Retry";
-      run.onclick = async () => {
-        run.disabled = true; run.textContent = "Loading editor…";
-        if (await load()) { run.onclick = null; start(); } else { run.disabled = false; run.textContent = "Editor failed to load. Retry"; }
-      };
+    try { monaco = await loader.init(); } catch {
+      // loader caches the rejected init promise, so only a reload can recover
+      run.disabled = false; run.textContent = "Editor failed to load. Reload page";
+      run.onclick = () => location.reload();
       return;
     }
     start();
@@ -93,17 +88,22 @@ const { id, starter, checks, solution } = Astro.props as { id: string; starter: 
           run.textContent = "Compiler failed to load. Retry"; run.disabled = false;
           return;
         }
-        const res = runChecks(source, result, checks);
-        list.replaceChildren(...res.map((r) => {
-          const li = document.createElement("li");
-          li.dataset.ok = String(r.ok);
-          li.textContent = `${r.ok ? "✓" : "✗"} ${r.message}`;
-          return li;
-        }));
-        const msgs = result.errors.map((e) => e.formattedMessage).join("\n");
-        errs.hidden = !msgs; errs.textContent = msgs;
-        if (res.every((r) => r.ok) && lesson) createProgress().markExercise(lesson, id!, true);
-        run.textContent = label; run.disabled = false;
+        try {
+          const res = runChecks(source, result, checks);
+          list.replaceChildren(...res.map((r) => {
+            const li = document.createElement("li");
+            li.dataset.ok = String(r.ok);
+            li.textContent = `${r.ok ? "✓" : "✗"} ${r.message}`;
+            return li;
+          }));
+          const msgs = result.errors.map((e) => e.formattedMessage).join("\n");
+          errs.hidden = !msgs; errs.textContent = msgs;
+          if (res.every((r) => r.ok) && lesson) createProgress().markExercise(lesson, id!, true);
+        } catch (e) {
+          errs.hidden = false; errs.textContent = "Unexpected error while checking: " + (e instanceof Error ? e.message : String(e));
+        } finally {
+          run.textContent = label; run.disabled = false;
+        }
       });
     }
   });

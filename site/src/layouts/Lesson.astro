@@ -34,10 +34,14 @@ const exerciseIds = (body: string | undefined) => Array.from((body ?? "").matchA
       <p class="lead">{entry.data.summary}</p>
       <article data-lesson={entry.id} data-exercises={exerciseIds(entry.body)}><slot /></article>
 
-      <h2>Docs sections covered</h2>
-      <ul>
-        {entry.data.covers.map((c: string) => <li><a href={solidityLink(c)}>{c}</a></li>)}
-      </ul>
+      {entry.data.covers.length > 0 && (
+        <>
+          <h2>Docs sections covered</h2>
+          <ul>
+            {entry.data.covers.map((c: string) => <li><a href={solidityLink(c)}>{c}</a></li>)}
+          </ul>
+        </>
+      )}
 
       <nav class="card" aria-label="Previous and next" style="display:flex;justify-content:space-between;gap:16px;padding:16px;margin-top:32px">
         {prev ? <a href={href(prev.id)}>&larr; {prev.data.title}</a> : <span />}

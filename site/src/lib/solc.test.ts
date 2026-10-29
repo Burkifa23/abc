@@ -51,3 +51,15 @@ test("worker replies with id and error when compile throws after load", async ()
   await g.self.onmessage({ data: { id: 7, url: "u", input: "x" } });
   expect(posted).toEqual([{ id: 7, error: "Error: boom" }]);
 });
+
+test("compile rejects and resets the worker when the compiler never replies", async () => {
+  const g: any = globalThis;
+  let made = 0, terminated = 0;
+  g.Worker = class { constructor() { made++; } postMessage() {} terminate() { terminated++; } };
+  const { compile } = await import("./solc");
+  await expect(compile("x", 20)).rejects.toThrow("Compiler failed to load");
+  expect(terminated).toBe(1);
+  compile("y", 20).catch(() => {});
+  expect(made).toBe(2);
+  await new Promise((r) => setTimeout(r, 40));
+});

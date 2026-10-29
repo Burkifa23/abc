@@ -22,8 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - run: cd site && bun install && bun test
+      - run: cd site && bun install --frozen-lockfile && bun test
       - uses: withastro/action@v3
-        with: { path: site }
+        with: { path: site, node-version: 24 }
       - id: deploy
         uses: actions/deploy-pages@v4
