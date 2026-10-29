@@ -1,0 +1,75 @@
+---
+import Base from "../layouts/Base.astro";
+import LabCard from "../components/LabCard.astro";
+import { labs, socials } from "../data";
+const base = import.meta.env.BASE_URL;
+const pillars = [
+  { t: "Civic, not speculative", d: "We build for real African problems: elections, procurement, land registries. No token pumps." },
+  { t: "Zero setup", d: "Every lab opens in GitHub Codespaces with the toolchain already installed. A browser is all you need." },
+  { t: "Test-driven", d: "Tests and UI are written for you. You write the Solidity and make the red tests turn green." },
+];
+---
+<Base title="Ashesi Blockchain Community" current="home">
+  <main>
+    <section class="hero container">
+      <img class="logo-img" src={`${base}logo.png`} alt="ABC, Ashesi Blockchain Community" width="433" height="239" />
+      <a class="badge" href={`${base}labs/`}>Workshop 03 lab is live →</a>
+      <h1>Build civic infrastructure on-chain.</h1>
+      <p class="lead">
+        A hands-on curriculum for Ashesi students who want to engineer trustworthy public systems
+        with smart contracts. You start with ledgers and finish by shipping open-source code.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href={`${base}docs/`}>Get started</a>
+        <a class="btn btn-outline" href={`${base}labs/`}>Browse labs</a>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container grid">
+        {pillars.map((p) => (
+          <div class="card"><h3>{p.t}</h3><p>{p.d}</p></div>
+        ))}
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">Curriculum</span>
+          <h2>Seven workshops, one portfolio.</h2>
+          <p class="lead">Foundations first, then four civic builds, then a hackathon sprint where we publish the results under the club's name.</p>
+        </div>
+        <div class="grid">{labs.map((lab) => <LabCard lab={lab} />)}</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container grid" style="align-items:center">
+        <div class="section-head" style="margin:0">
+          <span class="eyebrow">How a lab works</span>
+          <h2>Click. Code. Go green.</h2>
+          <p class="lead">Open a lab in Codespaces, fill in the TODOs in one <code>.sol</code> file, and run the tests until every one passes.</p>
+        </div>
+<pre><code>$ forge test
+[FAIL] test_06_UnregisteredCannotVote()
+[PASS] test_01_DeployerIsAdmin()
+...
+# fix vote(), run again
+Suite result: ok. 11 passed; 0 failed</code></pre>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">Community</span>
+          <h2>Come build with us.</h2>
+        </div>
+        <div class="hero-actions" style="justify-content:flex-start">
+          {socials.map((s) => <a class="btn btn-outline" href={s.href}>{s.name}</a>)}
+        </div>
+      </div>
+    </section>
+  </main>
+</Base>

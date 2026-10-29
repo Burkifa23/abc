@@ -1,0 +1,20 @@
+---
+import Base from "../layouts/Base.astro";
+import LabCard from "../components/LabCard.astro";
+import { labs } from "../data";
+const base = import.meta.env.BASE_URL;
+---
+<Base title="Labs · Ashesi Blockchain Community" current="labs">
+  <main class="container" style="padding-top:48px;padding-bottom:96px">
+    <div class="section-head">
+      <span class="eyebrow">Labs</span>
+      <h1>Pick a workshop, open a lab.</h1>
+      <p class="lead">
+        Each lab is its own Codespace with Foundry ready to go. Codespaces is free for students
+        through the <a href="https://education.github.com/pack">GitHub Student Developer Pack</a>.
+        New here? Read <a href={`${base}docs/#labs`}>how labs work</a> first.
+      </p>
+    </div>
+    <div class="grid">{labs.map((lab) => <LabCard lab={lab} />)}</div>
+  </main>
+</Base>

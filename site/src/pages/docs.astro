@@ -1,0 +1,174 @@
+---
+import Base from "../layouts/Base.astro";
+import { repo } from "../data";
+const base = import.meta.env.BASE_URL;
+const groups = [
+  { title: "Getting Started", items: [["introduction", "Introduction"], ["labs", "How labs work"], ["codespaces", "Open a Codespace"], ["local", "Run locally"]] },
+  { title: "Solidity Essentials", items: [["contracts", "Contracts and state"], ["types", "Types"], ["mappings", "Mappings and structs"], ["sender", "msg.sender"], ["errors", "Errors and access control"], ["events", "Events"], ["payable", "Ether and time"], ["hashing", "Hashing"]] },
+  { title: "Community", items: [["curriculum", "Curriculum"], ["contributing", "Add a lab"]] },
+];
+---
+<Base title="Docs · Ashesi Blockchain Community" current="docs">
+  <div class="docs">
+    <aside class="sidebar">
+      <nav aria-label="Docs">
+        {groups.map((g) => (
+          <>
+            <h4>{g.title}</h4>
+            {g.items.map(([id, label]) => <a href={`#${id}`}>{label}</a>)}
+          </>
+        ))}
+      </nav>
+    </aside>
+
+    <main class="prose">
+      <span class="eyebrow">Docs</span>
+      <h1 id="introduction">Introduction</h1>
+      <p class="lead">
+        ABC teaches applied blockchain engineering. We use smart contracts to build trustworthy public
+        systems: fair elections, honest procurement, and land titles that can't be issued twice.
+      </p>
+      <p>
+        These docs cover how the labs work, the Solidity you need for them, and how to contribute.
+        For the full language reference, see the official <a href="https://docs.soliditylang.org/en/latest/">Solidity documentation</a>.
+      </p>
+
+      <h2 id="labs">How labs work</h2>
+      <p>Every lab follows a test-driven, fill-in-the-blank approach:</p>
+      <ol>
+        <li>You open the lab in GitHub Codespaces. Foundry and the Solidity extension are already installed.</li>
+        <li>The tests are already written. You only edit one file: <code>src/&lt;Contract&gt;.sol</code>.</li>
+        <li>Run <code>forge test</code>. Read the first failing test, fix the matching TODO, and run it again.</li>
+      </ol>
+      <p>Tests are numbered to match the TODOs, so work through them in order:</p>
+      <pre><code>forge test                      # run everything
+forge test --mt test_04         # run one step
+forge test -vvv                 # show why a test failed</code></pre>
+      <div class="callout">
+        <strong>Pair up.</strong>
+        Civic workshops use pair programming. One person types and the other reads the tests. Swap every TODO.
+      </div>
+
+      <h2 id="codespaces">Open a Codespace</h2>
+      <p>
+        On the <a href={`${base}labs/`}>Labs page</a>, click <strong>Open in Codespaces</strong> on a live lab.
+        GitHub builds the container the first time, which takes a few minutes. After that it opens in seconds.
+      </p>
+      <p>
+        Each lab has its own dev container under <code>.devcontainer/&lt;lab&gt;/</code>, and they all share
+        one <code>Dockerfile</code>. That means every Codespace opens directly in the right lab folder with the right tools.
+      </p>
+      <div class="callout">
+        <strong>Free hours.</strong>
+        Students get extra Codespaces hours through the GitHub Student Developer Pack. Stop your Codespace when you're done so you don't use them up.
+      </div>
+
+      <h2 id="local">Run locally</h2>
+      <p>If you prefer your own machine, there are two options:</p>
+      <h3>Dev Containers (any OS)</h3>
+      <p>Install Docker and the VS Code <em>Dev Containers</em> extension, clone the repo, then run <em>Dev Containers: Reopen in Container</em> and pick a lab.</p>
+      <h3>Nix (Linux / macOS)</h3>
+      <pre><code>git clone {repo}
+cd abc
+nix-shell                      # provides forge, cast, anvil
+cd labs/03-campus-elections && forge test</code></pre>
+      <p>Outside the container, install forge-std yourself: <code>forge install foundry-rs/forge-std</code> and remap it in <code>foundry.toml</code>.</p>
+
+      <h2 id="contracts">Contracts and state</h2>
+      <p>
+        A contract is code plus storage that lives at an address on the chain. State variables are written
+        to that storage, and every change is a transaction that everyone can verify.
+      </p>
+      <pre><code>{`// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Counter {
+    uint256 public count;          // stored on-chain, auto getter
+
+    function increment() external {
+        count += 1;                // costs gas: it changes state
+    }
+}`}</code></pre>
+
+      <h2 id="types">Types</h2>
+      <table>
+        <thead><tr><th>Type</th><th>Use it for</th></tr></thead>
+        <tbody>
+          <tr><td><code>uint256</code></td><td>Counts, balances, ids. 0.8+ reverts on overflow.</td></tr>
+          <tr><td><code>bool</code></td><td>Flags such as <code>hasVoted</code>.</td></tr>
+          <tr><td><code>address</code></td><td>Wallets and contracts.</td></tr>
+          <tr><td><code>bytes32</code></td><td>Hashes.</td></tr>
+          <tr><td><code>string</code></td><td>Human-readable text. Costly, so keep it short.</td></tr>
+          <tr><td><code>T[]</code></td><td>Lists you need to loop over.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="mappings">Mappings and structs</h2>
+      <p>A struct groups fields together. A mapping is a lookup table where every key exists and starts at its zero value.</p>
+      <pre><code>{`struct Candidate { string name; uint256 voteCount; }
+
+Candidate[] public candidates;
+mapping(address => bool) public hasVoted;
+
+candidates.push(Candidate("Ama", 0));
+candidates[0].voteCount++;`}</code></pre>
+      <p>Mappings can't be iterated. If you need to loop, keep an array as well.</p>
+
+      <h2 id="sender">msg.sender</h2>
+      <p>
+        <code>msg.sender</code> is the address that called the function, and it can't be forged.
+        One vote per wallet comes down to <code>hasVoted[msg.sender]</code>.
+      </p>
+
+      <h2 id="errors">Errors and access control</h2>
+      <p>Custom errors are cheaper and clearer than revert strings. Reverting undoes the whole call.</p>
+      <pre><code>{`error NotAdmin();
+
+function registerVoter(address voter) external {
+    if (msg.sender != admin) revert NotAdmin();
+    isRegistered[voter] = true;
+}`}</code></pre>
+      <p>Tests check for them with <code>vm.expectRevert(Election.NotAdmin.selector)</code>.</p>
+
+      <h2 id="events">Events</h2>
+      <p>Events are cheap logs that frontends and auditors can read. Mark up to three parameters <code>indexed</code> to make them searchable.</p>
+      <pre><code>{`event Voted(address indexed voter, uint256 indexed candidateId);
+emit Voted(msg.sender, candidateId);`}</code></pre>
+
+      <h2 id="payable">Ether and time</h2>
+      <p>A <code>payable</code> function can receive ether, and <code>msg.value</code> tells you how much was sent. <code>block.timestamp</code> lets you enforce deadlines.</p>
+      <pre><code>{`function bid() external payable {
+    if (block.timestamp > deadline) revert BiddingClosed();
+    bids[msg.sender] += msg.value;
+}`}</code></pre>
+      <div class="callout"><strong>Watch out.</strong> Update state <em>before</em> sending ether out. This prevents re-entrancy attacks.</div>
+
+      <h2 id="hashing">Hashing</h2>
+      <p><code>keccak256</code> turns any data into a fixed 32-byte fingerprint. Store the hash and verify against it without revealing the data.</p>
+      <pre><code>{`bytes32 h = keccak256(abi.encodePacked(studentId, salt));
+require(h == registeredHash[msg.sender]);`}</code></pre>
+      <p>
+        A hash can only be as honest as the person who issued it. If an admin registers a fake student,
+        the contract will happily accept them. Workshop 4 discusses this "garbage in" problem.
+      </p>
+
+      <h2 id="curriculum">Curriculum</h2>
+      <table>
+        <thead><tr><th>Phase</th><th>Workshops</th></tr></thead>
+        <tbody>
+          <tr><td>1. Foundations</td><td>The Trust Problem · Shared Bank (Remix)</td></tr>
+          <tr><td>2. Civic engineering</td><td>Campus Elections · Anonymous Access · Procurement · Land Registry</td></tr>
+          <tr><td>3. Capstone</td><td>Open-Source Africa hackathon sprint</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="contributing">Add a lab</h2>
+      <ol>
+        <li>Copy <code>labs/03-campus-elections</code> to <code>labs/NN-your-lab</code>. Write the tests first, then strip the contract down to TODOs.</li>
+        <li>Copy <code>.devcontainer/03-campus-elections</code> to <code>.devcontainer/NN-your-lab</code> and update the folder name in <code>workspaceFolder</code>.</li>
+        <li>Add an entry to <code>site/src/data.ts</code> with <code>status: "live"</code>.</li>
+      </ol>
+      <p>Open a pull request on <a href={repo}>GitHub</a>.</p>
+    </main>
+  </div>
+</Base>
