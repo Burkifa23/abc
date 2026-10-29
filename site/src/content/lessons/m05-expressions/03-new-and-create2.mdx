@@ -1,0 +1,116 @@
+---
+title: "Creating contracts with new and create2"
+summary: "How one contract deploys another with the new keyword, how to send ether while doing it, and how a salt lets you know the new address before it exists."
+covers: ["Expressions and Control Structures", "Expressions and Control Structures > Creating Contracts via new"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./03-new-and-create2";
+
+Every club at Ashesi has its own bank account, treasurer and member list. Imagine the student council wanted a fresh, independent contract for each new club, created at the push of a button rather than by a developer running a deployment script. A contract can do exactly that: it can create other contracts. A contract that exists to create others is usually called a **factory**. This lesson covers the creation expression, how to fund the newborn contract, and the "salted" variant that lets you work out its address in advance.
+
+## Creating with new
+
+The keyword `new`, followed by a contract name and constructor arguments, deploys a fresh instance and hands back a reference to it. The constructor of the new contract runs as part of the same step.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Club {
+    uint256 public capacity;
+
+    constructor(uint256 cap) payable {
+        capacity = cap;
+    }
+}
+
+contract Society {
+    Club[] public clubs;
+
+    function open(uint256 cap) external returns (Club c) {
+        c = new Club(cap);
+        clubs.push(c);
+    }
+
+    function openFunded(uint256 cap) external payable returns (Club c) {
+        c = new Club{value: msg.value}(cap);
+        clubs.push(c);
+    }
+}
+```
+
+`new Club(cap)` gives back a value of type `Club`, so you can call its functions right away (`c.capacity()`) or turn it into a plain address with `address(c)`. If you assign `new` to a state variable at its declaration, it happens inside the factory's own constructor.
+
+There is one structural rule: the compiler must already know the complete code of the contract being created, because that code is embedded inside the factory's own bytecode. Two consequences follow. The factory grows with every contract type it can build, and recursive creation is impossible: if `A` creates `B` and `B` creates `A`, each would have to contain the other, so the compiler rejects it.
+
+## Funding the new contract
+
+The `{value: x}` option from the last lesson works here too: `new Club{value: msg.value}(cap)` sends ether into the new contract's balance as it is born. The constructor must be `payable`, as `Club`'s is. What you cannot do is limit the gas given to a constructor.
+
+If creation fails, for example because the factory's balance is too small to cover the value, or the constructor reverts, the factory's call fails with an exception. To react to that failure instead of failing too, you use `try`/`catch`, which lesson 07 covers.
+
+## Where does the new address come from?
+
+By default the new address is computed from two ingredients: the address of the creator and a counter that goes up with each contract the creator makes. That means the address of your second club depends on the first one having been created. Nobody can know it in advance unless they know the count.
+
+## Salted creation (create2)
+
+Add the option `salt`, a `bytes32` value of your choosing, and the contract is created with a different mechanism, called **create2** after the EVM instruction behind it. The address is then computed from the creator's address, the salt, the code that creates the new contract (its creation bytecode) and its constructor arguments. The counter is not used.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Club {
+    uint256 public capacity;
+
+    constructor(uint256 cap) {
+        capacity = cap;
+    }
+}
+
+contract DeterministicSociety {
+    function open(bytes32 salt, uint256 cap) external returns (Club c) {
+        c = new Club{salt: salt}(cap);
+    }
+
+    // The same arithmetic the EVM does, so we can know the address up front.
+    function predict(bytes32 salt, uint256 cap) public view returns (address) {
+        bytes32 initCodeHash = keccak256(
+            abi.encodePacked(type(Club).creationCode, abi.encode(cap))
+        );
+        bytes32 h = keccak256(
+            abi.encodePacked(bytes1(0xff), address(this), salt, initCodeHash)
+        );
+        return address(uint160(uint256(h)));
+    }
+}
+```
+
+Read `predict` from the inside out. The deployed code is the creation bytecode followed by the ABI-encoded constructor arguments, and its hash is `initCodeHash`. The final hash covers a fixed marker byte `0xff` (which keeps create2 addresses apart from those made by the counter method), the creator's address, the salt and that code hash. The address is the last 20 bytes of the result, which is what the conversion through `uint256` and `uint160` extracts. You do not need this function to *use* salted creation: `new Club{salt: salt}(cap)` is enough. It is for learning, and for off-chain tools that want the address before spending gas.
+
+What do you get from this?
+
+- **The address does not depend on how many other contracts the factory has made**, so you can rely on it even if the factory creates other things in the meantime.
+- **You can hand out the address before the contract exists.** People can send tokens to it, or reference it in a signed message, and the contract can be created later. The classic use is a contract that settles a dispute about something that happened off-chain; most pairs of people never fall out, so it is only created if it is needed.
+- **Everything about the new contract is fixed by the address.** Change the salt, the constructor argument or a single byte of the code and you get a different address. The check is a one-way guarantee: if the address matches, the inputs matched.
+
+You can combine options: `new Club{salt: salt, value: amount}(cap)`. Reusing a salt with identical code and arguments targets an address that is already taken, so that second creation fails.
+
+## Peculiarities worth knowing
+
+An address does not promise code. A contract could be destroyed and then created again at the same address, because the address depends only on the inputs. Yet the second copy can have different *deployed* bytecode even though its creation bytecode is identical: the constructor may read outside state, such as another contract's storage or the current block, that changed between the two creations, and it stores whatever result it computed as the final code. After the Cancun upgrade, `selfdestruct` only removes a contract when it runs in the same transaction that created it, so this trick is rarer today, but you should still never read "same address" as "same code".
+
+<div class="callout"><strong>Watch out.</strong> A predicted address is only correct if you feed the formula exactly the same constructor arguments as the real creation. Predicting with <code>cap = 50</code> and then creating with <code>cap = 60</code> gives two different addresses, and a <code>require(address(c) == predicted)</code> after creation will fail. Also remember the creator part: predicting from one contract and creating from another gives a third address.</div>
+
+## Try it
+
+Finish the factory below. `create` must build a `Club` with the salt it receives and the capacity it receives, using `new Club{salt: ...}(...)`, and hand the new contract back.
+
+<CodeExercise id="club-factory" {...exercises["club-factory"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

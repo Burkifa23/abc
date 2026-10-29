@@ -1,0 +1,148 @@
+---
+title: "Internal, external and named-argument calls"
+summary: "Calling a function in your own contract versus a function in another one, how to attach ether to a call, and how to pass arguments by name."
+covers: ["Expressions and Control Structures", "Expressions and Control Structures > Function Calls"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./02-function-calls";
+
+Think about paying your fees. When the accounts clerk at your own desk needs a total, she adds up the numbers herself: nobody leaves the room. When she needs the bursary to record a payment, she has to send a request to a different office, wait for the answer, and trust that the other office did what it said. Solidity has the same two kinds of call. Which one you get depends only on how you write the call, and the difference affects cost, safety and who the caller appears to be.
+
+## Internal calls: staying in the room
+
+If you write a function name by itself, `fee(3)`, the compiler treats it as an **internal call**. It only works for functions of the same contract (including ones it inherits, a topic for a later module). The compiler turns an internal call into a plain jump inside the running code, so there is no new execution context, `msg.sender` is unchanged, and the contract's memory is not cleared. That last point is why passing a `memory` array to an internal function is cheap: only the pointer travels, not the data.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Accounts {
+    function feePerCredit() internal pure returns (uint256) {
+        return 120;
+    }
+
+    function semesterFee(uint256[] memory credits) public pure returns (uint256 sum) {
+        for (uint256 i = 0; i < credits.length; i++) {
+            sum += credits[i] * feePerCredit();
+        }
+    }
+}
+```
+
+Functions may call themselves, which is called **recursion**, but keep it shallow. The EVM stack holds at most 1024 items, and every internal call takes at least one of those slots, so a deep chain of calls ends in a failed transaction. A loop is almost always a better fit on a blockchain.
+
+## External calls: sending a message
+
+An **external call** is a message sent to a contract's address. You write it with a dot: `c.f()`, where `c` is a variable of contract (or interface) type, or `this.f()` to call a function of your own contract through its public face. Calls to other contracts must always be external. Their arguments are copied into memory and sent as bytes, and the other contract runs in its own context, so inside it `msg.sender` is *you*, the calling contract.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Desk {
+    function who() external view returns (address) {
+        return msg.sender;
+    }
+
+    // Calling our own function with `this` sends a message to ourselves,
+    // so the answer is this contract's address, not the original caller's.
+    function whoViaThis() external view returns (address) {
+        return this.who();
+    }
+}
+```
+
+The call through `this` costs more than an internal call, and it changes `msg.sender`, so use it rarely. It also cannot be used inside a constructor: the contract does not exist at its address until the constructor finishes.
+
+An external call is not a transaction of its own. It is a **message call** inside the transaction that started everything, so a user signs once and pays gas once for the whole chain of calls (the message-calls lesson in the first module described this).
+
+## Sending ether and gas with a call
+
+Between the function name and the parentheses you may put curly braces with two optional settings: `{value: x}` sends `x` wei along with the call, and `{gas: g}` caps the gas the callee may spend. The ether lands in the callee's balance. The callee function must be `payable`, otherwise the `value` option is not even available and the compiler refuses.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+interface IMealCards {
+    function topUp(uint256 cardId) external payable;
+}
+
+contract CardDesk {
+    IMealCards public immutable cards;
+
+    constructor(IMealCards c) {
+        cards = c;
+    }
+
+    function load(uint256 cardId) external payable {
+        cards.topUp{value: msg.value}(cardId);
+    }
+}
+```
+
+Explicit `gas` values are discouraged. Gas prices of individual operations change in network upgrades, and a number that was generous last year can be too small next year.
+
+Look carefully at the order of the pieces. `cards.topUp{value: msg.value}` only prepares the call: it records the settings. The call actually happens at the pair of parentheses. If you forget the parentheses the settings are thrown away and nothing is sent. In versions before 0.7.0 the settings were written `f.value(x).gas(g)()`; that form is gone.
+
+## What happens when the other side fails
+
+A high-level call that fails makes your own call fail too. If the callee reverts, or runs out of gas, the exception bubbles up to the caller and the caller's state changes are undone as well (unless you catch it, which is the subject of lesson 07).
+
+There is a surprising case, though. The EVM considers a call to an address with no code to be a success, because there is simply nothing to run. To avoid silently "paying" a contract that does not exist, Solidity first checks that the target holds code (using the `extcodesize` opcode) and reverts if it is empty. Two situations skip that check. First, when the function returns data, since the compiler will decode the reply and empty data makes the decoder revert anyway (this rule dates from 0.8.10). Second, low-level calls made on a bare `address`, which only you can sanity-check. A consequence worth knowing: because of the first exception, ordinary high-level calls can reach precompiled contracts, which have no deployed code but do return data.
+
+## Trust and re-entry
+
+Calling another contract hands it control for a while. It may do anything its code allows, including calling back into *your* contract before your first call has finished. A common defence is to finish all your own state changes before making the external call, so that a callback sees a consistent contract. Later modules treat this pattern properly; for now just keep the habit.
+
+## Naming the arguments
+
+When a function has several parameters of the same type, it is easy to swap two of them. Solidity lets you pass arguments by name inside curly braces, in any order, as long as the names match the declaration exactly:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Fees {
+    mapping(uint256 => uint256) public owed;
+
+    function setOwed(uint256 studentId, uint256 amount) public {
+        owed[studentId] = amount;
+    }
+
+    function waive() public {
+        setOwed({amount: 0, studentId: 2024});
+    }
+}
+```
+
+This works for external calls and internal calls alike. The same `{name: value}` style appears later when building structs and when raising errors with arguments.
+
+## Leaving names out
+
+In a function declaration, parameter and return names are optional. An item without a name still exists, but you cannot refer to it in the body. This is how you ignore a parameter you do not need, for example when you must match an agreed signature. An unnamed return value is still filled by an explicit `return` statement.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Names {
+    function pickFirst(uint256 first, uint256) public pure returns (uint256) {
+        return first;
+    }
+}
+```
+
+<div class="callout"><strong>Watch out.</strong> Named arguments must use the declared names, not the ones you happen to prefer. And remember what the curly braces after a function name mean: <code>cards.topUp&#123;value: 1 ether&#125;</code> without the final <code>(cardId)</code> is only a half-built call, so no ether moves and no function runs.</div>
+
+## Try it
+
+Complete `payFor` so it sends all the ether it received on to the bursary's `pay` function, using `{value: ...}`, and passes the two arguments by name (put `term` first to prove that order does not matter).
+
+<CodeExercise id="fees-desk-call" {...exercises["fees-desk-call"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

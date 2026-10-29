@@ -1,0 +1,218 @@
+---
+title: "Evaluation order, assignment, destructuring and scoping"
+summary: "What order sub-expressions run in (mostly unspecified), how to return and unpack several values at once, when assignment copies and when it aliases, and where a variable lives."
+covers: ["Expressions and Control Structures", "Expressions and Control Structures > Order of Evaluation of Expressions", "Expressions and Control Structures > Assignment", "Expressions and Control Structures > Scoping and Declarations"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./04-evaluation-assignment-scoping";
+
+Your transcript lists a course code, a grade and the credits earned, all in one row. When the registry reads that row, it does not hand you three separate pieces of paper, and it does not promise to read the grade before the credits. Solidity has the same small surprises in the way it evaluates expressions, assigns several values at once and decides which names are visible where. They are four short topics that belong together because each one is about what a line of code *really* does.
+
+## Order of evaluation
+
+When an expression has several parts, such as `f() + g()`, which part runs first? Solidity does not say. More precisely, the order in which the children of a node in the expression tree are evaluated is unspecified. The only promises are that every child is finished before the node that uses it, that statements run one after another in the order you wrote them, and that `&&` and `||` short-circuit.
+
+That is harmless until the parts have side effects. Both calls below change the same counter, so the result depends on who runs first:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Ticketing {
+    uint256 public issued;
+
+    function nextNumber() internal returns (uint256) {
+        return ++issued;
+    }
+
+    // Do not write this: the result is 12 or 21 depending on evaluation order.
+    function risky() external returns (uint256) {
+        return nextNumber() * 10 + nextNumber();
+    }
+
+    // Statements run in order, so this version is well defined.
+    function safe() external returns (uint256) {
+        uint256 first = nextNumber();
+        uint256 second = nextNumber();
+        return first * 10 + second;
+    }
+}
+```
+
+The cure is to put every side effect on its own line. Short-circuiting, which is guaranteed, gives you one reliable ordering tool: in `a && b`, `b` is only evaluated if `a` is true, and in `a || b`, `b` is only evaluated if `a` is false.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Ratios {
+    // The division only runs when the divisor is non-zero.
+    function atLeastDouble(uint256 a, uint256 b) external pure returns (bool) {
+        return b != 0 && a / b >= 2;
+    }
+}
+```
+
+## Tuples, multiple returns and destructuring
+
+A **tuple** is a fixed-length list of values, possibly of different types, whose length is known when you compile. Solidity uses tuples mainly so that a function can return several values. Tuples are not a real type: you cannot store one in a variable or pass it as a single argument. They are only a way of grouping expressions on the two sides of an assignment.
+
+The unpacking step is called **destructuring**:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Tuples {
+    uint256 public last;
+
+    function stats() public pure returns (uint256 lo, uint256 hi, bool ok) {
+        return (3, 9, true);
+    }
+
+    function demo() external returns (uint256) {
+        // New variables, with the third component ignored.
+        (uint256 low, uint256 high, ) = stats();
+
+        // The same trick swaps two values without a temporary.
+        (low, high) = (high, low);
+
+        // Assign into an existing variable, ignoring the other two.
+        (last, , ) = stats();
+
+        return low;
+    }
+}
+```
+
+Three rules to remember. Both sides must have the same number of components (older compilers let you fill in a shorter tuple; modern ones do not). You may leave a slot empty with a bare comma to ignore that component. And you cannot mix declarations with plain assignments in one tuple: `(x, uint256 y) = (1, 2);` is an error. Declare `y` on one line and assign on the next.
+
+A function can name its return values, as `stats` does, or return them with `return (3, 9, true);`. Callers receive all the values, in order.
+
+## Assignment with arrays and structs
+
+For plain values such as numbers and booleans, assignment copies the value. For arrays and structs (and `bytes` and `string`, which behave like arrays) it is more subtle, because it depends on the **data location**: storage, memory or calldata. The earlier module on reference types spelled out the rules; here is what they mean in practice. When you hand a storage array to a function whose parameter is in `memory`, the function receives an independent copy, so it cannot change the original. When the parameter is declared `storage`, only a reference travels, and changes land in the real array.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Copies {
+    uint256[3] marks;
+
+    function run() external returns (uint256 viaCopy, uint256 viaRef) {
+        bumpCopy(marks);
+        viaCopy = marks[0]; // still 0: the function changed a copy
+
+        bumpRef(marks);
+        viaRef = marks[0]; // now 1: the function changed the real thing
+    }
+
+    function bumpCopy(uint256[3] memory m) internal pure {
+        m[0] = 1;
+    }
+
+    function bumpRef(uint256[3] storage m) internal {
+        m[0] = 1;
+    }
+
+    function compare() external returns (uint256 snapVal, uint256 liveVal) {
+        uint256[3] memory snap = marks;  // copy of storage
+        uint256[3] storage live = marks; // another name for the same storage
+        marks[1] = 5;
+        snapVal = snap[1]; // 0
+        liveVal = live[1]; // 5
+    }
+}
+```
+
+Be careful with multiple assignment when reference types are involved. The swap trick `(a, b) = (b, a)` works for values but not for non-value types in storage,. For storage arrays and structs the line does not behave like a swap. If you need to swap two storage arrays or structs, swap their contents element by element or restructure the data.
+
+## Scoping and declarations
+
+A variable you declare inside a function is visible from the line *after* its declaration to the closing brace of the smallest `{ }` block that contains it. This is the scoping of C99, and it is the same in most modern languages. There is one exception: a variable declared in the set-up slot of a `for` loop only lives until the end of that loop. Parameters are visible in the body that follows them, and a catch parameter in its catch block.
+
+Two blocks side by side may each declare a variable with the same name, since their scopes do not overlap:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Scopes {
+    function twoBlocks() external pure returns (uint256 total) {
+        {
+            uint256 part = 4;
+            total += part;
+        }
+        {
+            uint256 part = 6; // a different variable, no clash
+            total += part;
+        }
+    }
+}
+```
+
+Declarations made *outside* any function body, such as state variables, functions and contract types, are visible everywhere in the contract, even above the line that declares them. A function can read a state variable defined further down the file and can call itself. Local variables do not get that treatment. Using one before its declaration is an error, which is a deliberate change from the JavaScript-style scoping that Solidity had before version 0.5.0, where a variable existed from the top of the function.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+// This file does not compile on purpose: `total` is used before it is declared.
+contract TooEarly {
+    function late() external pure returns (uint256) {
+        total = 5;
+        uint256 total;
+        return total;
+    }
+}
+```
+
+When an inner declaration has the same name as an outer one, the inner one is said to **shadow** it. The compiler warns, because the code is almost certainly confusing. The point where the shadowing starts matters. This function compiles, with warnings, and the assignment before the inner declaration still reaches the outer variable:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+// This compiles with warnings about shadowing.
+contract Shadowing {
+    function seatsLeft() external pure returns (uint256 seats) {
+        seats = 40;
+        {
+            seats = 60;     // still the outer `seats`: the inner one does not exist yet
+            uint256 seats;  // from here on, the inner one hides the outer one
+        }
+    }
+}
+```
+
+The function returns 60. Avoid writing code like this; the lesson is only that the rule is "visible from the next line", not "from the start of the block".
+
+### Every variable starts at zero
+
+Declaring a variable without a value gives it a default whose bytes are all zero. For each type that works out to the natural "empty" value:
+
+| Type | Default |
+|---|---|
+| `bool` | `false` |
+| `uint` and `int` types | `0` |
+| `address` | the zero address |
+| fixed-size arrays and `bytes1` to `bytes32` | every element is zero |
+| dynamic arrays, `bytes`, `string` | empty |
+| `enum` | its first member |
+
+So `uint256 count;` really does start at 0, whether it is a state variable or a local. This is convenient, and it is also a trap: a variable you forgot to set holds a perfectly valid-looking value.
+
+<div class="callout"><strong>Watch out.</strong> A zero default can pass for real data. An <code>address</code> variable you forgot to fill is the zero address, an <code>enum</code> you forgot to set is its first member (often "Pending" or "Open"), and a mapping read for a missing key returns 0. Check explicitly for "not set" when it matters, rather than assuming a variable holds something meaningful.</div>
+
+## Try it
+
+Write `order` so it returns its two inputs smallest first, swapping with a tuple assignment when they arrive in the wrong order. Then finish `gap` by calling `order` and destructuring both results into new variables.
+
+<CodeExercise id="span-destructure" {...exercises["span-destructure"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
