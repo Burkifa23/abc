@@ -3,15 +3,16 @@
 set -euo pipefail
 lab="${1:?usage: verify-lab.sh <lab-dir>}"
 export REPO_ROOT; REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+tmp="$(mktemp -d)"; log="$(mktemp)"
+trap 'rm -rf "$tmp" "$log"' EXIT
 cp -r "$lab/." "$tmp/"
+rm -rf "$tmp/out" "$tmp/cache" "$tmp/broadcast"  # stale local build output
 cd "$tmp"
 
-forge build >/dev/null 2>&1 || { echo "FAIL: starter does not compile"; exit 1; }
-if forge test >/dev/null 2>&1; then echo "FAIL: starter already passes"; exit 1; fi
+forge build >"$log" 2>&1 || { cat "$log"; echo "FAIL: starter does not compile"; exit 1; }
+if forge test >"$log" 2>&1; then echo "FAIL: starter already passes"; exit 1; fi
 cp -r .solution/. .
-forge test >/dev/null 2>&1 || { echo "FAIL: solution fails"; exit 1; }
+forge test >"$log" 2>&1 || { cat "$log"; echo "FAIL: solution fails"; exit 1; }
 
 if [ -f lab.json ]; then
   extra="$(node -e 'process.stdout.write(require("./lab.json").extraCheck||"")')"
