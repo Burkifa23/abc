@@ -1,0 +1,98 @@
+---
+title: "Function types"
+summary: "Treat a function as a value: store it, pass it to another function, or hand it to another contract."
+covers: ["Types", "Types > Value Types"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./05-function-types";
+
+A lecturer posts one marking sheet and says, "apply the curve to every script". The curve itself might be "add 5 marks" for one course and "scale by 1.1" for another. The sheet's job does not change; only the rule being applied does. In code, that means passing a *function* to another function. Solidity supports this because functions have types, just like numbers do, and a value of such a type can be held in a variable, passed as a parameter or returned.
+
+## Writing a function type
+
+The shape is the same as a function header with the name and body removed:
+
+```solidity
+function (uint256 mark) pure returns (uint256)
+```
+
+The full form is `function (<parameter types>) {internal|external} [pure|view|payable] [returns (<return types>)]`. Points to note:
+
+- Two visibilities exist for function types, **internal** and **external**. If you write neither, the type is internal.
+- Parameter names are optional and ignored. Return types are required in the type if the function returns something; leave off `returns` when it returns nothing.
+- State mutability (`pure`, `view`, `payable`) is part of the type. Leaving it out means the function may change state, with no ether accepted.
+
+So `function (uint256) view returns (bool) external` is an external function that reads state, takes a number, and returns a bool.
+
+## Internal and external function values
+
+An **internal** function value is a jump target inside the running code. It can only point to functions in the current contract or to internal library functions, and it can only be used inside this contract's own code. Passing it to another contract is impossible, which is why the type cannot appear in an external function's parameters.
+
+An **external** function value is an address plus a four-byte selector (together 24 bytes), so it can cross contract boundaries as data. Calling it makes a normal external call.
+
+You get a function value by naming the function without parentheses. The kind you get depends on how you name it:
+
+- `f` (the bare name) is an internal value.
+- `this.f` is an external value, because it goes through the contract's own address. Only `public` and `external` functions can be named this way, and the same holds for a variable `x` declared `public`, whose getter is reachable as `this.x`.
+
+## Members of external function values
+
+An external function value has two members:
+
+- `.address` the address of the contract that holds the function.
+- `.selector` the first four bytes of the hash of the signature, which identify the function in a call.
+
+```solidity
+function who() public view returns (address a, bytes4 sel) {
+    a = this.vote.address;
+    sel = this.vote.selector;       // same as bytes4(keccak256("vote(uint256)"))
+}
+function vote(uint256 option) public {}
+```
+
+Older versions allowed `.gas()` and `.value()` on function values; they have been removed. Use the call options instead: `target.vote{gas: 50000, value: 1 ether}(2)`.
+
+## Conversions between function types
+
+One function type converts **implicitly** into another only when everything lines up:
+
+1. The parameter types are identical, and so are the return types.
+2. Both are internal or both external.
+3. The state mutability of the source is the same or *stricter* than the target. A `pure` function can stand in for a `view` one, and a `view` one for a non-payable one; `payable` can stand in for non-payable. Nothing goes in the other direction, because that would let a function promise less than it delivers.
+
+To read where an external value points, use the `.address` member from the previous section.
+
+## Function types as parameters
+
+This is where function values earn their keep: a function that accepts a function. The parameter's type is written out in full, and the caller passes the name of a matching function.
+
+```solidity
+function curveAll(uint256[] memory marks, function (uint256) pure returns (uint256) rule)
+    internal pure returns (uint256[] memory)
+{
+    for (uint i = 0; i < marks.length; i++) marks[i] = rule(marks[i]);
+    return marks;
+}
+
+function plusFive(uint256 m) private pure returns (uint256) { return m + 5; }
+
+// caller: curveAll(scores, plusFive);
+```
+
+Because internal values are just jump destinations, this costs little gas. Libraries use the same trick for helper routines such as `sort(arr, compare)`.
+
+External function values also work as parameters of `public` and `external` functions, which is how callbacks between contracts are passed (a contract tells another "call this function of mine when you are done").
+
+<div class="callout"><strong>Watch out.</strong> An internal function value that was never assigned is zero-initialised, and calling it fails with a panic (code 0x51), not a friendly message. Check that a stored function value was set before you call it.</div>
+
+## Try it
+
+Write an internal helper `applyTwice` that takes a function `(uint256) pure returns (uint256)` and a number, calls the function twice, and returns the result. Then write `quadruple(uint256)` that uses it with `double`.
+
+<CodeExercise id="apply-twice" {...exercises["apply-twice"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

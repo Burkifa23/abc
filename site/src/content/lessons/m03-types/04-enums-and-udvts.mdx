@@ -1,0 +1,93 @@
+---
+title: "Enums and user-defined value types"
+summary: "Name a fixed set of states with an enum, and make your own distinct number types so cedis and kilograms can never be mixed up."
+covers: ["Types", "Types > Value Types"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./04-enums-and-udvts";
+
+A club application goes through a few stages: submitted, approved, rejected. You could store the stage as a plain number, 0, 1 or 2, and remember what each means. Six months later someone writes 3 and nothing complains. The same trouble appears with amounts: a `uint256` holding cedis and another holding kilograms are both just `uint256`, so adding them compiles happily. Both problems are about giving numbers a meaning that the compiler can enforce. Solidity has two tools for it.
+
+## Enums
+
+An **enum** is a type with a short, named list of possible values.
+
+```solidity
+enum Application { Submitted, Approved, Rejected }
+
+contract Club {
+    Application public stage;            // starts as Submitted, the first member
+
+    function approve() public {
+        require(stage == Application.Submitted, "already decided");
+        stage = Application.Approved;
+    }
+}
+```
+
+Facts to keep:
+
+- It needs at least one and at most 256 members. Members are named, and you write them as `Application.Approved`.
+- The default value of an enum variable is its **first** member. Pick the order with that in mind: if "nothing decided yet" is the sensible starting state, list it first.
+- Enums can be declared inside a contract or at file level (outside any contract), and shared with other files through imports.
+- Under the hood an enum is an unsigned integer counting from 0, and in the ABI it appears as `uint8`. You may convert to an integer with `uint8(stage)`. Converting an integer *to* an enum is explicit and **checked**: `Application(7)` on a three-member enum reverts with a panic instead of producing an invalid value.
+- The only operators are comparisons such as `==` and `!=`; there is no arithmetic on enums.
+- `type(Application).min` and `type(Application).max` give the first and last member, handy for range checks.
+
+```solidity
+Application last = type(Application).max;     // Application.Rejected
+```
+
+Because new members shift nothing as long as you add them at the end, adding to the end of an enum is the safe way to evolve it. Reordering existing members changes their numbers, which breaks any stored data or off-chain code that used the old order.
+
+## User-defined value types
+
+A **user-defined value type** (UDVT) is a brand-new type that is stored exactly like an existing elementary value type but is treated by the compiler as something different. The syntax is `type Name is Underlying;` and the underlying type must be an elementary value type such as `uint128`, `bytes32` or `address`.
+
+```solidity
+type Cedis is uint128;
+type Kilograms is uint128;
+```
+
+`Cedis` and `Kilograms` use identical storage, but they do not convert into each other, and neither converts implicitly to `uint128`. You cross the border explicitly with two built-in functions that every UDVT gets:
+
+- `Cedis.wrap(x)` takes a `uint128` and returns a `Cedis`.
+- `Cedis.unwrap(c)` takes a `Cedis` and returns the `uint128` inside.
+
+```solidity
+Cedis fee = Cedis.wrap(250);
+uint128 raw = Cedis.unwrap(fee);
+// Cedis total = fee + fee;     // does not compile: no operators yet
+```
+
+Also, no operator comes for free: not `+`, not even `==`. That is the point. A mistake like adding Cedis to Kilograms fails to compile, and each unwrap in the code marks a place worth reviewing.
+
+### Adding operators yourself
+
+If you do want `+` on prices, define a function and attach it with `using ... for ... global`. The function must be declared at file level (a free function) and take and return the user-defined type:
+
+```solidity
+function add(Cedis a, Cedis b) pure returns (Cedis) {
+    return Cedis.wrap(Cedis.unwrap(a) + Cedis.unwrap(b));
+}
+
+using { add as + } for Cedis global;
+```
+
+After that line `fee + fee` works everywhere the type is used, with whatever checks you wrote inside `add`. The `global` keyword makes the binding follow the type into every file that imports it. Operators like `==` can be defined the same way.
+
+Compared with using a struct for the same purpose, a UDVT costs nothing extra in storage or gas, because it is the underlying value and nothing more. Real code uses them to mark types such as token amounts, timestamps, or identifiers.
+
+<div class="callout"><strong>Watch out.</strong> Casting an enum from an integer is checked, but a UDVT's <code>wrap</code> is not: <code>Cedis.wrap(x)</code> accepts any value of the underlying type, so a nonsense amount wraps happily. The type prevents mix-ups, not bad numbers. Validate the number before you wrap it.</div>
+
+## Try it
+
+Declare `enum Status { Pending, Approved, Rejected }` and `type Price is uint128;` at file level. In `Shop`, add a public `Status` variable, an `approve()` function that sets it to `Approved`, and `toPrice(uint128)` returning a `Price` by wrapping, and `fromPrice(Price)` returning the raw `uint128` by unwrapping.
+
+<CodeExercise id="status-and-price" {...exercises["status-and-price"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

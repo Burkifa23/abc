@@ -1,0 +1,93 @@
+---
+title: "Data location"
+summary: "Every array, struct and string lives somewhere: storage, memory or calldata. Learn what each means and what assignment copies."
+covers: ["Types", "Types > Reference Types"]
+---
+
+import Figure from "../../../components/Figure.astro";
+import DataLocations from "../../../components/diagrams/DataLocations.astro";
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./06-data-location";
+
+You can hand a classmate your lecture notes in three ways. You can let them read your original notebook over your shoulder, or you can photocopy the pages so they can scribble on their copy, or you can put a printout on the table that neither of you may write on. Which one you choose changes the cost, and whether your notes get messed up. Solidity forces a similar choice every time you use a **reference type**: arrays, structs, and (as a special case) mappings. A number simply *is* its value, but an array is a big thing somewhere, so the compiler needs to know *where*.
+
+## The three locations
+
+Lesson 5 of module 1 showed the EVM's data areas. Here are the three that a reference-typed variable can name; see how they compare in the figure.
+
+<Figure caption="The EVM's data areas. Reference-typed variables name one of storage, memory or calldata.">
+  <DataLocations />
+</Figure>
+
+- **`storage`**: the contract's permanent table. State variables live here. Reads and especially writes are the costly part of a contract.
+- **`memory`**: a temporary, writable workspace that lasts as long as the current function call. Arrays created with `new uint[](n)` are in memory, and their size is fixed once created: you cannot `push` to them.
+- **`calldata`**: the read-only bytes that were sent with the call. It cannot be modified. Using it for inputs means the contract does not copy the data anywhere, which saves gas.
+
+Value types (numbers, bools, addresses) have no location annotation, because they are just copied around as they are.
+
+## What assignment does
+
+The location on each side of `=` decides whether Solidity **copies** the data or just makes a second name (a **reference**) for the same data.
+
+| Assigning ... | to ... | Result |
+|---|---|---|
+| storage | memory | copy |
+| memory | storage | copy |
+| calldata | memory | copy |
+| calldata | storage | copy |
+| storage | local storage variable | reference (an alias) |
+| memory | memory | reference (an alias) |
+| anything | a state variable | copy, always |
+
+The two reference cases are the ones that surprise people:
+
+```solidity
+struct Student { string name; uint16 year; }
+Student[] students;
+
+function promote(uint256 i) public {
+    Student storage s = students[i];   // not a copy: s is another name for the stored struct
+    s.year += 1;                       // changes the contract's data
+}
+
+function wrongPromote(uint256 i) public {
+    Student memory s = students[i];    // a copy is made (and paid for)
+    s.year += 1;                       // changes only the copy; it is discarded on return
+}
+```
+
+`wrongPromote` compiles, uses gas, and does nothing. In the other direction, with two memory variables `a = b` makes both names point to the same memory data, so changing one is visible through the other.
+
+A local `storage` variable must be initialised at the point where you declare it, because an uninitialised pointer would point at an arbitrary slot.
+
+## Parameters, returns and locations
+
+Since version 0.5 you must write the location explicitly for reference-type parameters, return values and local variables. Which locations are allowed depends on the function's visibility:
+
+- `external` function parameters can be `calldata` (the usual choice, the cheapest) or `memory`.
+- `public` function parameters can be `memory` or `calldata`.
+- `internal` and `private` function parameters can be `memory`, `calldata`, or `storage`. A `storage` parameter is a pointer to something the caller already has in storage, so nothing is copied and the function can change it.
+- Return values are normally `memory`. An internal or private function can return a `storage` pointer.
+
+Prefer `calldata` for read-only inputs of external functions, because copying a big array into memory costs gas for every element. Choose `memory` when you need to change the data locally. Choose `storage` when you want to update what the contract already holds.
+
+```solidity
+function total(uint256[] calldata xs) external pure returns (uint256 sum) {
+    for (uint256 i = 0; i < xs.length; i++) sum += xs[i];   // read-only, nothing copied
+}
+```
+
+Once something is in calldata, slicing and passing it to other functions that accept `calldata` keeps it copy-free, but passing it where `memory` is required forces a copy.
+
+<div class="callout"><strong>Watch out.</strong> The most common mistake is writing <code>memory</code> when you meant <code>storage</code>. Both compile, but with <code>memory</code> you edit a throwaway copy while the stored data stays unchanged, and you pay to copy it. If an update seems to do nothing, check the location word first.</div>
+
+## Try it
+
+In `Roster`, fill in three functions using the correct location for each: `sum` (reads an array argument and does not change it, `external`), `bump` (adds 1 to each element of a copy and returns it, `public`), and `promote` (changes a stored student's year).
+
+<CodeExercise id="roster-locations" {...exercises["roster-locations"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

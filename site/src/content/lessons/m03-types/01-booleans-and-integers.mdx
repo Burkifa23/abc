@@ -1,0 +1,78 @@
+---
+title: "Booleans, integers and fixed point"
+summary: "The yes/no type, the whole family of whole-number types, how overflow is handled, and why fixed-point numbers are not usable yet."
+covers: ["Types", "Types", "Types > Value Types"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./01-booleans-and-integers";
+
+A hostel warden keeps a tally: how many students signed in tonight, whether the gate is locked, and the cap of 60 rooms per block. Three little facts, and each needs a different kind of container. Solidity makes you choose that container up front. It is a **statically typed** language: every variable has a type fixed at compile time, and the type decides how many bytes it takes and what you can do with it. Types fall into two families. **Value types** are copied whenever you pass them around or assign them. **Reference types** (arrays, structs, mappings) point at data and need a place to live, which lesson 6 covers. This lesson starts with the simplest value types.
+
+## Booleans
+
+`bool` has exactly two values, `true` and `false`. The operators are `!` (not), `&&` (and), `||` (or), `==` and `!=`. The two-symbol operators **short-circuit**: in `a || f()`, if `a` is already `true`, `f()` is never called. That matters when `f` is expensive or has side effects.
+
+```solidity
+bool gateLocked = true;
+bool canEnter = !gateLocked && isResident;   // false as soon as gateLocked is true
+```
+
+A state variable of type `bool` starts as `false`. A `bool` is not a number: unlike C or JavaScript, `if (1)` does not compile, and `uint x = true` is rejected.
+
+## Integers
+
+Whole numbers come as `uint8, uint16, ... uint256` (unsigned, never negative) and `int8, ... int256` (signed). The number is the width in bits, in steps of 8. `uint` and `int` are aliases for the 256-bit versions. You can ask a type for its limits with `type(uint8).min` and `type(uint8).max` (0 and 255); `type(int8).min` is -128.
+
+Why bother with small ones? In ordinary local variables there is no saving, because the EVM works in 256-bit words anyway. Small types help only when several of them are packed together in storage (a later lesson), and sometimes they are fixed by an interface, such as the `uint8` decimals of a token.
+
+### Comparisons, bit operations and shifts
+
+- Comparisons `<=, <, ==, !=, >=, >` give a `bool`.
+- Bit operations work on the binary form: `&` (and), `|` (or), `^` (xor), `~` (flip every bit).
+- Shifts `<<` and `>>` move bits left or right. `x << n` multiplies by 2^n, and `x >> n` divides by 2^n, rounding toward negative infinity for signed numbers. The right-hand operand must be unsigned.
+
+```solidity
+uint8 flags = 5;                              // binary 00000101
+bool bitOne = ((flags >> 1) & 1) == 1;        // false: bit 1 is 0
+bool bitTwo = ((flags >> 2) & 1) == 1;        // true: bit 2 is 1
+```
+
+Notice the brackets. `==` binds tighter than `&`, so without them the compiler would try `1 == 1` first and then `&` that against a number. Always parenthesise bit tricks.
+
+### Arithmetic is checked
+
+Since Solidity 0.8, `+ - * / % **` on integers are **checked**: if the true result does not fit the type, the transaction reverts with a `Panic(0x11)` error instead of silently wrapping round. In earlier versions `uint8(250) + 10` quietly gave 4, and many token contracts were drained that way.
+
+Checking costs a little gas. When you can prove overflow is impossible, or you actually want wrap-around (hash arithmetic, counters that cycle), put the code in an `unchecked { ... }` block. Inside, `uint8(250) + 10` really is 4.
+
+```solidity
+function nextSlot(uint8 slot) public pure returns (uint8) {
+    unchecked { return slot + 1; }   // 255 wraps to 0 by design
+}
+```
+
+Two further rules. First, only code written *inside* the block is unchecked; a function you call from it keeps its own checks. Second, negating the most negative signed value, `-type(int8).min`, overflows even though it looks harmless, because +128 does not exist in `int8`.
+
+### Division, modulo and exponent
+
+Integer division **truncates toward zero**, so `7 / 2` is 3 and `-7 / 2` is -3. Dividing by zero, or taking `% 0`, panics with code `0x12`. The result of `%` takes the sign of the left operand: `-7 % 3` is -1.
+
+`**` is exponentiation: `2 ** 10` is 1024. It is right-associative, so `2 ** 3 ** 2` means `2 ** 9`. With variables it is checked like everything else. Also note that `0 ** 0` is 1.
+
+## Fixed-point numbers
+
+Solidity has the keywords `fixed` and `ufixed` (such as `fixed128x18`) meant for numbers with a decimal point. The language *declares* them but cannot yet use them: you cannot assign to them or do arithmetic with them. Money in contracts is therefore held as whole integers in a smallest unit, exactly like pesewas rather than cedis. Ether is stored in wei (10^18 wei = 1 ether), and a stablecoin with six decimals stores 1.50 as `1_500_000`.
+
+<div class="callout"><strong>Watch out.</strong> Casting does not check ranges. Converting a <code>uint256</code> variable holding 300 with <code>uint8(x)</code> cuts off the high bits and gives 44 without any error, even in 0.8. The checked behaviour applies to arithmetic operators only. Lesson 11 covers conversions properly.</div>
+
+## Try it
+
+Write `clamp(uint8 x)`, a `pure` function that returns `x` if it is at most 100 and returns 100 otherwise, as for a score capped at 100.
+
+<CodeExercise id="clamp-score" {...exercises["clamp-score"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
