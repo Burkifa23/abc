@@ -1,0 +1,159 @@
+---
+title: "assert, require and revert"
+summary: "How a Solidity call fails: the three kinds of error data, when to use assert, require or revert, what a failure undoes, and how errors travel between contracts."
+covers: ["Expressions and Control Structures", "Expressions and Control Structures > Error handling: Assert, Require, Revert and Exceptions"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./06-assert-require-revert";
+
+A student tries to register for a lab that is already full. The registrar does not enrol half of them, or enrol them and fix it next week: the form is rejected and nothing changes. Smart contracts work the same way. When a function discovers that it cannot do its job properly, it stops, **undoes every change it made**, and tells the caller why. That whole mechanism is an **exception** (also called a **revert**), and this lesson is about raising and reading them.
+
+## What a failure does
+
+When an exception is raised, every state change made in the current call and in everything it called is rolled back: storage writes, balance transfers, emitted events. The caller receives a block of **error data** that explains the failure. By default the exception then *bubbles up*: the caller fails too, with the same data, and so on up to the transaction, which is marked as failed. The only gas that is lost is what was already spent; the unused remainder goes back to the sender. (Old compilers used an invalid opcode for some failures that burned all the gas. Since 0.8.0 that no longer happens for panics.)
+
+There is one family of calls where bubbling does not happen: the low-level `call`, `delegatecall`, `staticcall` and `send`. They never throw. They return `false` as their first result and leave it to you to look. Another warning belongs here: a low-level call to an address that has **no code** returns `true`, because an empty account happily "succeeds" at doing nothing. If that matters, check the address first. The next lesson shows how to catch failures of ordinary external calls with `try`/`catch`.
+
+## Three shapes of error data
+
+| Kind | Looks like | Typical source |
+|---|---|---|
+| `Panic(uint256)` | 4-byte selector plus a code; 36 bytes in total | the compiler's own checks and `assert` |
+| `Error(string)` | selector `0x08c379a0`, then an ABI-encoded string | `require(cond, "text")`, `revert("text")` |
+| custom error | the 4-byte selector of its signature, then its ABI-encoded arguments | `revert MyError(args)` and `require(cond, MyError(args))` |
+
+A revert with no data at all is also possible: `require(cond)` and `revert()` produce zero bytes.
+
+Custom errors are declared once and carry typed arguments:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Library {
+    error NotMember(address who);
+    error LateReturn(uint256 daysLate, uint256 fine);
+
+    mapping(address => bool) public isMember;
+
+    function borrow() external view {
+        if (!isMember[msg.sender]) revert NotMember(msg.sender);
+    }
+}
+```
+
+The name and argument types give the error its four-byte selector, so a custom error with no arguments costs only 4 bytes of return data, whereas a string reason costs 68 or more (selector, offset, length, then the text padded to 32-byte words). That is why custom errors are the modern default. Longer explanations belong in a NatSpec comment, which costs nothing at run time.
+
+## assert: for things that must never happen
+
+`assert(condition)` raises a `Panic(uint256)` with code `0x01` when the condition is false. It takes no message. Use it for **invariants**, statements that must hold if your code is bug-free, whatever a user sends. A failing `assert` means *you* have a bug.
+
+The compiler also raises panics by itself. Here are the codes:
+
+| Code | Cause |
+|---|---|
+| `0x00` | generic compiler-inserted panic |
+| `0x01` | `assert(false)` |
+| `0x11` | arithmetic overflow or underflow outside `unchecked` |
+| `0x12` | division or modulo by zero |
+| `0x21` | converting a too-large or negative value to an `enum` |
+| `0x22` | reading a storage byte array that is wrongly encoded |
+| `0x31` | `.pop()` on an empty array |
+| `0x32` | array, `bytesN` or slice index out of bounds |
+| `0x41` | allocating too much memory or an array that is too large |
+| `0x51` | calling a zero-initialised variable of internal function type |
+
+Good code should never produce any of these, even when a user sends nonsense. If one appears, tools such as fuzzers and static analysers can often tell you which input triggers it.
+
+## require: for inputs and conditions outside your control
+
+`require` checks something that the caller, or the outside world, is responsible for: arguments, balances, permissions, the result of an external call. It has three forms:
+
+1. `require(cond)` reverts with no data at all.
+2. `require(cond, "reason")` reverts with an `Error(string)`.
+3. `require(cond, MyError(args))` reverts with a custom error. This form needs compiler 0.8.26 when you compile through the IR pipeline, and 0.8.27 on the default one. The site compiles with 0.8.38, so it works here.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Cafeteria {
+    error Closed();
+    bool public open = true;
+    mapping(address => uint256) public credit;
+
+    function buy(uint256 price) external {
+        require(open, Closed());
+        require(credit[msg.sender] >= price, "Not enough credit");
+        credit[msg.sender] -= price;
+    }
+}
+```
+
+One subtle point: `require` is an ordinary function, so **all its arguments are evaluated before it checks anything**. In `require(ok, MyError(expensive()))` the call to `expensive()` happens even when `ok` is true, along with any side effects. Keep the arguments cheap and free of effects, or use an `if` with `revert`, which only builds the error when it is needed.
+
+## revert: raising the error yourself
+
+`revert` has three forms as well. `revert MyError(a, b);` is a *statement*, written without parentheses around the error. `revert("reason");` and `revert();` are the older *function* forms, still valid. The statement form with a custom error is the most economical.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Hall {
+    error HallFull(uint256 seats);
+    uint256 public seats = 120;
+    uint256 public taken;
+
+    function reserve(uint256 count) external {
+        if (taken + count > seats) revert HallFull(seats);
+        taken += count;
+    }
+}
+```
+
+`if (!cond) revert E();` and `require(cond, E());` mean the same thing when the arguments have no side effects; choose whichever reads better. Older Solidity also had a `throw` keyword. It was deprecated in 0.4.13 and removed in 0.5.0.
+
+## Which failures are Error and which are Panic
+
+Many situations give an `Error(string)` or empty data rather than a panic: a failed `require`, a plain `revert`, an external call to an address that has no code, sending ether to a function that is not `payable`, and sending ether to a public getter. Failures of calls into other contracts are different: the error data from the callee is passed along, so whatever the callee threw, whether `Error`, `Panic` or a custom error, is what the caller sees when it bubbles. The same goes for a failed `.transfer()` and for a `new` that does not finish.
+
+Putting them side by side, here is the judgement call that sorts a check into the right keyword:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Pot {
+    error Odd();
+
+    function payHalf(address payable to) external payable {
+        require(msg.value % 2 == 0, Odd());            // input: the caller's fault
+
+        uint256 before = address(this).balance;
+        (bool ok, ) = to.call{value: msg.value / 2}(""); // low-level: we must check
+        require(ok, "Transfer failed");
+
+        // invariant: exactly half left the contract
+        assert(address(this).balance == before - msg.value / 2);
+    }
+}
+```
+
+<div class="callout"><strong>Watch out.</strong> Using <code>assert</code> to validate user input is a bug. A panic says "this code is broken", and tools will flag it as such. Anything a caller can trigger belongs in <code>require</code> or <code>revert</code> with a real error, and <code>assert</code> stays for what only a programming mistake can break.</div>
+
+## Reading the error data
+
+If you ever look at a failed transaction on a block explorer, the revert data starts with a selector, which tells you the kind of error. `0x08c379a0` is `Error(string)`, `0x4e487b71` is `Panic(uint256)`. Anything else is a custom error whose selector you can match against the contract's ABI. The data is plain bytes: nothing stops a contract from returning odd bytes on purpose, which matters for the next lesson.
+
+## Try it
+
+A hostel lets students book beds until it closes. Declare the two custom errors, use `require` with the first, use a `revert` statement for the second, and then update the room count.
+
+<CodeExercise id="hostel-custom-errors" {...exercises["hostel-custom-errors"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
