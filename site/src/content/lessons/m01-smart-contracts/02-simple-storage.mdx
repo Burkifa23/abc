@@ -1,17 +1,72 @@
 ---
-title: A Simple Storage Contract
-summary: Store a number on-chain and read it back.
-covers: ["Introduction to Smart Contracts > A Simple Smart Contract"]
+title: "A simple storage contract"
+summary: "Read and write a contract that stores one number on the blockchain, and explain every line of it."
+covers: ["Introduction to Smart Contracts", "Introduction to Smart Contracts > A Simple Smart Contract"]
 ---
 
 import Quiz from "../../../components/Quiz.astro";
 import CodeExercise from "../../../components/CodeExercise.astro";
 import { quiz, exercises } from "./02-simple-storage";
 
-## Storing a number
+Picture the notice board outside the Ashesi registry. On exam week someone pins up the room number for the Calculus paper, and anyone walking past can read it. Anyone with a pin can also replace it. Now imagine that board is not a piece of cork in a corridor but a small program on a blockchain: nobody owns the cork, nobody can take it down, and every earlier notice is kept forever in the chain's history. That is the smallest useful smart contract, and this lesson builds it.
 
-A contract keeps state in storage that lives at an address on the chain. This lesson is a placeholder: the full text arrives with the course content.
+## The whole contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract ExamNotice {
+    uint256 room;
+
+    function announce(uint256 newRoom) public {
+        room = newRoom;
+    }
+
+    function current() public view returns (uint256) {
+        return room;
+    }
+}
+```
+
+Eleven lines. We will go through them top to bottom.
+
+## Licence and version lines
+
+The first line is a comment that names the source's licence in a machine-readable way (SPDX is a standard list of licence names). It matters because blockchains make publishing code the normal thing to do, and publishing raises copyright questions. The compiler does not check that the name is on the SPDX list; it simply copies the text into the metadata it attaches to the compiled output. `MIT` is a permissive choice. If your code is not open, the special value `UNLICENSED` means "no usage allowed". Do not mix it up with `UNLICENSE`, which is a licence that gives everything to everyone.
+
+The second line is the **version pragma**. A *pragma* is an instruction to the compiler about how to treat a file. `^0.8.24` means "version 0.8.24 or newer, but below 0.9.0". Because code can behave differently under a breaking compiler release, the fence protects you from compiling your contract with a version you never tested. Older code often writes the same idea as a range, such as `>=0.4.16 <0.9.0`. As lesson 1 stressed, this line only makes the compiler verify itself.
+
+## The contract and its state
+
+A **contract** in Solidity is a bundle of code (its *functions*) and data (its *state*) that lives at one specific address on the blockchain. The line `uint256 room;` declares a **state variable**. `uint256` is an unsigned integer (no minus sign) that is 256 bits wide, so it can hold values from 0 up to 2^256 - 1. The short name `uint` means exactly the same thing, but the full name is clearer and we use it throughout.
+
+Think of the state variable as one cell in a tiny database owned by the contract. The contract's functions are the only ways to touch that database. Unless you assign something, the cell starts at zero.
+
+## The two functions
+
+`announce` takes a number and assigns it to `room`. That assignment changes the blockchain's data, so it must be sent as a **transaction** and costs gas (lesson 4).
+
+`current` is marked `view`, which promises that it only reads state and never changes it. Reading from outside the chain is free. The `returns (uint256)` part says what the function hands back.
+
+Inside the contract you refer to `room` by its bare name. You might be tempted to write `this.room`. Do not: in Solidity that prefix means something quite different (it makes an external call back into the contract), and the docs promise to explain the difference later. For now, just use the bare name.
+
+## A shortcut: public state variables
+
+Writing a function whose only job is to return a variable is so common that Solidity does it for you. If you declare `uint256 public room;`, the compiler adds a function named `room()` that returns it. You do not write it yourself, and you cannot also write one with the same name. Without `public`, other contracts have no way to read the variable (although, as you will see in lesson 5, the data is still visible on the chain to anyone who looks hard enough).
+
+## What this contract really does
+
+The contract lets anyone in the world store a single number and lets anyone read it. There is no gatekeeper: another person can call `announce` right after you and overwrite your number. Your old number is not lost, though, because every transaction ever sent stays in the chain's history. Later lessons add access rules so that only a chosen address may change the value.
+
+<div class="callout"><strong>Watch out.</strong> Identifiers (contract, function and variable names) must use plain ASCII characters. You may store text in other scripts, such as Twi or Arabic, inside a <code>string</code> value, but be careful with look-alike characters: two symbols that appear identical can have different code points and therefore produce different bytes, so a "match" on screen may not match on the chain.</div>
+
+## Try it
+
+Write the same idea with the names the course uses. Create `SimpleStorage` with one `uint256` state variable, a function `set(uint256)` that stores a value, and a function `get()` that returns it and is marked `view`.
 
 <CodeExercise id="simple-storage" {...exercises["simple-storage"]} />
+
+## Check your understanding
 
 <Quiz questions={quiz} />

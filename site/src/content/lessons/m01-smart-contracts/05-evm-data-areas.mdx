@@ -1,0 +1,83 @@
+---
+title: "Storage, transient storage, memory, stack, calldata"
+summary: "Name the places an EVM contract keeps data, say how long each lasts and how much it costs, and pick the right one for a value."
+covers: ["Introduction to Smart Contracts > The Ethereum Virtual Machine"]
+---
+
+import Figure from "../../../components/Figure.astro";
+import DataLocations from "../../../components/diagrams/DataLocations.astro";
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./05-evm-data-areas";
+
+A lecturer has a filing cabinet in the office (permanent, but slow to get at and costly to keep), a whiteboard in the lecture hall (wiped after each class), and a sticky note on the laptop for the number she is working with right now. A contract has the same range of places for its data, and choosing the wrong one makes a contract either expensive or wrong. This lesson tours them all. The comparison is in the figure below; keep it in mind as we go.
+
+<Figure caption="Where an EVM contract can keep data, how long it lasts, and what it costs.">
+  <DataLocations />
+</Figure>
+
+## Storage: the filing cabinet
+
+Each contract account has its own **storage**: a key-value table in which both keys and values are 256-bit words. It survives between calls and between transactions, and that is exactly why it is expensive. Reading it costs noticeably more than the other areas, and creating a new entry or changing one costs even more, because every node must keep that data forever.
+
+Three facts to remember:
+
+- You cannot walk through storage from inside a contract to list what is there.
+- A contract can read and write only its own storage, never another contract's.
+- Because it costs so much, store only what the contract genuinely needs to function. Things you can recompute, cache or aggregate are better handled outside the chain.
+
+Every state variable you have written so far (`room`, `balanceOf`) lives in storage.
+
+<div class="callout"><strong>Watch out.</strong> "Private" in Solidity only controls which <em>contracts</em> can read a variable through code. It does not hide the data. Storage is public on the chain, and anyone can read the raw slots with a node. Never keep a secret such as an exam answer or a password in a state variable.</div>
+
+## Transient storage: the whiteboard
+
+**Transient storage** works like storage, with a key-value table of 256-bit words, but it is wiped when the transaction ends. Values written in it are visible to every call inside the same transaction, including nested calls made by that first call, and then they disappear. Because nothing has to be saved permanently, it is far cheaper than storage.
+
+It became available with the Cancun upgrade (and so with compilers targeting the Cancun EVM or later). The Solidity `transient` keyword for state variables arrived in 0.8.28 and works for simple value types such as `bool` and `uint256`:
+
+```solidity
+contract Turnstile {
+    bool transient busy;
+
+    modifier oneAtATime() {
+        require(!busy, "already inside");
+        busy = true;
+        _;
+        busy = false;
+    }
+}
+```
+
+Such a flag could guard a function against being re-entered while it is still running, and it costs a fraction of the same logic done with a normal storage flag. (We study re-entrancy in the security module, and modifiers in the Contracts module.) Note that a transient variable cannot be given an initial value where it is declared, because that value would be wiped at the end of the creation transaction anyway.
+
+## Memory: scratch paper for one call
+
+Each message call receives a fresh, empty **memory**. It is a flat run of bytes: you can read a 32-byte word at a time and write either one byte or one word. Memory grows in 32-byte steps when you touch a spot not used before, and growing is charged, with the price per word rising the larger memory becomes (the growth cost is quadratic). The practical effect: building a huge array in memory can cost more than it looks.
+
+When a contract finishes a call, its memory is gone. Variables in function bodies that hold arrays, structs or strings are usually in memory, which is why you will write the word `memory` in Solidity declarations later in the course.
+
+## The stack: the sticky note
+
+The EVM is a **stack machine**, not a register machine. Every calculation happens by pushing 256-bit words on a stack and popping them off. The stack holds at most 1024 words. The instructions can only reach the top: you may copy one of the top 16 items to the top, or swap the top with one of the 16 beneath it. To get something deeper you must first move things out of the way, which is why a function with a very large number of local variables can fail with the notorious "stack too deep" error. Simple values such as an `uint256` local variable normally live here.
+
+## Calldata, returndata and code
+
+Three more areas are used in every call, even though you rarely name them.
+
+- **Calldata** is the read-only input of the call: the function selector and ABI-encoded arguments. When a contract is being created, its calldata holds the constructor's inputs. Parameters of `external` functions arrive in calldata first. If you declare an array or string parameter as `memory`, the compiler copies it into memory at the start of the function. If you declare it `calldata`, nothing is copied until you read an element, which is cheaper when you only need part of the data.
+- **Returndata** is where a finished call leaves its result for the caller, which is how `return` values travel.
+- **Code** is where the contract's bytecode itself sits. Values marked `constant` or `immutable` are placed here: the compiler pastes the value straight into the code wherever it is used, so reading them does not touch storage at all.
+
+## Choosing a place
+
+| Need | Place |
+| --- | --- |
+| Balances that must last | storage |
+| A flag that only matters during one transaction | transient storage |
+| An array being built inside a function | memory |
+| A loop counter | stack |
+| A long list passed in that you only read | calldata |
+
+## Check your understanding
+
+<Quiz questions={quiz} />

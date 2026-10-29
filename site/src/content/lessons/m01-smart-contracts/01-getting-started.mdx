@@ -1,0 +1,89 @@
+---
+title: "Getting started and tooling"
+summary: "Choose the right tool for a quick experiment and for a lab, read a compiler version string, and know where the other install routes and resources live."
+covers: ["Getting Started", "Translations", "Installing the Solidity Compiler", "Installing the Solidity Compiler > Versioning", "Installing the Solidity Compiler > Remix", "Installing the Solidity Compiler > npm / Node.js", "Installing the Solidity Compiler > Docker", "Installing the Solidity Compiler > Linux Packages", "Installing the Solidity Compiler > macOS Packages", "Installing the Solidity Compiler > Static Binaries", "Installing the Solidity Compiler > Building from Source", "Installing the Solidity Compiler > CMake Options", "Installing the Solidity Compiler > The Version String in Detail", "Installing the Solidity Compiler > Important Information About Versioning", "Resources", "Resources > General Resources", "Resources > Integrated (Ethereum) Development Environments", "Resources > Editor Integrations", "Resources > Solidity Tools", "Resources > Third-Party Solidity Parsers and Grammars"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./01-getting-started";
+
+It is Sunday night and Ama, a second-year at Ashesi, wants to try a smart contract before Monday's lecture. She searches the web and finds six different ways to "install Solidity", each with its own terminal commands. Which one does she pick? For most of this course the honest answer is: none of them. You will use two tools that need no installation at all. This lesson explains why, then gives you a map of everything else so nothing in the docs feels like a mystery.
+
+## What Solidity is, and the route through the docs
+
+**Solidity** is the programming language you write smart contracts in. A **compiler** (called `solc`) turns your Solidity text into the bytecode that the Ethereum Virtual Machine (the EVM, lesson 4) can run. Everything in this course is about writing text that `solc` accepts and that behaves the way you meant.
+
+The official documentation suggests a four-step route: understand what a smart contract is, get to know the language through examples, install a compiler, then keep learning from the wider community. This module follows the same path. One warning from it deserves repeating early: people write software, so software has bugs, and a contract often holds other people's money. Review, tests, audits and careful reading about security are not optional extras. We return to security in module 8.
+
+## Why ABC uses two tools
+
+**Remix** is a code editor that runs in your browser. You open a page, type a contract, press compile, and deploy it to a pretend blockchain living inside the tab. It is ideal for small contracts and for learning, and it is also a handy way to try a nightly compiler without installing several versions side by side. The cost is that one browser tab is awkward for a project with many files, automated tests and a history in Git.
+
+**GitHub Codespaces with Foundry** is what our labs use. A Codespace is a ready-made computer in the cloud that opens inside your browser, already holding the lab's files. **Foundry** is a toolkit that compiles contracts, runs tests, and simulates a chain from the command line. The advantages for a class are practical: everybody has the same compiler version, nobody loses an evening to a broken laptop setup, and the instructions are the same on a phone hotspot or a lab PC.
+
+So the rule of thumb is simple. For a five-minute experiment, use Remix. For anything you hand in, use a lab.
+
+### How labs work
+
+1. Open a lab in Codespaces from the Labs page of this site (`../../../labs/` from here).
+2. Read the lab's README, then find the places marked `TODO` in the Solidity files.
+3. Fill them in and run `forge test` in the terminal.
+4. When every test is green, you are done. A red test names what is still wrong.
+
+The in-page exercises in these lessons use the same idea in miniature: a few checks that turn green once your code does what was asked.
+
+## The version rules you must know
+
+Solidity version numbers look like `0.8.38`. The docs describe them as Semantic Versioning with one twist for versions that start with `0`: a change in the *third* number (a patch release) never breaks existing code. If your file compiles on `0.8.24`, it should compile on `0.8.25` and every later `0.8.z`. A change in the *second* number (`0.8` to `0.9`) is allowed to break things. That is why the pragma `^0.8.24` (lesson 2) is a safe fence: it accepts later `0.8` releases and rejects `0.9.0`.
+
+Besides full releases, the project publishes **prereleases** and **nightly builds** that hold the newest unfinished work. They are for early feedback, not for contracts that carry real value. When you deploy something real, use the latest full release, because security fixes normally land only in the newest version.
+
+### Reading a version string
+
+A full version string has four parts joined together:
+
+- the version number, such as `0.8.38`;
+- an optional prerelease tag such as `nightly.2026.10.1`, `pre.3` or `develop.2026.10.1`;
+- a commit marker, `commit.` followed by a Git hash (with `.mod` added if the source was locally modified);
+- the platform: any number of dotted words describing the build, for example `Emscripten.clang`.
+
+A release looks like `0.8.38+commit.<hash>.<platform>`; the plus sign separates the version from the build details. A nightly puts its tag after a hyphen: `0.8.39-nightly.2026.10.1+commit.<hash>.<platform>`.
+
+The project moves version numbers in a predictable way. Right after a release, the development branch assumes the next patch number. Non-breaking changes leave the number alone. A breaking change raises the second number. The official release is always made with the current number, minus the prerelease tag. So after `0.8.38` ships, nightlies say `0.8.39-nightly...`, and the next release is `0.8.39`, unless something broke in the meantime, in which case it is `0.9.0`.
+
+<div class="callout"><strong>Watch out.</strong> A <code>pragma solidity</code> line does not choose or install a compiler, and it does not switch features on. It only makes the compiler you are already running check that its own version fits, and stop with an error if it does not.</div>
+
+## The other ways to get a compiler
+
+You will not need these in this course. They are listed so that you recognise them in tutorials and job descriptions.
+
+- **npm / Node.js.** `npm install --global solc` installs `solcjs`, a JavaScript build of the compiler made with Emscripten from the same source code as the C++ one. It is portable and convenient inside JavaScript projects (Remix uses it), but it has fewer features, and its command-line options differ from those of `solc`. Tools that expect `solc` behaviour will not work with the `solcjs` command.
+- **Docker.** The `solc` image from the `argotorg` organisation on `ghcr.io` runs the real compiler inside a container. The `stable` tag gives the latest release, `nightly` gives the unstable development branch, and a version number gives that specific release. You mount a local folder so the container can see your files, or you send it the "standard JSON" input that tools prefer.
+- **Linux packages.** The compiler also ships as standalone binaries that run on most distributions. Ubuntu packages from the project's PPA stop at version 0.8.30 and are no longer updated. Some distributions package it themselves, there are community scripts for Arch and Nix (not vetted by anyone official, so be careful), and an unmaintained snap exists.
+- **macOS packages.** Homebrew builds the compiler from source for you (`brew tap ethereum/ethereum`, then `brew install solidity`). Pre-built bottles are not offered, and an older version can be installed from a specific formula commit.
+- **Static binaries.** The `solc-bin` repository, mirrored at `binaries.soliditylang.org`, keeps a binary of every past and current version for each platform, plus nightlies. Each platform folder has a `list.json` giving every file's version, build and hashes so tools can verify a download. Files are never changed after being added. New tools should read `emscripten-wasm32/` and `list.json` and ignore the legacy folders.
+- **Building from source.** You need CMake (3.21.3 or newer), Boost (1.83+), Git and a recent C++ compiler (GCC 13.3+, Clang 19.1.1+ or MSVC 2022+); Z3 is optional. You clone the repository, then run `cmake` and `make` (or open a generated Visual Studio solution on Windows). The default build is "pedantic" and treats warnings as errors; `-DPEDANTIC=OFF` relaxes this. A build from a Git checkout is marked as a prerelease inside its bytecode. To rebuild an official release, use the source tarball attached to the GitHub release instead.
+- **CMake options.** Run `cmake .. -LH` to list what you can configure. The SMT solvers (z3, cvc5, Eldarica) used by the optional formal-verification checker are looked for only when the compiler runs, so the build does not need them.
+
+## Translations
+
+The documentation exists in several languages, including Chinese, French, Indonesian, Japanese, Korean, Persian, Russian, Spanish and Turkish, thanks to volunteers. Their completeness varies and some lag behind, so the English version is the reference. If you want to read in another language or help translate, the docs point to a translation workflow in the `solidity-docs` GitHub organisation.
+
+## Resources: where to look next
+
+- **General.** The Ethereum developer pages, Ethereum StackExchange for questions, the Solidity website, changelog and source on GitHub, chat rooms for users and compiler developers, the `awesome-solidity` list, Solidity by Example, and a glossary.
+- **Development environments.** Foundry (our labs) and Hardhat (JavaScript-based) are the two most common. Remix is the browser option. Ape and Wake are Python-based. Brownie is no longer actively maintained, Truffle was sunset in 2023, and Dapp is a command-line tool.
+- **Editors.** Extensions exist for VS Code (the Nomic Foundation one gives inline errors and jump-to-definition and is a good default), IntelliJ, Sublime Text, Vim and Emacs.
+- **Tools.** Linters such as Solhint, Ethlint and Slippy; the analyser Aderyn; `solc-select` for switching compiler versions; a Prettier plugin for formatting; Sourcify for checking a deployed contract against its source; and diagram, documentation and debugging helpers such as sol2uml, Doxity and hevm.
+- **Parsers.** If you ever build your own tooling, there is a JavaScript parser based on an ANTLR4 grammar.
+
+## Try it
+
+Compile your first contract. The starter has an unfinished contract that the compiler will not accept. Fix it so the file compiles.
+
+<CodeExercise id="hello-compile" {...exercises["hello-compile"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
