@@ -14,9 +14,8 @@ const codeLike = /[`;{]|function|contract|uint|mapping/;
 const build = (src: string) => parseOutput(solc.compile(buildInput(src)));
 
 test("finds lessons", () => expect(mdxFiles.length).toBeGreaterThan(0));
-
 test("solc package matches SOLC_BUILD", () => {
-  const v = SOLC_BUILD.match(/soljson-v([d.]+)+/)![1];
+  const v = SOLC_BUILD.match(/soljson-v([0-9.]+)[+]/)![1];
   expect(solc.version().startsWith(v)).toBe(true);
 });
 
@@ -30,7 +29,7 @@ for (const file of mdxFiles) {
     test("has sidecar .ts", () => expect(has).toBe(true));
     test("has <Quiz", () => expect(mdx).toContain("<Quiz"));
     test("mdx uses its sidecar", () => {
-      const slug = file.split("/").pop()!.replace(/.mdx$/, "");
+      const slug = file.split("/").pop()!.replace(/[.]mdx$/, "");
       expect(mdx).toContain(`from "./${slug}"`);
       expect(mdx).toContain("questions={quiz}");
     });
