@@ -19,7 +19,7 @@ What the cafeteria should expect:
 
 - **The callee starts clean.** `IdDesk` runs with fresh, empty memory and reads its question from calldata. Its answer comes back as return data, which lands in memory that the caller reserved.
 - **Everything waits.** The cafeteria contract is paused until the answer arrives.
-- **The caller sets a gas budget.** It may hand over all of its remaining gas or only a slice, and keep the rest. If the inner call fails, the gas passed to it is spent, and the caller is told it failed.
+- **The caller sets a gas budget.** It may hand over all of its remaining gas or only a slice, and keep the rest. If the inner call reverts, its unused gas comes back to the caller; only an exceptional halt such as running out of gas or hitting an invalid instruction burns everything passed in. Either way the caller is told it failed.
 - **Nesting has a ceiling.** A chain of calls may be at most 1024 levels deep, and each level can only pass on 63/64 of the gas it has left, so real chains stop a little before that. Prefer loops to long call chains.
 
 How failure is handled depends on how you call. With the ordinary syntax (`idDesk.isStudent(who)`, a high-level call), Solidity checks the result and, on failure, reverts the caller too, so the error rolls upward. With the low-level tools `call`, `delegatecall` and `staticcall`, nothing is rolled up for you: they hand back a `bool` saying whether it worked, and it is your job to look at it.

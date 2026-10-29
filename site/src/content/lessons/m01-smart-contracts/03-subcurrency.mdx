@@ -59,7 +59,7 @@ A **constructor** runs exactly once, while the contract is being created, and ca
 
 `mint` creates new credits out of nothing, so only the treasurer may do it. The `if` line compares the caller against the stored address, and `revert NotTreasurer()` stops the call and **undoes every change made in the current call and its sub-calls**, unless a caller catches the failure. A **custom error** is a named kind of failure, declared with `error`, which can carry data. `InsufficientBalance(requested, available)` tells the caller both what they asked for and what they have, so a wallet or block explorer can show a clear message instead of a mysterious failure.
 
-There is a shorter way to write the same check: `require(amount <= have, InsufficientBalance(amount, have));`. It reads nicely but needs a recent compiler: Solidity 0.8.26 with the via-IR pipeline, or 0.8.27 on the legacy pipeline. Older compilers reject it, so this course writes `if (...) revert ...` when the pragma is `^0.8.24`.
+There is a shorter way to write the same check: `require(amount <= mine, InsufficientBalance(amount, mine));`. It reads nicely but needs a recent compiler: Solidity 0.8.26 with the via-IR pipeline, or 0.8.27 on the legacy pipeline. Older compilers reject it, so this course writes `if (...) revert ...` when the pragma is `^0.8.24`.
 
 ## Checked arithmetic
 
