@@ -1,12 +1,19 @@
-let compile;
-function ready(cb) { Module.calledRun ? cb() : (Module.onRuntimeInitialized = cb); }
-self.onmessage = (e) => {
+let compile, loaded;
+// One shared load promise: concurrent requests all wait on the same init.
+function load(url) {
+  return (loaded ??= new Promise((res, rej) => {
+    try {
+      importScripts(url);
+      Module.calledRun ? res() : (Module.onRuntimeInitialized = res);
+    } catch (err) { loaded = undefined; rej(err); }
+  }));
+}
+self.onmessage = async (e) => {
   const { id, url, input } = e.data;
+  try { await load(url); }
+  catch (err) { return postMessage({ id, loadError: true, error: String(err) }); }
   try {
-    if (!compile) importScripts(url);
-    ready(() => {
-      compile ??= Module.cwrap("solidity_compile", "string", ["string", "number", "number"]);
-      postMessage({ id, output: compile(input, 0, 0) });
-    });
+    compile ??= Module.cwrap("solidity_compile", "string", ["string", "number", "number"]);
+    postMessage({ id, output: compile(input, 0, 0) });
   } catch (err) { postMessage({ id, error: String(err) }); }
 };

@@ -36,10 +36,11 @@ export function compile(source: string): Promise<CompileResult> {
     worker = new Worker(import.meta.env.BASE_URL + "solc-worker.js");
     worker.onerror = failAll;
     worker.onmessage = (e) => {
-      const { id, output, error } = e.data;
-      if (error) return failAll();
+      const { id, output, error, loadError } = e.data;
+      if (loadError) return failAll();
       const p = pending.get(id);
       pending.delete(id);
+      if (error) return p?.fail(new Error(error));
       try { p?.ok(parseOutput(output)); } catch { p?.fail(new Error("Compiler failed to load")); }
     };
   }
