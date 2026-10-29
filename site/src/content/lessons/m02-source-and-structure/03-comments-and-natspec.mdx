@@ -1,0 +1,161 @@
+---
+title: "Comments and NatSpec"
+summary: "Write plain comments for yourself, and NatSpec comments that the compiler turns into documentation for users and developers."
+covers: ["Layout of a Solidity Source File", "Layout of a Solidity Source File > Comments", "NatSpec Format", "NatSpec Format > Documentation Example", "NatSpec Format > Tags", "NatSpec Format > Documentation Output"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./03-comments-and-natspec";
+
+When you press "confirm" in a wallet, you are about to run code you cannot read. What if the wallet could show a sentence such as "Registers you for the Data Structures exam"? Somebody has to write that sentence, and it should travel with the code rather than live in a separate document that goes stale. Solidity has a comment style made for this job: NatSpec. First, the ordinary comments.
+
+## Plain comments
+
+Two forms exist, borrowed from C and JavaScript:
+
+```solidity
+// One line, ends where the line ends.
+
+/*
+   Several lines,
+   ends at the closing marker.
+*/
+```
+
+A single-line comment stops at any Unicode line terminator: LF, VF, FF, CR, NEL, LS or PS, all in UTF-8. The terminator is not swallowed by the comment, it stays in the source. That matters for the last three, NEL, LS and PS, which are not plain ASCII; they would then lead to a parser error. You will almost never see this, but if a file copied from a word processor refuses to compile at a comment, check for odd line endings.
+
+## NatSpec: comments with a purpose
+
+There is a third kind, written with `///` or with a block that begins `/**` and ends `*/`. It goes directly above the thing it describes. The name stands for *Ethereum Natural Language Specification*. It was inspired by Doxygen (a documentation generator for C-family languages), but it does not try to stay compatible with it, so check the tag list below instead of assuming.
+
+The audience is split in two. Some messages are for the **end user**: they can be shown when the user is about to sign a transaction. Others are for **developers**. The compiler reads the comments, sorts them into these two groups and writes them out as JSON that wallets, explorers and documentation tools can use. The advice is to annotate everything that is part of the ABI, so every public or external function, event and public variable.
+
+### Where it can go
+
+A doc comment may sit above a contract, interface, library, function, enum, enum value, event, struct and error. A public state variable counts as a function for NatSpec purposes. One important limit: the compiler only *interprets* the tags on external and public items. You may write comments on internal and private functions for human readers, but they will not be parsed (the docs warn that this could change in the future).
+
+### A worked example
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+/// @title Hostel room allocator
+/// @author ABC dev team
+/// @notice Lets students check which hostel block a room number belongs to
+/// @dev Block sizes are fixed; nothing here touches storage
+/// @custom:status classroom demo
+contract Hostel {
+    /// @notice Which block is this room in?
+    /// @dev Ten rooms per block, counting from zero
+    /// @param room the room number
+    /// @return block_ the block index
+    /// @return floor_ the floor inside that block
+    function locate(uint256 room) external pure virtual returns (uint256 block_, uint256 floor_) {
+        block_ = room / 10;
+        floor_ = (room % 10) / 5;
+    }
+
+    /// @notice Number of rooms in each block
+    function blockSize() external pure virtual returns (uint256) {
+        return 10;
+    }
+}
+
+contract AnnexHostel is Hostel {
+    function locate(uint256 room) external pure override returns (uint256, uint256) {
+        return (room / 20, 0);
+    }
+
+    /// Larger blocks in the annex
+    /// @inheritdoc Hostel
+    function blockSize() external pure override returns (uint256) {
+        return 20;
+    }
+}
+```
+
+### The tags
+
+| Tag | Purpose | Allowed on |
+|---|---|---|
+| `@title` | A short name for the thing | contract, library, interface, struct, enum |
+| `@author` | Who wrote it | contract, library, interface, struct, enum |
+| `@notice` | Plain explanation for end users | contract, library, interface, function, public variable, event, struct, enum, error |
+| `@dev` | Extra detail for developers | everything above plus state variables |
+| `@param` | Describes one parameter; must be followed by that parameter's name | function, event, enum value, error |
+| `@return` | Describes one returned value | function, enum, public variable |
+| `@inheritdoc` | Copies missing tags from a base function; must name the base contract | function, enum, public variable |
+| `@custom:name` | Your own tag (lowercase letters and hyphens, not starting with a hyphen) | anywhere |
+
+Remember these points:
+
+- Every tag is optional. If you use no tag at all, the compiler treats the text as a `@notice`.
+- If a function returns several values, write one `@return` for each, in the order of the return list, the same way you write one `@param` per parameter.
+- The compiler checks what it can. A `@param` that names a parameter that does not exist, or more `@return` lines than the function returns, is a compile *error*. This is a good thing: it keeps docs honest.
+- Custom tags are for third-party tools such as analysers and verifiers, and they end up in the developer documentation.
+- If a returned variable has a name, the first word after its `@return` must be that name, as in `@return block_ the block index`. For unnamed returns you start straight with the description.
+- A `@notice` can contain placeholders in backticks, such as `` `room` ``. The compiler passes the text through, and a client may fill in the actual value when it shows the message to a user ("Which block is room 14 in?").
+
+### Inheriting documentation
+
+An overriding function with no NatSpec of its own may inherit the docs of the function it replaces. This happens automatically unless:
+
+- the parameter names differ,
+- there is more than one base function, or
+- you wrote `@inheritdoc ContractName`, which makes you responsible for naming the source.
+
+In the example above, `AnnexHostel.blockSize` writes its own sentence and also says `@inheritdoc Hostel`, so any tag it does not state itself (here the `@notice`) is copied from `Hostel`.
+
+## What the compiler produces
+
+Compiling with `solc --userdoc --devdoc Hostel.sol` (or asking for `userdoc` and `devdoc` in Standard JSON) yields two JSON documents per contract. Both contain `version` (currently 1) and `kind` (`user` or `dev`).
+
+The **user documentation** is for people about to act. For our contract it looks like this:
+
+```json
+{
+  "version": 1,
+  "kind": "user",
+  "methods": {
+    "locate(uint256)": { "notice": "Which block is this room in?" },
+    "blockSize()": { "notice": "Number of rooms in each block" }
+  },
+  "notice": "Lets students check which hostel block a room number belongs to"
+}
+```
+
+The **developer documentation** carries the rest:
+
+```json
+{
+  "version": 1,
+  "kind": "dev",
+  "author": "ABC dev team",
+  "details": "Block sizes are fixed; nothing here touches storage",
+  "custom:status": "classroom demo",
+  "title": "Hostel room allocator",
+  "methods": {
+    "locate(uint256)": {
+      "details": "Ten rooms per block, counting from zero",
+      "params": { "room": "the room number" },
+      "returns": { "block_": "the block index", "floor_": "the floor inside that block" }
+    }
+  }
+}
+```
+
+Notice that methods are keyed by the **canonical signature** from the ABI (`locate(uint256)`), not just the name, so overloaded functions stay distinct. When return variables are unnamed, their descriptions appear under `_0`, `_1` and so on, in order. Since 0.6.11 each file also carries `version` and `kind`, so consumers can detect format changes.
+
+<div class="callout"><strong>Watch out.</strong> NatSpec is just text that the compiler passes along. It is not a guarantee. A <code>@notice</code> that claims "only the owner can call this" does not make it true. Wallets that show these messages are repeating what the author wrote, so a wrong or deceptive notice is still a bug (or an attack).</div>
+
+## Try it
+
+A colleague documented `weighted` but copied the tags from another function, so the compiler refuses the file. Because the harness removes comments before matching text, you cannot be checked for the words in the tags themselves. The compiler is the checker instead: if your `@param` names, or the number of `@return` lines, are wrong, the file does not compile. Fix the tags so they match the signature, and implement the function (`score * weight / 100`).
+
+<CodeExercise id="document-weighted" {...exercises["document-weighted"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

@@ -1,0 +1,25 @@
+---
+const blocks = [
+  { t: "struct Voter", d: "groups fields" },
+  { t: "enum Phase", d: "named states" },
+  { t: "uint256 total", d: "state variable" },
+  { t: "event Voted", d: "log for outsiders" },
+  { t: "error NotOpen", d: "named failure" },
+  { t: "modifier onlyOpen", d: "wraps a function" },
+  { t: "function vote()", d: "executable code" },
+];
+---
+<svg viewBox="0 0 640 250" role="img" aria-labelledby="ca-t" font-family="var(--mono)" font-size="11">
+  <title id="ca-t">One contract drawn as a box holding seven kinds of member: a struct, an enum, a state variable, an event, an error, a modifier and a function</title>
+  <rect x="6" y="6" width="628" height="238" rx="12" fill="none" stroke="var(--border)" stroke-width="2" />
+  <text x="22" y="30" fill="currentColor" font-weight="600">contract Ballot</text>
+  {blocks.map((b, i) => (
+    <g transform={`translate(${(i % 4) * 150 + 22} ${Math.floor(i / 4) * 88 + 48})`}>
+      <rect width="140" height="72" rx="8" fill="none" stroke="var(--border)" stroke-width="1.5" />
+      <text x="70" y="32" text-anchor="middle" fill="currentColor" font-weight="600">{b.t}</text>
+      <text x="70" y="52" text-anchor="middle" fill="var(--muted-fg)">{b.d}</text>
+    </g>
+  ))}
+  <text x="472" y="198" fill="var(--muted-fg)">types, data, logs,</text>
+  <text x="472" y="214" fill="var(--muted-fg)">failures, rules, code</text>
+</svg>
