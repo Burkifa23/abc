@@ -1,7 +1,8 @@
 ---
 import Base from "../layouts/Base.astro";
 import LabCard from "../components/LabCard.astro";
-import { labs, socials } from "../data";
+import { socials } from "../data";
+import labs from "../labs.json";
 import { modules } from "../content/modules";
 const base = import.meta.env.BASE_URL;
 const pillars = [
@@ -14,7 +15,7 @@ const pillars = [
   <main>
     <section class="hero container">
       <img class="logo-img" src={`${base}logo.png`} alt="ABC, Ashesi Blockchain Community" width="433" height="239" />
-      <a class="badge" href={`${base}labs/`}>Workshop 03 lab is live →</a>
+      <a class="badge" href={`${base}labs/`}>Labs are live →</a>
       <h1>Build civic infrastructure on-chain.</h1>
       <p class="lead">
         A hands-on curriculum for Ashesi students who want to engineer trustworthy public systems
