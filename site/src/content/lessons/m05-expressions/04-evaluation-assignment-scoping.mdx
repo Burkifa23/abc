@@ -66,21 +66,21 @@ The unpacking step is called **destructuring**:
 pragma solidity ^0.8.24;
 
 contract Tuples {
-    uint256 public last;
+    uint256 public lastSeats;
 
-    function stats() public pure returns (uint256 lo, uint256 hi, bool ok) {
+    function hallInfo() public pure returns (uint256 seats, uint256 rows, bool open) {
         return (3, 9, true);
     }
 
     function demo() external returns (uint256) {
         // New variables, with the third component ignored.
-        (uint256 low, uint256 high, ) = stats();
+        (uint256 low, uint256 high, ) = hallInfo();
 
         // The same trick swaps two values without a temporary.
         (low, high) = (high, low);
 
         // Assign into an existing variable, ignoring the other two.
-        (last, , ) = stats();
+        (lastSeats, , ) = hallInfo();
 
         return low;
     }
@@ -89,7 +89,7 @@ contract Tuples {
 
 Three rules to remember. Both sides must have the same number of components (older compilers let you fill in a shorter tuple; modern ones do not). You may leave a slot empty with a bare comma to ignore that component. And you cannot mix declarations with plain assignments in one tuple: `(x, uint256 y) = (1, 2);` is an error. Declare `y` on one line and assign on the next.
 
-A function can name its return values, as `stats` does, or return them with `return (3, 9, true);`. Callers receive all the values, in order.
+A function can name its return values, as `hallInfo` does, or return them with `return (3, 9, true);`. Callers receive all the values, in order.
 
 ## Assignment with arrays and structs
 
@@ -128,7 +128,7 @@ contract Copies {
 }
 ```
 
-Be careful with multiple assignment when reference types are involved. The swap trick `(a, b) = (b, a)` works for values but not for non-value types in storage,. For storage arrays and structs the line does not behave like a swap. If you need to swap two storage arrays or structs, swap their contents element by element or restructure the data.
+Be careful with multiple assignment when reference types are involved. The swap trick `(a, b) = (b, a)` is reliable only for value types: with storage arrays or structs the right-hand side is not copied first, so the result is not a swap. If you need to swap two storage arrays or structs, swap their contents element by element or restructure the data.
 
 ## Scoping and declarations
 
@@ -178,11 +178,11 @@ pragma solidity ^0.8.24;
 
 // This compiles with warnings about shadowing.
 contract Shadowing {
-    function seatsLeft() external pure returns (uint256 seats) {
-        seats = 40;
+    function desks() external pure returns (uint256 count) {
+        count = 40;
         {
-            seats = 60;     // still the outer `seats`: the inner one does not exist yet
-            uint256 seats;  // from here on, the inner one hides the outer one
+            count = 60;      // still the outer `count`: the inner one does not exist yet
+            uint256 count;   // from here on, the inner one hides the outer one
         }
     }
 }
@@ -202,6 +202,8 @@ Declaring a variable without a value gives it a default whose bytes are all zero
 | fixed-size arrays and `bytes1` to `bytes32` | every element is zero |
 | dynamic arrays, `bytes`, `string` | empty |
 | `enum` | its first member |
+| `struct` | every member set to its own default |
+| `mapping` | no stored entries; every key reads as zero |
 
 So `uint256 count;` really does start at 0, whether it is a state variable or a local. This is convenient, and it is also a trap: a variable you forgot to set holds a perfectly valid-looking value.
 
