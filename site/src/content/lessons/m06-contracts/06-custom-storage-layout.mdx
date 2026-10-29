@@ -1,0 +1,93 @@
+---
+title: "Custom storage layout"
+summary: "Telling the compiler where a contract's state variables begin, what that moves and what it leaves alone, and why proxy-based systems care."
+covers: ["Contracts", "Contracts > Custom Storage Layout"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./06-custom-storage-layout";
+
+Imagine the Ashesi library gives every club a numbered shelf block, and by default every club's books start at shelf 0. That is fine while each club has its own library. It becomes a mess when two clubs are forced to share one building: their shelf 0 would be the same shelf. Smart contracts hit exactly this problem in **proxy** designs, where one contract's storage is borrowed by another contract's code. A **custom storage layout** lets a contract say "start my shelves at number 4096" instead of 0.
+
+## The default and the override
+
+Recall from the earlier modules that state variables are assigned **slots** in order: the first gets slot 0, the next gets slot 1 (several small ones may share a slot), and so on. Inherited variables come first. A **layout specifier** shifts that whole run to a base slot you choose. It needs Solidity 0.8.29 or later:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.29;
+
+contract Lockers layout at 0x1000 {
+    uint256 public total;      // slot 0x1000
+    uint256 public reserved;   // slot 0x1001
+    uint256[3] public rooms;   // slots 0x1002 to 0x1004
+}
+```
+
+The pattern is `contract Name layout at <expression>`. If the contract also inherits, the specifier may come before or after the `is` list, but it can appear only once.
+
+## What the expression may be
+
+The base slot is read by the compiler, not by the running contract, so it must be computable at compile time and fit in a `uint256`. Allowed: number literals, arithmetic on them, and `constant` variables initialised with such expressions. There is also a built-in, `erc7201("some.id")`, which turns a name into a slot using the formula from ERC-7201: hash the name, subtract one, hash again, and clear the last byte. The result is a far-away, collision-resistant location that no ordinary slot-by-slot layout will ever reach.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.29;
+
+uint256 constant STUDENT_BASE = 0x2000;
+
+contract Registry layout at STUDENT_BASE + 0x40 {
+    uint256 public students;
+}
+
+contract Archive layout at erc7201("ashesi.archive.v1") {
+    uint256 public records;
+}
+```
+
+Computed values such as `block.number` or a constructor argument are not allowed. The slot has to be known when the code is built.
+
+## What it moves, and what it does not
+
+- **Moves:** all ordinary (persistent) state variables, including those inherited from base contracts. They keep their relative order and are all shifted by the same amount.
+- **Does not move:** `transient` variables (lesson 5) live in a separate address space, so the specifier ignores them. The element data of mappings and dynamic arrays is placed by hashing, so it was never in a straight line to begin with, and it always lands somewhere inside `uint256` range whatever the base slot is.
+- **Cannot wrap around:** if the fixed-size variables would run past the last slot of storage, compilation fails. A contract with `uint256[3]` placed two slots before the end has nowhere to put the last one.
+
+Inheritance has one rule: only the **most derived** contract specifies the layout, and it applies to the whole family. The specifier cannot be used on abstract contracts, interfaces or libraries at all.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.29;
+
+contract Membership {
+    uint256 public members;   // base slot + 0
+}
+
+contract ClubDues is Membership layout at 0x3000 {
+    uint256 public dues;      // base slot + 1
+    uint256 transient seen;   // not shifted at all
+}
+```
+
+Here `members` is at `0x3000` and `dues` at `0x3001`. Moving the whole family is a single decision, made by whoever finally deploys the most derived contract.
+
+## Why bother
+
+The usual reason is **upgradeable proxies**. A proxy holds the data and forwards each call to a separate logic contract using `delegatecall`, which runs the logic's code against the proxy's storage. If the proxy keeps its own variables (the logic contract's address, say) in slot 0 and the logic contract also starts at slot 0, they overwrite each other. Moving one side to a distant base slot, or giving each module its own `erc7201` name, keeps the two apart. This is the same idea as the namespaced storage in ERC-7201, with the compiler doing the arithmetic for you instead of hand-written assembly.
+
+Other uses are rarer: lining up with a layout that already exists on-chain, or deliberately keeping a contract's variables away from slots another library reserves.
+
+<div class="callout"><strong>Watch out.</strong> Changing the base slot of a contract that is already deployed (or of a new version of an upgradeable one) moves all its variables, so the old data is suddenly not where the code looks. The compiler cannot warn you about that. Treat the layout line as part of the storage format: decide it once and never edit it. Also avoid naming your own identifiers <code>layout</code> or <code>at</code>: they are not yet reserved words, but the language plans to reserve them.</div>
+
+Leave a comfortable gap between your base slot and the end of the 2^256 address space. The compiler only stops you at the very edge, but a contract that later grows, or code that stores extra values past its own variables with inline assembly, will want that room.
+
+## Try it
+
+`Notebook` has two state variables at the default location. Give it a base slot of `0x100`.
+
+<CodeExercise id="custom-slot" {...exercises["custom-slot"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

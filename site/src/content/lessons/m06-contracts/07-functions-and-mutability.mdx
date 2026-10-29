@@ -1,0 +1,146 @@
+---
+title: "Parameters, return variables and state mutability"
+summary: "How functions take inputs and hand back several outputs, and how view and pure let the compiler (and the EVM) hold you to your word."
+covers: ["Contracts", "Contracts > Functions"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./07-functions-and-mutability";
+
+A function is like a form at the Ashesi registry: you hand over a few items, a clerk does something, and you get something back. This lesson covers the two ends of that exchange (parameters in, return values out) and a promise a function can make about what it touches: **state mutability**.
+
+## Functions inside and outside contracts
+
+Functions normally live inside a contract, but Solidity also allows **free functions** written at file level. A free function is always `internal`: its code is copied into every contract that calls it. It still runs in the context of the contract that called it, so it can call other contracts or send ether, but it has no direct access to `this` or to state variables, since it does not belong to any contract.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+function percent(uint256 part, uint256 whole) pure returns (uint256) {
+    return (part * 100) / whole;
+}
+
+contract Attendance {
+    uint256 public present;
+    uint256 public enrolled = 40;
+
+    function mark() external {
+        present += 1;
+    }
+
+    function rate() external view returns (uint256) {
+        return percent(present, enrolled);
+    }
+}
+```
+
+## Parameters
+
+Parameters are declared like local variables: type, optional data location, name. A name can be left out for a parameter you never use, which also silences the compiler's "unused" warning. Inside the function a parameter is an ordinary local variable, and you may assign to it.
+
+```solidity
+function award(address, uint256 marks) external { /* first parameter ignored */ }
+```
+
+## Return variables
+
+After `returns`, you list the outputs the same way, and a function may return as many as you like:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Marks {
+    function summary(uint256 a, uint256 b) external pure returns (uint256 total, uint256 best) {
+        total = a + b;
+        best = a > b ? a : b;
+    }
+
+    function summaryShort(uint256 a, uint256 b) external pure returns (uint256, uint256) {
+        return (a + b, a > b ? a : b);
+    }
+}
+```
+
+Two styles are shown. In the first, the returned values have **names**: they exist from the start, hold their type's default value (0 here) until you assign them, and the function ends by reaching the closing brace. In the second, you write `return (x, y)` with a tuple whose length and types match the declared outputs (after implicit conversion). You can mix them, but an early `return` out of a function with named outputs must carry the values explicitly.
+
+Only value-like data can come out of an `external` or `public` function. You cannot return mappings, internal function types or `storage` references from them. Internal functions have no such limit.
+
+Callers pick the results apart with destructuring: `(uint256 t, uint256 b) = summary(3, 9);`, and may skip one with an empty slot: `(, uint256 b) = summary(3, 9);`.
+
+## State mutability
+
+Every function declares how much of the chain's state it touches. There are four levels, and the compiler checks each one:
+
+| Keyword | Reads state | Writes state | Accepts ether |
+|---|---|---|---|
+| `pure` | no | no | no |
+| `view` | yes | no | no |
+| (none) | yes | yes | no |
+| `payable` | yes | yes | yes |
+
+A function with no keyword is non-payable: it is allowed to change state but rejects incoming ether. Wallets and libraries use this level to decide how to call a function: a `view` or `pure` call can be answered by a node for free, with no transaction. Getters that the compiler generates for `public` variables are automatically `view`.
+
+### What counts as modifying state (not allowed in `view`)
+
+1. Writing to a state variable, including a transient one.
+2. Emitting an event.
+3. Creating another contract.
+4. Using `selfdestruct`.
+5. Sending ether.
+6. Calling any function that is not itself `view` or `pure`.
+7. Using low-level calls such as `.call`.
+8. Inline assembly that uses state-changing opcodes.
+
+### What counts as reading state (not allowed in `pure`)
+
+On top of the list above:
+
+1. Reading a state variable (persistent or transient). Reading an `immutable` also counts.
+2. Looking at `address(this).balance` or any `<address>.balance`.
+3. Using the members of `block`, `tx` or `msg`, **except** `msg.sig` and `msg.data`, which come from the call itself and not from the chain.
+4. Calling a function that is not `pure`.
+5. Inline assembly with state-reading opcodes.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Fees {
+    uint256 public base = 100;
+
+    function late(uint256 days_) external view returns (uint256) {
+        return base + days_ * 5;             // reads storage: view
+    }
+
+    function doubled(uint256 x) external pure returns (uint256) {
+        return x * 2;                        // touches nothing: pure
+    }
+
+    function selector() external pure returns (bytes4) {
+        return msg.sig;                      // allowed in pure
+    }
+}
+```
+
+A `pure` function may still `revert` or call `require`. Undoing earlier changes is not itself a change to state, which is also how the EVM sees it.
+
+### How strongly it is enforced
+
+`view` is enforced at run time. When the compiler targets Byzantium or newer (the default), calling a `view` or `pure` function on another contract uses the `STATICCALL` opcode, and the EVM itself refuses any state write inside it. Library `view` functions are called through `DELEGATECALL`, which has no static version, so for them only the compile-time check protects you.
+
+`pure` cannot be enforced by the EVM: no opcode exists to forbid reads. So `STATICCALL` guarantees "no writes" for both keywords, and "no reads" for `pure` is a compile-time rule only.
+
+<div class="callout"><strong>Watch out.</strong> If you leave the mutability off a function that only reads, it still works, but the compiler warns that it could be <code>view</code>, and callers must send a transaction (and pay gas) to run it. Conversely, marking a function <code>view</code> does not make it free when <em>another contract</em> calls it inside a transaction: the cost is paid just the same.</div>
+
+## Try it
+
+`Gradebook` has three functions with the wrong mutability. Fix each so the ABI says what the code really does.
+
+<CodeExercise id="mutability-trio" {...exercises["mutability-trio"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
