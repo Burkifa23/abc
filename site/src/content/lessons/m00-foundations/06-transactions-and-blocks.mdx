@@ -1,6 +1,6 @@
 ---
 title: "Transactions and blocks on Ethereum"
-summary: "Follow a transaction from your wallet to a block, and explain why it is all-or-nothing, ordered, and not instantly final."
+summary: "Follow a transaction from your wallet into a block, and explain why it is applied as a unit, ordered by the network, and not instantly final."
 covers: ["Introduction to Smart Contracts > Blockchain Basics"]
 ---
 
@@ -9,69 +9,66 @@ import TxLifecycle from "../../../components/diagrams/TxLifecycle.astro";
 import Quiz from "../../../components/Quiz.astro";
 import { quiz } from "./06-transactions-and-blocks";
 
-At the end of the semester Ama pays her club dues to the treasurer, Kofi, from her phone. Seconds later, in another dorm, Ama (in a rush) also tries to send all her remaining balance to a friend. Both payments use the same money. The network cannot honour both, and it cannot ask Ama which one she meant. Somehow it has to pick one and reject the other, and all the nodes have to pick the *same* one.
+At the end of the semester Ama has 100 units of an Ethereum-style token in her wallet. From her phone she pays 100 to Kofi, the club treasurer. A minute later, flustered, she sends the same 100 to her friend Esi from her laptop. Both payments are properly signed, and both want the same money. The network cannot phone Ama to ask which one she meant, and thousands of nodes must all end up agreeing on the same answer.
 
-This lesson shows how Ethereum does that with transactions and blocks. It is also the foundation for everything in the Solidity course: smart contracts run inside transactions.
+Walking through what happens to these two payments shows everything this lesson needs: what a transaction is, how a block fixes an order, and why "sent" is not the same as "final". It is also the base for the Solidity course, because every contract call travels inside a transaction.
 
-## The blockchain as a shared database
+## Reading is free, writing is a transaction
 
-Ethereum is best understood as a **globally shared, transactional database**. Everyone can read it just by joining the network. But nobody can edit it directly. To change something, you must submit a **transaction**, and all the other participants must accept it.
+Anyone can join the network and read the whole ledger: balances, past payments, contract data. But nobody edits it directly. The only way to change anything is to send a **transaction**: a signed message asking the network to update the shared data. Your wallet builds it and signs it with your private key (lesson 4), and nodes check that signature before they take it seriously. This is how Ethereum knows that only Ama's key can spend Ama's money.
 
-Think of a table of account balances. Reading is free and open to all. Writing means sending a transaction.
+Each transaction also carries a counter, the **nonce** (lesson 4), that goes up by one per transaction from the same account. It stops a signed payment from being replayed, and it gives Ama's transactions a fixed sequence.
 
-## Transactions are all-or-nothing
+## One transaction, one unit of change
 
-A **transaction** is a request to change the database. The word matters: a transaction is either applied completely or not at all.
-
-Take a transfer of 5 from Ama to Kofi. It involves two changes: subtract 5 from Ama, add 5 to Kofi. Because the transaction is atomic, you can never end up in a half-done state where Ama lost 5 but Kofi did not gain it. If any part fails, the whole transaction is cancelled and nothing changes. And while the transaction is being applied, no other transaction can interfere with it.
+Paying Kofi 100 means two edits: Ama's balance goes down, Kofi's goes up. Ethereum treats the transaction as a unit. Either the whole effect lands, or none of it does. You will never find a state where Ama was debited and Kofi never credited.
 
 ```text
-Ama:  100 -> 95
-Kofi:  20 -> 25    // both happen, or neither does
+Ama:  100 -> 0
+Kofi:  20 -> 120    // both edits take effect together, or neither does
 ```
 
-Later in the course, you will see that a contract function can *revert*, which cancels the entire transaction in exactly this way.
+This matters even more once contracts run code during a transaction. If any step fails (a rule is broken, or gas runs out), the contract's changes are undone, which Solidity calls a **revert**. Two details to keep in mind:
 
-## Transactions are signed
+- The sender still pays for the work. Computation costs **gas**, a fee paid in ETH, and a reverted transaction can still be included in a block. Its state changes are rolled back, but the gas already used is not refunded.
+- Another transaction cannot sneak in halfway through. Each one runs from start to finish before the next begins.
 
-Every transaction is **signed** by its sender with their private key (lesson 4). Nodes verify the signature before accepting it. This is how the database protects access: only the holder of Ama's key can move Ama's funds. The signed transaction also includes a sender-specific counter (the nonce) so it cannot be replayed.
+## Who goes first? Blocks decide
 
-## The double-spend problem and blocks
+Now the problem from the opening. Ama's two payments were sent from different devices, so different nodes may hear about them in different orders. If everyone judged by what they heard first, the ledgers would diverge.
 
-Back to Ama's two payments. Which one comes first? In a peer-to-peer network, "first" is not objective: different nodes may hear about them in different orders. This is the **double-spend** problem.
+Ethereum avoids the argument. Pending transactions wait in the **mempool**, a shared holding area of transactions not yet in a block. A **block proposer** then picks some of them, puts them in a chosen order, and publishes a **block**. Every node runs those transactions in that exact order. Suppose the payment to Kofi comes first: it succeeds, Ama's balance becomes 0, and the payment to Esi then fails the balance rule. Esi's payment is not paid. The order inside the block settled it.
 
-The solution is to not argue about it. The network selects one agreed **order** for transactions. Transactions are bundled into a **block**, executed in that order, and the block is shared with every node. If two transactions conflict, the one that ends up second is rejected: it simply does not become part of the block.
+Blocks are added one after another, a few seconds apart on current Ethereum (the interval is a protocol setting, so check a block explorer like Etherscan for today's number). That linear sequence of blocks, each linked to the one before, is the chain.
 
-Blocks are appended one after another in time, forming a linear sequence, hence the name blockchain. New blocks arrive at regular intervals; the exact interval is a protocol setting that can change, so check a block explorer such as Etherscan for current numbers.
-
-## Following one transaction
-
-<Figure caption="Wallet signs, transaction waits in the mempool, a block proposer includes it, the block is appended, the state updates.">
+<Figure caption="Wallet signs, the transaction waits in the mempool, a proposer includes it, the block is appended, and the state is updated.">
   <TxLifecycle />
 </Figure>
 
-1. Your **wallet** builds the transaction and signs it with your private key.
-2. It is broadcast to nodes. Pending transactions wait in the **mempool**, a pool of transactions not yet in a block.
-3. A **block proposer** (a validator in proof of stake, lesson 5) chooses which pending transactions to include and in what order.
-4. The proposed block is attested by other validators and appended to the chain.
-5. Every node executes the transactions in the block, so everyone's copy of the **state** (balances, contract storage) is updated the same way.
+1. Your **wallet** builds the transaction and signs it.
+2. Nodes spread it around and it waits in the mempool.
+3. A **proposer** (a validator, from lesson 5) chooses which pending transactions to include and in what order.
+4. Other validators attest to the block, and it is appended to the chain.
+5. Every node executes the block's transactions, so every copy of the **state** (balances and contract storage) changes in the same way.
 
-## Blocks can be reverted near the tip
+## Included is not the same as final
 
-The mechanism that selects the order (attestation in proof of stake) means that, from time to time, recent blocks are reverted. This only happens at the **tip** of the chain, the newest blocks. The more blocks that are added on top of a block, the less likely it is to ever be reverted. A transaction that looks successful may still be dropped, or end up in a different block, if you look too early. Waiting is the cure: the longer you wait, the safer it is.
+Once the block holding Ama's payment appears, it is easy to relax. Do not yet. A newly added block is not **finalised**: until enough validators have attested over later rounds (lesson 5), it can be dropped if a competing branch wins out. On Ethereum proof of stake this is rare, and it only ever affects the newest blocks at the tip of the chain, but it is possible. Once a block is finalised, undoing it would mean destroying a very large amount of validators' stake, which is why finalised history is treated as permanent.
 
-<div class="callout"><strong>Watch out.</strong> Sending a transaction does not guarantee it lands in the next block, or in any specific block. The proposer chooses what goes in. Do not write an app that assumes "I sent it, therefore it happened now." Also, you cannot schedule a transaction to run by itself in the future: something has to send it. For timed actions, people use an automation service or an oracle.</div>
+For app builders the rule is: show "pending" while the transaction is in the mempool, "included" once it is in a block, and "final" only after finalisation. Large payments should wait for the last one.
 
-## Why this matters for Solidity
+<div class="callout"><strong>Watch out.</strong> Sending a transaction does not mean it runs in the next block, or at any particular time. The proposer decides what to include, so a transaction with a low fee can sit pending for a long time. And nothing on Ethereum runs by itself later: a contract cannot wake up at midnight and act. Something external has to send a transaction. Timed jobs are handled by automation (keeper) services that send those transactions for you. Oracles are a different tool: they bring off-chain facts, like an exchange rate, onto the chain for contracts to read.</div>
 
-You do not need to understand the cryptography to write contracts. Treat these as promises the platform gives you:
+## What to carry into Solidity
 
-- state changes happen through transactions;
-- each transaction is signed by the sender, so the contract can rely on knowing who called it;
-- a transaction is all-or-nothing;
-- the order of transactions is decided by the network, not by the caller.
+You do not need the cryptography to write contracts. Treat these as guarantees from the platform:
 
-Once you accept these as given, you can focus on the code. In the next module you will write your first smart contract and see how these promises show up in the language.
+- Contract code only runs because someone sent a signed transaction, so the contract can know who called it.
+- A transaction is applied as a unit, or reverted (and still costs gas).
+- The network, through blocks, decides the order. You do not.
+- Recent results can still change until finalised.
+
+In the next module you will write your first contract and see these ideas appear in code.
 
 ## Check your understanding
 

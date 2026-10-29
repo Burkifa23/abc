@@ -18,7 +18,7 @@ Blockchains solve this with **proof of work**.
 
 From lesson 1, a block is a page of the ledger. A real block has two parts:
 
-- the **header**: the block's number, the hash of the previous block, a fingerprint of the entries, and a counter called the **nonce** (explained below);
+- the **header**: the hash of the previous block, a fingerprint of the entries, a timestamp, and a counter called the **nonce** (explained below). Our diagrams also number blocks to make them easy to discuss; that is a simplification, not a header field in every chain;
 - the **body**: the list of entries (transactions).
 
 A block's own hash is computed from its header. Since the header contains the previous hash, each block commits to everything before it.

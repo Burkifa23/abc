@@ -16,14 +16,14 @@ const steps = [
   </defs>
   {steps.map((s, i) => (
     <g transform={`translate(${i * 128 + 4} 30)`}>
-      <rect width="108" height="76" rx="8" fill="none" stroke="var(--border)" stroke-width="1.5" />
-      <text x="54" y="26" text-anchor="middle" fill="currentColor" font-weight="600">{i + 1}. {s.t}</text>
-      <text x="54" y="48" text-anchor="middle" fill="var(--muted-fg)">{s.d.split(" ").slice(0, Math.ceil(s.d.split(" ").length / 2)).join(" ")}</text>
-      <text x="54" y="62" text-anchor="middle" fill="var(--muted-fg)">{s.d.split(" ").slice(Math.ceil(s.d.split(" ").length / 2)).join(" ")}</text>
+      <rect width="116" height="76" rx="8" fill="none" stroke="var(--border)" stroke-width="1.5" />
+      <text x="58" y="26" text-anchor="middle" fill="currentColor" font-weight="600">{i + 1}. {s.t}</text>
+      <text x="58" y="48" text-anchor="middle" fill="var(--muted-fg)">{s.d.split(" ").slice(0, Math.ceil(s.d.split(" ").length / 2)).join(" ")}</text>
+      <text x="58" y="62" text-anchor="middle" fill="var(--muted-fg)">{s.d.split(" ").slice(Math.ceil(s.d.split(" ").length / 2)).join(" ")}</text>
     </g>
   ))}
   {[0, 1, 2, 3].map((i) => (
-    <path d={`M${i * 128 + 112} 68 H${i * 128 + 130}`} fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#txl-arrow)" />
+    <path d={`M${i * 128 + 120} 68 H${i * 128 + 130}`} fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#txl-arrow)" />
   ))}
-  <text x="4" y="132" fill="var(--muted-fg)">Not included yet? Still pending. Rejected by the block? It never changes state.</text>
+  <text x="4" y="132" fill="var(--muted-fg)">A reverted tx can still be included: its changes are undone, but gas is paid.</text>
 </svg>

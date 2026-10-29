@@ -35,7 +35,7 @@ A hash function is useful because it behaves in these ways:
 4. **Avalanche effect.** A tiny change in the input changes the output completely, not just a digit or two. You saw this in the playground.
 5. **One-way.** Given only a hash, there is no practical way to work backwards to the input. The only option is to guess inputs and hash them until one matches.
 
-A sixth property follows from these: it is **collision resistant**. A *collision* is two different inputs with the same hash. They must exist in theory (infinitely many inputs, finitely many outputs), but finding one on purpose is out of reach for SHA-256.
+A sixth property is **collision resistance**, a design goal of its own. A *collision* is two different inputs with the same hash. They must exist in theory (infinitely many inputs, finitely many outputs), but finding one on purpose is out of reach for SHA-256.
 
 ## Why blockchains care
 
