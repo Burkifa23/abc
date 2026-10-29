@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// Workshop 3: Secure Campus Elections
+/// Lab 08: Secure Campus Elections
 /// Fill in every function marked TODO until `forge test` is all green.
 /// Do not rename anything here: the tests depend on these names.
 contract Election {

@@ -2,9 +2,12 @@ name: Labs
 
 on:
   push:
-    paths: ['labs/**', '.devcontainer/**', 'scripts/**', '.github/workflows/labs.yml']
+    paths: ['labs/**', '.devcontainer/**', 'scripts/**', '.github/workflows/labs.yml', 'site/src/labs.json']
   pull_request:
-    paths: ['labs/**', '.devcontainer/**', 'scripts/**', '.github/workflows/labs.yml']
+    paths: ['labs/**', '.devcontainer/**', 'scripts/**', '.github/workflows/labs.yml', 'site/src/labs.json']
+
+permissions:
+  contents: read
 
 jobs:
   sync:
@@ -45,9 +48,11 @@ jobs:
           FORGE_STD_VERSION=$(grep -oP 'ARG FORGE_STD_VERSION=\K\S+' .devcontainer/Dockerfile)
           sudo git clone --depth 1 --branch "$FORGE_STD_VERSION" https://github.com/foundry-rs/forge-std /opt/forge-std
       - name: Verify lab
+        env:
+          LAB: ${{ matrix.lab }}
         run: |
           if [ "${{ matrix.expect-fail }}" = "true" ]; then
-            ! bash scripts/verify-lab.sh "${{ matrix.lab }}"
+            ! bash scripts/verify-lab.sh "$LAB"
           else
-            bash scripts/verify-lab.sh "${{ matrix.lab }}"
+            bash scripts/verify-lab.sh "$LAB"
           fi

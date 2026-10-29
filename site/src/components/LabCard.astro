@@ -1,8 +1,11 @@
 ---
+import { getCollection } from "astro:content";
 import type labs from "../labs.json";
 interface Props { lab: (typeof labs)[number] }
 const { lab } = Astro.props;
 const base = import.meta.env.BASE_URL;
+const have = new Set((await getCollection("lessons")).map((e) => e.id));
+const docs = lab.docs.filter((d) => have.has(d));
 const pretty = (id: string) => id.split("/").pop()!.replace(/-/g, " ");
 ---
 <article class="card">
@@ -13,8 +16,8 @@ const pretty = (id: string) => id.split("/").pop()!.replace(/-/g, " ");
     {lab.concepts.map((c) => <code>{c}</code>)}
   </div>
   <p class="meta">Adapted from {lab.adaptedFrom}</p>
-  {lab.docs.length > 0 && (
-    <p class="meta">Lessons: {lab.docs.map((d, i) => (
+  {docs.length > 0 && (
+    <p class="meta">Lessons: {docs.map((d, i) => (
       <>{i > 0 && ", "}<a href={`${base}docs/${d}/`}>{pretty(d)}</a></>
     ))}</p>
   )}

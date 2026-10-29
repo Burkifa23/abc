@@ -15,7 +15,9 @@ cp -r .solution/. .
 forge test >"$log" 2>&1 || { cat "$log"; echo "FAIL: solution fails"; exit 1; }
 
 if [ -f lab.json ]; then
-  extra="$(node -e 'process.stdout.write(require("./lab.json").extraCheck||"")')"
+  if command -v jq >/dev/null 2>&1; then extra="$(jq -r '.extraCheck // empty' lab.json)"
+  elif command -v node >/dev/null 2>&1; then extra="$(node -e 'process.stdout.write(require("./lab.json").extraCheck||"")')"
+  else echo "FAIL: need jq or node to read lab.json"; exit 1; fi
   if [ -n "$extra" ]; then bash -c "$extra" || { echo "FAIL: extra check"; exit 1; }; fi
 fi
 echo "PASS $lab"

@@ -1,4 +1,4 @@
-# Workshop 03: Secure Campus Elections
+# Lab 08: Secure Campus Elections
 
 **The problem:** someone stuffs ballot boxes and alters the tallies.
 **Your job:** write a voting contract that allows one vote per registered wallet and keeps a count anyone can check.

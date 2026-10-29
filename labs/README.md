@@ -2,7 +2,7 @@
 
 Each lab is a folder `labs/NN-slug/` (NN two digits) with `lab.json`, `README.md`, `foundry.toml`, `src/`, `test/`, and `.solution/` (mirrors the lab root, e.g. `.solution/src/Election.sol`). Every `.sol` file starts with `// SPDX-License-Identifier: MIT` and `pragma solidity ^0.8.24;`. `foundry.toml` is identical in every lab (copy lab 08's).
 
-`lab.json` is the source of truth. After editing it run `node scripts/sync-labs.mjs`; this generates `.devcontainer/NN-slug/devcontainer.json` and `site/src/labs.json`. `node scripts/sync-labs.mjs --check` fails if either is stale. Fields: `n`, `slug`, `title`, `kind` (`learn`|`build`), `summary`, `concepts`, `adaptedFrom`, `docs` (lesson ids), `openFiles`, optional `features` (copied into the devcontainer) and `extraCheck` (shell command run after the solution tests pass).
+`lab.json` is the source of truth. After editing it run `node scripts/sync-labs.mjs` (locally or in CI; it needs Node, which lab Codespaces do not have); this generates `.devcontainer/NN-slug/devcontainer.json` and `site/src/labs.json`. `node scripts/sync-labs.mjs --check` fails if either is stale. Fields: `n`, `slug`, `title`, `kind` (`learn`|`build`), `summary`, `concepts`, `adaptedFrom`, `docs` (lesson ids), `openFiles`, optional `features` (copied into the devcontainer) and `extraCheck` (shell command run after the solution tests pass).
 
 ## Lab Recipe
 
