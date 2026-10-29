@@ -18,8 +18,8 @@ When an operator gets two types, one operand is converted to the other's type, a
 
 ```solidity
 uint16  ects  = 30;
-uint64  hours = 2500;
-uint128 total = ects * hours;  // ects is widened to uint64, multiplied there, then widened to uint128
+uint64  budget = 2500;
+uint128 total = ects * budget;  // ects is widened to uint64, multiplied there, then widened to uint128
 ```
 
 Notice the multiplication itself is done in `uint64`. If it would overflow `uint64`, it reverts; the later widening to `uint128` cannot rescue it.
@@ -69,14 +69,14 @@ address payable pay = payable(who);   // address -> address payable needs payabl
 
 A literal is a value written directly in the source. Literals convert more freely than variables, as long as the value fits.
 
-**Integers.** A decimal or hex literal converts to any integer type big enough to hold it. 
+**Integers.** A decimal or hex literal converts to any integer type big enough to hold it, and fails otherwise:
 
 ```solidity
 uint8  a = 99;         // fine
 uint16 b = 0xABCDE;    // compile error: needs 20 bits, so it would be truncated
 ```
 
- Before 0.8.0 an explicit cast would silently truncate a literal; now it is as strict as the implicit one.
+Before 0.8.0 an explicit cast would silently truncate a literal; now it is as strict as the implicit one.
 
 **Fixed-size bytes.** The rules differ for decimal and hex:
 
