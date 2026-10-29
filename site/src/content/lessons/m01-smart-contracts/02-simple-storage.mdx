@@ -7,3 +7,11 @@ covers: ["Introduction to Smart Contracts > A Simple Smart Contract"]
 ## Storing a number
 
 A contract keeps state in storage that lives at an address on the chain. This lesson is a placeholder: the full text arrives with the course content.
+
+import Quiz from "../../../components/Quiz.astro";
+
+<Quiz questions={[
+  { q: "Where does a contract keep its state?", options: ["In storage", "In the browser", "In a cookie"], answer: 0, explain: "State lives in on-chain storage." },
+  { q: "Can anyone read a public variable?", options: ["No", "Yes"], answer: 1, explain: "Public variables get a getter." },
+  { q: "Which keyword declares a contract?", options: ["class", "contract", "module"], answer: 1, explain: "Solidity uses the contract keyword." }
+]} />

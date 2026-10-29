@@ -1,0 +1,45 @@
+---
+import type { Question } from "../lib/quiz";
+const { questions } = Astro.props as { questions: Question[] };
+---
+<section class="quiz" data-questions={JSON.stringify(questions)} aria-labelledby="quiz-h">
+  <h2 id="quiz-h">Check your understanding</h2>
+  {questions.map((q, i) => (
+    <fieldset class="q">
+      <legend>{q.q}</legend>
+      {q.options.map((o, j) => (
+        <label><input type="radio" name={`q${i}`} value={j} /> {o}</label>
+      ))}
+      <p class="fb" hidden></p>
+    </fieldset>
+  ))}
+  <button type="button" class="check">Check answers</button>
+  <p class="summary" aria-live="polite"></p>
+</section>
+
+<script>
+  import { score, type Question } from "../lib/quiz";
+  import { createProgress } from "../lib/progress";
+
+  document.querySelectorAll<HTMLElement>(".quiz").forEach((root) => {
+    const questions: Question[] = JSON.parse(root.dataset.questions!);
+    const lesson = root.closest<HTMLElement>("article[data-lesson]")?.dataset.lesson;
+    root.querySelector(".check")!.addEventListener("click", () => {
+      const fieldsets = root.querySelectorAll<HTMLFieldSetElement>("fieldset.q");
+      const picks = questions.map((_, i) => {
+        const c = root.querySelector<HTMLInputElement>(`input[name="q${i}"]:checked`);
+        return c ? Number(c.value) : null;
+      });
+      fieldsets.forEach((fs, i) => {
+        const fb = fs.querySelector<HTMLElement>(".fb")!;
+        const ok = picks[i] === questions[i].answer;
+        fb.hidden = false;
+        fb.dataset.ok = String(ok);
+        fb.textContent = ok ? "✓ Correct" : `✗ ${picks[i] === null ? "No answer. " : ""}${questions[i].explain}`;
+      });
+      const r = score(questions, picks);
+      root.querySelector(".summary")!.textContent = `${r.correct} of ${r.total} correct`;
+      if (lesson) createProgress().markQuiz(lesson, r.allCorrect);
+    });
+  });
+</script>

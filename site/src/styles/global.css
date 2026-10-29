@@ -155,3 +155,13 @@ a.card:hover { background: var(--muted); }
   .nav { gap: 14px; }
   .header-actions .gh { display: none; }
 }
+
+.sidebar a[data-done]::after { content: " ✓"; color: var(--muted-fg); }
+.quiz { margin-top: 56px; }
+.quiz .q { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin: 0 0 16px; }
+.quiz legend { font-weight: 500; padding: 0 6px; }
+.quiz label { display: block; padding: 4px 0; cursor: pointer; }
+.quiz .fb { margin: 8px 0 0; font-size: 14px; color: var(--muted-fg); }
+.quiz .fb[data-ok="true"] { color: var(--fg); }
+.quiz .check { background: var(--primary); color: var(--primary-fg); border: 0; border-radius: var(--radius); padding: 8px 16px; font: inherit; cursor: pointer; }
+.quiz .summary { margin-top: 12px; font-weight: 500; }
