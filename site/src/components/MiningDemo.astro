@@ -1,0 +1,60 @@
+---
+---
+<section class="md">
+  <label>Data <input class="data" type="text" value="Alice pays Bob 5" autocomplete="off" /></label>
+  <label>Previous hash <input class="prev" type="text" value="0" autocomplete="off" /></label>
+  <label>Difficulty (leading zeros)
+    <select class="diff"><option>1</option><option>2</option><option selected>3</option><option>4</option></select>
+  </label>
+  <button type="button" class="mine">Mine</button>
+  <dl class="res" aria-live="polite">
+    <dt>Nonce</dt><dd class="nonce">-</dd>
+    <dt>Hash</dt><dd class="hash">-</dd>
+    <dt>Tries</dt><dd class="tries">-</dd>
+    <dt>Time</dt><dd class="time">-</dd>
+  </dl>
+</section>
+<style>
+  .md { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin: 24px 0; background: var(--card); }
+  label { display: block; font-weight: 500; margin-bottom: 12px; }
+  input, select { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+  .mine { padding: 8px 16px; font: inherit; color: var(--primary-fg); background: var(--primary); border: 0; border-radius: 6px; cursor: pointer; }
+  .mine:disabled { opacity: 0.5; cursor: wait; }
+  .res { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 16px 0 0; }
+  dt { color: var(--muted-fg); }
+  dd { margin: 0; font-family: var(--mono); font-size: 13px; word-break: break-all; }
+</style>
+<script>
+  import { mine } from "../lib/mining";
+  const CHUNK = 5000;
+  document.querySelectorAll<HTMLElement>(".md").forEach((root) => {
+    const q = (s: string) => root.querySelector<HTMLElement>(s)!;
+    const btn = q(".mine") as HTMLButtonElement;
+    btn.addEventListener("click", () => {
+      const o = {
+        data: (q(".data") as HTMLInputElement).value,
+        prevHash: (q(".prev") as HTMLInputElement).value,
+        difficulty: Number((q(".diff") as HTMLSelectElement).value),
+        maxTries: CHUNK,
+      };
+      const t0 = performance.now();
+      let start = 0;
+      btn.disabled = true;
+      const step = () => {
+        const r = mine(o, start);
+        const tries = r ? r.nonce + 1 : start + CHUNK;
+        q(".tries").textContent = String(tries);
+        q(".time").textContent = `${Math.round(performance.now() - t0)} ms`;
+        if (r) {
+          q(".nonce").textContent = String(r.nonce);
+          q(".hash").textContent = r.hash;
+          btn.disabled = false;
+        } else {
+          start += CHUNK;
+          setTimeout(step, 0);
+        }
+      };
+      step();
+    });
+  });
+</script>

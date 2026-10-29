@@ -1,0 +1,27 @@
+---
+---
+<section class="hp">
+  <label>Type anything
+    <input class="in" type="text" value="hello" autocomplete="off" spellcheck="false" />
+  </label>
+  <p class="k">SHA-256</p><code class="out sha"></code>
+  <p class="k">keccak-256</p><code class="out kec"></code>
+</section>
+<style>
+  .hp { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin: 24px 0; background: var(--card); }
+  label { display: block; font-weight: 500; }
+  .in { display: block; width: 100%; margin-top: 6px; padding: 8px 10px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+  .k { margin: 14px 0 4px; color: var(--muted-fg); font-size: 13px; }
+  .out { display: block; word-break: break-all; }
+</style>
+<script>
+  import { sha256Hex, keccakHex } from "../lib/mining";
+  document.querySelectorAll<HTMLElement>(".hp").forEach((root) => {
+    const input = root.querySelector<HTMLInputElement>(".in")!;
+    const sha = root.querySelector<HTMLElement>(".sha")!;
+    const kec = root.querySelector<HTMLElement>(".kec")!;
+    const update = () => { sha.textContent = sha256Hex(input.value); kec.textContent = keccakHex(input.value); };
+    input.addEventListener("input", update);
+    update();
+  });
+</script>

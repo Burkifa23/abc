@@ -1,0 +1,28 @@
+---
+title: Blocks and Mining
+summary: Hashes, chained blocks, and proof of work.
+covers: []
+---
+
+import Figure from "../../../components/Figure.astro";
+import ChainOfBlocks from "../../../components/diagrams/ChainOfBlocks.astro";
+import HashPlayground from "../../../components/HashPlayground.astro";
+import MiningDemo from "../../../components/MiningDemo.astro";
+
+## Hashes
+
+Placeholder text. Change one character and the whole hash changes.
+
+<HashPlayground />
+
+## Chains
+
+<Figure caption="Each block stores the hash of the block before it.">
+  <ChainOfBlocks />
+</Figure>
+
+## Mining
+
+Placeholder text. Find a nonce so the hash starts with zeros.
+
+<MiningDemo />

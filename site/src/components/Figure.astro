@@ -1,0 +1,12 @@
+---
+const { caption } = Astro.props as { caption: string };
+---
+<figure class="figure">
+  <div class="fig-body"><slot /></div>
+  <figcaption>{caption}</figcaption>
+</figure>
+<style>
+  .figure { margin: 24px 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 16px; }
+  .fig-body :global(svg) { display: block; width: 100%; height: auto; color: var(--fg); }
+  figcaption { margin-top: 12px; color: var(--muted-fg); font-size: 13px; }
+</style>
