@@ -1,0 +1,108 @@
+---
+title: "Visibility and getters"
+summary: "Who may use a variable or function, how the compiler writes getters for you, and why 'private' never means 'secret'."
+covers: ["Contracts", "Contracts > Visibility and Getters"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./02-visibility-and-getters";
+
+The Ashesi library has a public catalogue anyone can search, a staff-only back office, and a locked cabinet of rare books that only the librarian opens. Nobody confuses these. Solidity has a similar set of doors, called **visibility**, and each state variable and each function must stand behind one of them. Pick the wrong door and you either leak something you meant to protect or lock out the caller you meant to serve.
+
+## Doors for state variables
+
+A state variable has three choices (there is no `external` for variables):
+
+- `public`: other contracts and outside callers can read it, because the compiler generates a **getter function** with the variable's name. Nobody can write to it from outside; no setter is generated.
+- `internal`: usable inside this contract and in contracts that inherit from it. This is the default when you write nothing.
+- `private`: usable only inside the contract that declares it, not even in contracts that inherit from it.
+
+The keyword goes after the type: `uint256 public total;`.
+
+## Doors for functions
+
+Functions get four:
+
+| Keyword | Called from inside? | Called from outside (other contracts, transactions)? | Visible to derived contracts? |
+|---|---|---|---|
+| `external` | Only as `this.f()` | Yes, part of the ABI | Yes, by `this.f()` |
+| `public` | Yes, directly | Yes, part of the ABI | Yes |
+| `internal` | Yes | No | Yes |
+| `private` | Yes | No | No |
+
+The keyword sits between the parameter list and `returns`. Two differences are worth spelling out. An `external` function is reached by a real message call, so calling it from within the same contract needs the `this.` prefix, which turns the call into an external one. A `public` function can be called both ways, and an `internal` call is just a jump inside the same code, with no new message. Because internal and private functions never appear in the ABI, they may take parameters that cannot cross the ABI boundary, such as mappings or storage references.
+
+Free functions (declared outside any contract) are always internal.
+
+## Getters in detail
+
+For `uint256 public total = 7;` the compiler writes a function `total()` that returns the value. Inside the contract there are two ways to name it, and they are not the same thing:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Tally {
+    uint256 public total = 7;
+
+    function viaStorage() external view returns (uint256) {
+        return total;          // internal access: reads the variable directly
+    }
+
+    function viaGetter() external view returns (uint256) {
+        return this.total();   // external access: calls the generated function
+    }
+}
+```
+
+Both return 7, but the second makes a call to the contract's own address. In ordinary code use the bare name.
+
+The generated getter changes shape with the type:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Catalogue {
+    struct Book {
+        string title;
+        uint16 year;
+        address[] borrowers;
+        mapping(address => uint256) dueDay;
+    }
+
+    uint256[] public shelfCounts;
+    mapping(address => uint256) public fines;
+    mapping(address => mapping(uint256 => bool)) public attended;
+    mapping(uint256 => Book) public books;
+
+    function allCounts() external view returns (uint256[] memory) {
+        return shelfCounts;
+    }
+}
+```
+
+- **Array.** `shelfCounts(uint256 i)` returns the single element at index `i`. The compiler does not hand back the whole array, because a long array would make a single call very expensive. Write a function such as `allCounts()` if you want everything.
+- **Mapping.** `fines(address)` takes the key and returns the value. Nested mappings take one key per level: `attended(address, uint256)` returns a `bool`.
+- **Struct.** `books(uint256)` returns the struct's members one by one, *leaving out* every member that is an array or a mapping. Here the result is `(string title, uint16 year)`. Strings and `bytes` are kept. Arrays and mappings are skipped because there is no sensible way to pick one element or give a key through the getter.
+
+Getters themselves have `external` visibility and the `view` mutability.
+
+## Private is not secret
+
+`private` and `internal` are rules for *other contracts' code*. They do not hide anything from people. Every state variable sits in the contract's storage, and anyone can read raw storage slots from a node. A hidden "answer" or an unrevealed password in a `private` variable is public the moment the transaction that set it is mined. A later module on storage layout shows exactly how to find it. Keep secrets off the chain, or hash and commit to them instead.
+
+<div class="callout"><strong>Watch out.</strong> Making a function <code>public</code> when you meant <code>internal</code> is one of the most common ways to open a hole. A helper such as <code>_applyCurve</code> that changes balances, left <code>public</code>, can be called by anyone. When in doubt, start with the narrowest door and widen it only when a caller outside needs it.</div>
+
+Overriding rules (an `external` function may be overridden by a `public` one, for example) arrive with inheritance in lesson 11.
+
+## Try it
+
+`Gradebook` has the wrong doors. Open one getter for the marks mapping, make `record` callable from outside, and shut the helper `curve` and the `passMark` variable away from the ABI.
+
+<CodeExercise id="pick-visibility" {...exercises["pick-visibility"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

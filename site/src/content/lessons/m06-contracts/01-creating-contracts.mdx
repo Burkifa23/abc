@@ -1,0 +1,128 @@
+---
+title: "Creating contracts and constructors"
+summary: "How a contract comes into existence, what a constructor does, and what actually gets saved on the chain afterwards."
+covers: ["Contracts", "Contracts > Creating Contracts"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./01-creating-contracts";
+
+When the Ashesi Student Union is founded, somebody has to sign the charter, name the first president and agree the term fee. After that day those things are not renegotiated every morning. A Solidity **constructor** plays the part of the founding day: a special function that runs exactly once, at the moment the contract is born, and never again. This lesson covers the two ways a contract is created, what a constructor can do, and what actually gets saved on the chain when it finishes.
+
+## Two ways to be born
+
+A contract can be created **from outside**: you (or a script, or an IDE such as Remix) send a transaction with no recipient address and, in its data field, the compiled *creation code*. The network runs that code, and the address of the new contract is derived from your address and your account's nonce. It can also be created **from inside Solidity**, by another contract using the `new` keyword. The previous module showed the mechanics of `new` and `create2`; here we care about what both routes have in common.
+
+In both cases the compiler needs the full picture. If contract A creates contract B, A's compiled output must contain B's creation code, so B's source has to be known when A is compiled. A consequence is that two contracts cannot create each other: A would have to contain B, which contains A, which contains B. The `type(C).creationCode` member from the units-and-globals module hands you that same byte string if you ever want it directly.
+
+## What a constructor is
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract StudentUnion {
+    address public president;
+    string public name;
+    uint256 public termFee;
+
+    constructor(string memory name_, uint256 termFee_) {
+        president = msg.sender;
+        name = name_;
+        termFee = termFee_;
+    }
+}
+```
+
+The `constructor` keyword replaces a function name. It runs once, during creation, and it can take parameters like any function; whoever deploys must supply them. A few rules to remember:
+
+- A constructor is optional. Without one, the contract starts with default values (or the initial values written next to the state variables).
+- There is only one. Solidity does not let you overload constructors, so you cannot offer two different ways to build the same contract.
+- It needs no visibility keyword; older versions required one, and current compilers only warn that it is ignored.
+- It may be marked `payable` if you want deployment itself to carry ether.
+- Inside it, `msg.sender` is whoever is creating the contract. If an ordinary account deploys, that is the account. If another contract uses `new`, it is *that contract*, which matters in the next section.
+
+The constructor arguments travel as part of the creation data: the ABI encoding of the arguments is simply appended after the compiled code. Tools such as Remix and web3 libraries do this for you.
+
+## Who is the creator?
+
+Suppose the student council wants a factory that opens a new union for every campus club.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Club {
+    address public president;
+    string public name;
+
+    constructor(address president_, string memory name_) {
+        president = president_;
+        name = name_;
+    }
+}
+
+contract ClubFactory {
+    Club[] public clubs;
+
+    function open(address president, string calldata name) external returns (Club) {
+        Club club = new Club(president, name);
+        clubs.push(club);
+        return club;
+    }
+}
+```
+
+`Club` does not use `msg.sender` for the president. If it did, every club's president would be the factory contract itself, because the factory is the one calling the constructor. Passing the person in as an argument avoids that trap.
+
+## What is stored afterwards
+
+Creation is two steps. First the EVM runs the *creation code* (also called initcode), which includes your constructor. When it finishes, whatever the code returns is stored at the new address as the contract's **runtime code**. That runtime code holds every `public` and `external` function and everything those functions can reach by calling other functions. The constructor itself, and internal helpers used only by the constructor, are not included. The deployed contract therefore cannot be "constructed again": the code that could do it is gone.
+
+If the constructor reverts, the whole creation fails and no contract appears.
+
+Two size limits apply:
+
+| Limit | Value | Source |
+|---|---|---|
+| Runtime code stored on chain | 24,576 bytes (24 KiB) | EIP-170 |
+| Initcode (creation code plus constructor arguments) | 49,152 bytes (48 KiB) | EIP-3860 |
+
+The second limit also adds a small gas charge per 32-byte word of initcode, and storing the runtime code costs gas per byte, so bigger contracts are costlier to deploy. When you hit 24 KiB the usual remedies are to split the logic into several contracts, move code into libraries (a later lesson), or trim long custom error strings.
+
+## Nobody is home yet
+
+While the constructor runs, the new address has no code stored yet. That has two practical effects.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Peek {
+    uint256 public sizeSeenInConstructor;
+    uint256 public sizeLater;
+
+    constructor() {
+        sizeSeenInConstructor = address(this).code.length;
+    }
+
+    function measure() external {
+        sizeLater = address(this).code.length;
+    }
+}
+```
+
+`sizeSeenInConstructor` is 0; after `measure()` the second variable is the real size. First, you must not call your own public functions through `this.f()` inside a constructor, because there is nothing at the address to receive the call; plain internal calls such as `f()` are fine. Second, any check of the form "does this address contain code?" is fooled by a contract that is still in its constructor.
+
+<div class="callout"><strong>Watch out.</strong> A common safety test is "reject callers that are contracts, because <code>code.length</code> is not zero". A contract calling you from <em>its own constructor</em> has no code yet and walks straight through. Never use that test as your only defence.</div>
+
+## Try it
+
+Write a constructor for `Society` that takes the society's name, stores it, and records the deployer as `owner`.
+
+<CodeExercise id="constructor-owner" {...exercises["constructor-owner"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
