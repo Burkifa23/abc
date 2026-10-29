@@ -64,7 +64,7 @@ The EVM is a **stack machine**, not a register machine. Every calculation happen
 
 Three more areas are used in every call, even though you rarely name them.
 
-- **Calldata** is the read-only input of the call: the function selector and ABI-encoded arguments. When a contract is being created, its calldata holds the constructor's inputs. Parameters of `external` functions arrive in calldata first. If you declare an array or string parameter as `memory`, the compiler copies it into memory at the start of the function. If you declare it `calldata`, nothing is copied until you read an element, which is cheaper when you only need part of the data.
+- **Calldata** is the read-only input of the call: the function selector and ABI-encoded arguments. During contract creation the calldata is empty: constructor arguments are appended to the initialisation code and read from there. Parameters of `external` functions arrive in calldata first. If you declare an array or string parameter as `memory`, the compiler copies it into memory at the start of the function. If you declare it `calldata`, nothing is copied until you read an element, which is cheaper when you only need part of the data.
 - **Returndata** is where a finished call leaves its result for the caller, which is how `return` values travel.
 - **Code** is where the contract's bytecode itself sits. Values marked `constant` or `immutable` are placed here: the compiler pastes the value straight into the code wherever it is used, so reading them does not touch storage at all.
 

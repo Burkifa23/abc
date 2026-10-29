@@ -34,10 +34,10 @@ contract CanteenCredit {
     }
 
     function send(address to, uint256 amount) public {
-        uint256 have = balanceOf[msg.sender];
-        if (amount > have) revert InsufficientBalance(amount, have);
-        balanceOf[msg.sender] = have - amount;
+        uint256 mine = balanceOf[msg.sender];
+        if (mine < amount) revert InsufficientBalance(amount, mine);
         balanceOf[to] += amount;
+        balanceOf[msg.sender] -= amount;
         emit Sent(msg.sender, to, amount);
     }
 }
@@ -57,13 +57,13 @@ A **constructor** runs exactly once, while the contract is being created, and ca
 
 ## Permission checks, reverts and custom errors
 
-`mint` creates new credits out of nothing, so only the treasurer may do it. The `if` line compares the caller against the stored address, and `revert NotTreasurer()` stops the call and **undoes every change made so far** in the transaction. A **custom error** is a named kind of failure, declared with `error`, which can carry data. `InsufficientBalance(requested, available)` tells the caller both what they asked for and what they have, so a wallet or block explorer can show a clear message instead of a mysterious failure.
+`mint` creates new credits out of nothing, so only the treasurer may do it. The `if` line compares the caller against the stored address, and `revert NotTreasurer()` stops the call and **undoes every change made in the current call and its sub-calls**, unless a caller catches the failure. A **custom error** is a named kind of failure, declared with `error`, which can carry data. `InsufficientBalance(requested, available)` tells the caller both what they asked for and what they have, so a wallet or block explorer can show a clear message instead of a mysterious failure.
 
-There is a shorter way to write the same check: `require(amount <= have, InsufficientBalance(amount, have));`. It is valid from Solidity 0.8.26 and reads nicely, but older compilers do not accept it, so this course writes `if (...) revert ...` when the pragma is `^0.8.24`.
+There is a shorter way to write the same check: `require(amount <= have, InsufficientBalance(amount, have));`. It reads nicely but needs a recent compiler: Solidity 0.8.26 with the via-IR pipeline, or 0.8.27 on the legacy pipeline. Older compilers reject it, so this course writes `if (...) revert ...` when the pragma is `^0.8.24`.
 
 ## Checked arithmetic
 
-Since Solidity 0.8, arithmetic is checked. If `balanceOf[to] += amount` would go above the biggest 256-bit number, the transaction reverts instead of wrapping around. The same protection stops `have - amount` from going below zero, but we test for that case first so the caller gets our clearer error.
+Since Solidity 0.8, arithmetic is checked. If `balanceOf[to] += amount` would go above the biggest 256-bit number, the transaction reverts instead of wrapping around. The same protection would stop `balanceOf[msg.sender] -= amount` from going below zero, but we test for that case first so the caller gets our clearer error.
 
 ## Events
 
@@ -73,7 +73,7 @@ Since Solidity 0.8, arithmetic is checked. If `balanceOf[to] += amount` would go
 
 You would normally watch `Sent` events with a JavaScript library such as ethers or viem; exact calls change between library versions, so check their documentation. The idea is always the same: subscribe to the event, then call `balanceOf` for the sender and receiver to display fresh numbers.
 
-<div class="callout"><strong>Watch out.</strong> If you send credits to a friend and then look up your friend's address in a block explorer, you will see nothing: the balances live only in <em>this contract's</em> storage, not in the friend's account. To track the credits, look at the contract's address, its events, and its <code>balanceOf</code> function.</div>
+<div class="callout"><strong>Watch out.</strong> A credit is not a coin in anyone's pocket; it is a row in this contract's table. Open your friend's account in an explorer and it will show no sign of the transfer. The evidence lives under the contract's own address: its <code>Sent</code> events and what <code>balanceOf</code> returns.</div>
 
 ## Try it
 

@@ -42,6 +42,8 @@ contract SimpleStorage {
       { type: "compiles" },
       { type: "abi", contract: "SimpleStorage", kind: "function", name: "set", inputs: ["uint256"], stateMutability: "nonpayable", message: "Has set(uint256) that changes state" },
       { type: "abi", contract: "SimpleStorage", kind: "function", name: "get", inputs: [], outputs: ["uint256"], stateMutability: "view", message: "Has view get() returning uint256" },
+      { type: "regex", pattern: "\\bstoredData\\s*=\\s*\\w+\\s*;", message: "set assigns the argument to storedData" },
+      { type: "regex", pattern: "return\\s+storedData\\s*;", message: "get returns storedData" },
     ],
   },
 };

@@ -9,30 +9,30 @@ import CallVsDelegatecall from "../../../components/diagrams/CallVsDelegatecall.
 import Quiz from "../../../components/Quiz.astro";
 import { quiz } from "./06-message-calls";
 
-The Ashesi library has a desk that checks student IDs. The cafeteria, the gym and the printing room do not each build their own ID checker; they send the student to the desk and take its answer. Contracts work the same way. A fee contract may ask a token contract for a balance, a voting contract may ask a registry whether someone is a student. This lesson covers how those requests work, and then the last few features of the EVM that you should know exist.
+Suppose the Ashesi library keeps one contract, `IdDesk`, that knows which wallets belong to current students. The cafeteria, the gym and the print shop each have their own contracts, and none of them copies the student list; they ask `IdDesk`. That "asking" is the everyday business of the EVM, and this lesson follows it from the first question to the odd corners of the machine.
 
-## Message calls
+## Asking another contract: message calls
 
-A **message call** is how one contract calls another contract, or sends ether to a plain account. It looks like a small transaction: it has a sender, a target, a payload, an amount of ether, some gas and a block of return data. In fact, a transaction is just the top-level message call, and it can trigger further message calls inside it, to any depth the rules allow.
+When the cafeteria contract asks `IdDesk` a question, it makes a **message call**. It is a small transaction nested inside the big one. It names a target, carries a payload and optionally some ether, spends gas, and gets return data back. The same mechanism pushes ether to a plain account. A transaction from a wallet is simply the outermost message call.
 
-Things worth knowing about calls:
+What the cafeteria should expect:
 
-- **Gas is shared out.** The caller chooses how much of its remaining gas to pass along and how much to keep. If the inner call runs out of gas or fails in any way, only the gas that was passed is lost, and a failure flag is returned. By default Solidity treats such a failure as its own failure, so the exception travels up the call chain automatically ("bubbles up").
-- **The callee starts fresh.** It gets clean memory, and it sees its input in calldata. When it finishes, it hands back return data, which the caller receives in memory it prepared.
-- **Calls are synchronous.** The caller waits until the inner call finishes.
-- **Depth is limited.** Calls can nest at most 1024 deep. Also, only 63/64 of the remaining gas can be forwarded in each call, which in practice brings the usable depth to a little under 1000. For work that needs many repetitions, a loop is safer than recursion through calls.
+- **The callee starts clean.** `IdDesk` runs with fresh, empty memory and reads its question from calldata. Its answer comes back as return data, which lands in memory that the caller reserved.
+- **Everything waits.** The cafeteria contract is paused until the answer arrives.
+- **The caller sets a gas budget.** It may hand over all of its remaining gas or only a slice, and keep the rest. If the inner call fails, the gas passed to it is spent, and the caller is told it failed.
+- **Nesting has a ceiling.** A chain of calls may be at most 1024 levels deep, and each level can only pass on 63/64 of the gas it has left, so real chains stop a little before that. Prefer loops to long call chains.
 
-## Delegatecall and libraries
+How failure is handled depends on how you call. With the ordinary syntax (`idDesk.isStudent(who)`, a high-level call), Solidity checks the result and, on failure, reverts the caller too, so the error rolls upward. With the low-level tools `call`, `delegatecall` and `staticcall`, nothing is rolled up for you: they hand back a `bool` saying whether it worked, and it is your job to look at it.
 
-A **delegatecall** is a variant of the message call with one big difference: the *code* is taken from the target, but it runs in the *context of the caller*. The storage that gets read and written is the caller's, the address and balance that count are the caller's, and `msg.sender` and `msg.value` keep the values they had in the caller instead of becoming the caller's own address.
+## Borrowing code: delegatecall and libraries
 
-Think of a lecturer borrowing a marking scheme from a colleague. With a normal call, the colleague does the marking in her own office, on her own papers. With a delegatecall, you take the marking scheme, but you apply it to your own pile of papers, in your own office.
+A **delegatecall** runs another contract's *code* but in *your* context. Storage reads and writes hit the caller's storage, the executing address and balance are the caller's, and `msg.sender` and `msg.value` are what the caller itself received. Picture a lecturer who takes a colleague's marking scheme and applies it to her own pile of scripts in her own office. A normal call would instead send the scripts to the colleague's office.
 
 <Figure caption="With a call, the callee's code changes the callee's storage. With a delegatecall, the callee's code changes the caller's storage.">
   <CallVsDelegatecall />
 </Figure>
 
-This is the mechanism behind Solidity **libraries**: reusable code, such as one that manages a complex data structure, which is applied to the storage of whichever contract uses it. It also lets a contract load code from a different address at run time.
+This is what makes Solidity **libraries** possible: shared code for, say, a tricky data structure, applied to the storage of whichever contract uses it. It also lets a contract pick its code at run time by naming an address.
 
 ```solidity
 contract Roster {
@@ -46,39 +46,39 @@ contract Roster {
 }
 
 contract Bumper {
-    uint256 public counter;    // storage slot 0 of Bumper
+    uint256 public counter;    // slot 0 of Bumper
 
     function bump() external { counter += 1; }
 }
 ```
 
-Here is the trap. When `Roster` delegates to `Bumper.bump()`, the code increases "slot 0", but slot 0 of *Roster* is `lecturer`. The call quietly corrupts the wrong variable. Storage layouts of the caller and the delegated code must line up.
+The trap: `bump()` adds one to "slot 0", but when it runs for `Roster`, slot 0 is `lecturer`. The code quietly damages the wrong variable. Storage layouts must match between the caller and the borrowed code.
 
-<div class="callout"><strong>Watch out.</strong> Delegatecall to code you do not fully control hands that code the power to rewrite your storage and move your funds. It is used with great care, and mismatched storage layouts are a classic source of exploits. Even a contract with no <code>selfdestruct</code> in it can be made to self-destruct if it delegatecalls code that has one.</div>
+<div class="callout"><strong>Watch out.</strong> Delegatecalling code you do not control lets that code rewrite your storage and spend your ether. Mismatched layouts and untrusted targets are classic sources of exploits, so reserve delegatecall for code you have audited.</div>
 
-## Logs
+## Leaving a trace: logs
 
-The EVM can write data to a specially indexed list called the **log**, which is organised all the way up to the block level. Solidity's **events** are built on it, as you saw in lesson 3. The key properties: contracts cannot read log data after writing it, but programs outside the chain can find it efficiently. Parts of the log are stored in structures called bloom filters, so even **light clients**, which do not download the entire chain, can search the logs in a way they can verify cryptographically. That is why wallets and explorers use events for history rather than reading storage.
+Sometimes a contract wants to announce something without paying to store it. It can write a **log entry**, which the chain keeps in an index tied to the block. Events are Solidity's friendly face for this, as in lesson 3. Contracts cannot read logs back, but outside programs can search them quickly. Part of that index uses bloom filters, a compact structure that lets a **light client** (a node that skips downloading the full chain) look up matching logs and still check them cryptographically. This is why a wallet app can list your past transfers without scanning storage.
 
-## Create
+## Making new contracts: create
 
-A contract can create another contract. It does so with a dedicated instruction, not by sending a transaction to the zero address. The difference from a normal call is small: the payload is run as initialisation code and its result stored as the new contract's code, and the creator receives the new contract's address. (Solidity writes this with the `new` keyword, which we meet in the Contracts module.)
+A contract may deploy another one. It uses a dedicated creation instruction rather than a transaction to a special address. The payload is run as initialisation code, the returned bytes become the new contract's code, and the creator receives its address. The plain version derives the address from the creator and its nonce, as in lesson 4. A second form, **CREATE2**, mixes in a caller-chosen salt and the initialisation code, so the address can be predicted before anything is deployed. Solidity exposes both through `new` (the Contracts module has the details).
 
-## Deactivating and self-destruct
+## Retiring a contract: self-destruct
 
-Historically, the only way to remove a contract from the chain was for the contract to run `selfdestruct`, which sent its remaining ether to a chosen address and erased the contract's code and storage. Ether sent to an erased address afterwards is gone forever.
+Long ago, the only way to take code off the chain was for the contract to execute `selfdestruct`, which paid out its remaining ether to a named account and wiped its code and storage. Ether later sent to the wiped address was lost for good.
 
-That has changed. Since the Cancun upgrade, `selfdestruct` **only sends the ether** and no longer deletes the contract, with one exception: if it runs in the same transaction in which the contract was created, the old deleting behaviour still applies. This is a network-wide rule (EIP-6780), so it depends on the chain's EVM version, not on the compiler setting you used. The instruction has also been deprecated since Solidity 0.8.18, the compiler warns when you use it, and using it in a new contract is strongly discouraged. Even an erased contract stays in the history of the chain on most nodes, so it is not like deleting a file.
+Since the Cancun upgrade (EIP-6780), `selfdestruct` has shrunk to *just paying out the ether*. The wipe still happens only when it runs in the very transaction that created the contract. This is a network rule, so it depends on the chain, not on your `--evm-version` compiler setting. Solidity has deprecated the instruction since 0.8.18 and warns when you use it; avoid it in new work. Even a wiped contract remains in the chain's history on most nodes.
 
-If you want to switch a contract off, the better design is to keep a flag in the contract and make every function revert while the flag is set. Make sure the design also lets users get their ether out.
+If you want a contract to stop working, store a "closed" flag and make its functions revert while it is set, and let users withdraw what is theirs. Because the wiping behaviour is gone for existing contracts, delegatecalling code that contains `selfdestruct` can now at most send out your ether; it will not erase your contract unless it happens in the creating transaction.
 
-## Precompiled contracts
+## Built-in helpers: precompiled contracts
 
-A few addresses are special. The range from address `1` up to `0x0a` holds **precompiled contracts**. You call them like any other contract, but there is no EVM code at the address: their behaviour, and their gas cost, is built into the EVM itself. They exist for heavy operations that would be too expensive written in ordinary bytecode, such as recovering a signer from a signature or computing certain hashes. Other EVM-compatible chains may offer a different set, and Ethereum may add more, but new ones are expected to stay within `1` to `0xffff`.
+Some low addresses behave like contracts but contain no bytecode. They are called **precompiled contracts**, and the EVM client itself implements them, including their gas price. They cover jobs that would be painfully slow in ordinary bytecode, such as recovering the signer of a signature, certain hashes, and elliptic-curve maths. They start at address `0x01`; the addresses `0x01` to `0x0a` are the classic set, and later upgrades have added more (the Pectra upgrade added BLS12-381 operations from `0x0b` upward). Other EVM chains may carry a different set, so check before relying on one.
 
 ## The instruction set
 
-The EVM's instruction set is deliberately small, so that every implementation behaves identically; a mismatch would split the network. All instructions work on 256-bit words, or on slices of memory and other byte arrays. You will find the usual arithmetic, bit, logic and comparison operations, conditional and unconditional jumps, and instructions to read facts about the current block, such as its number and timestamp. Solidity compiles to this set, and the inline assembly chapter lists every instruction (opcode).
+All of the above compiles down to a deliberately small list of instructions, kept small so every client behaves identically (a disagreement would split the network). Each works on 256-bit words or on slices of memory and other byte arrays. Examples: `SSTORE` writes a storage slot, `CALL` and `DELEGATECALL` start the calls above, and `JUMP` moves execution elsewhere in the code. There are also the usual arithmetic, bit, logic and comparison instructions, and ones that read block facts such as number and timestamp. The inline assembly chapter lists every opcode.
 
 ## Check your understanding
 

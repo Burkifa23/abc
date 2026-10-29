@@ -24,12 +24,12 @@ An **account** is an entry in Ethereum's state, and it has an address. There are
 
 The EVM does not treat the two differently in the places that matter. You can send ether to either kind, and either kind can be the target of a call.
 
-Every account has these fields:
+Every account has a balance and a nonce. Contract accounts also carry code and storage, which are empty for an EOA:
 
 - a **balance**, kept in **wei**, the smallest unit of ether. One ether is 10^18 wei (written `10**18` in Solidity);
 - a **nonce**, a counter used to tell transactions apart and to derive contract addresses;
 - **storage**, a persistent key-value store that maps 256-bit words to 256-bit words (lesson 5);
-- **code**, which is empty for an EOA.
+- **code**, the bytecode that runs when the account is called. One modern exception: since EIP-7702, an EOA may point at a contract through a special "delegation designator" stored in its code field, so that its transactions can borrow that contract's logic. The key pair still controls the account.
 
 <Figure caption="An externally owned account holds a balance and a nonce. A contract account adds code and storage. A transaction carries value and a payload from one to the other.">
   <EvmOverview />
@@ -50,7 +50,7 @@ Creation has a subtle point that trips people up. The payload of a creation tran
 
 Suppose anyone could submit an endless loop for free. Every node would burn power forever. Ethereum prevents this with **gas**, a unit that measures computation.
 
-When a transaction starts, its sender (the account recorded as `tx.origin`) pays up front for a chosen amount of gas. Each step the EVM takes uses up some gas according to a fixed price list. If the gas runs out, an **out-of-gas** exception ends execution and undoes the state changes made in the current call. Gas that was used is not returned. The gas that is left is refunded to the sender when execution ends normally.
+When a transaction starts, its sender (the account recorded as `tx.origin`) pays up front for a chosen amount of gas. Each step the EVM takes uses up some gas according to a fixed price list. If the gas runs out, an **out-of-gas** exception ends execution and undoes the state changes made in the current call. An out-of-gas failure (or a call to an invalid instruction) consumes all the gas given to that call. When execution ends normally, or ends in an ordinary `revert`, the gas that is left over is refunded to the sender.
 
 This does two jobs. It pushes developers to write economical code, and it pays the validators who run the transaction. Each block also has a maximum total gas, so there is a ceiling on how much work any one block can demand from the network.
 
@@ -59,7 +59,7 @@ Two ideas set the bill:
 - the **gas limit** is how much gas the sender is willing to spend at most;
 - the **gas price** is what the sender pays per unit. The sender chooses it, and validators decide whether to include the transaction. Offering too low a price does not trick the system; it just means validators ignore the transaction. (On Ethereum today the price is split into a base fee that is burned and an optional tip, but the idea of price times gas is the same.)
 
-A transaction that reverts is still included in a block, and the gas it used is still paid. It is the *effects* that are undone, not the cost of trying.
+A transaction that reverts is still included in a block, and the gas used up to the revert is still paid. It is the *effects* that are undone, not the cost of the work already done; the unused remainder comes back.
 
 ## Where does a call fit in?
 
