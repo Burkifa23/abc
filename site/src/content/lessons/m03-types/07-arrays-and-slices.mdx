@@ -33,7 +33,7 @@ function squares(uint256 n) public pure returns (uint256[] memory out) {
 
 ## Bytes and string
 
-`bytes` is a dynamic array of single bytes, and `string` is the same thing but meant for UTF-8 text. Both are packed tightly instead of using a whole 32-byte slot per item, so they are cheaper than `bytes1[]`. Two differences matter:
+`bytes` is a dynamic array of single bytes, and `string` is the same thing but meant for UTF-8 text. Both are packed tightly instead of using a whole 32-byte slot per item, so in memory and calldata they are cheaper than a `bytes1[]`, where every item would get its own 32-byte word. Two differences matter:
 
 - `bytes` has `length` and index access like any array, and (in storage) `push`/`pop`.
 - `string` has **neither** `length` nor `s[i]`. A UTF-8 character can take more than one byte, so "the third item" would be ambiguous. To count bytes, convert first: `bytes(s).length`.
@@ -72,17 +72,17 @@ Each `push` costs a storage write. Setting `length` by hand is not allowed since
 A reference into a storage array is a pointer to an *item*, not a copy. If that item stops existing, the pointer is left aiming at a slot that the array no longer owns. This is a **dangling reference**:
 
 ```solidity
-uint256[][] queues;
+uint256[][] lecturesByDay;
 
 function oops() public {
-    queues.push();                          // queues[0] exists
-    uint256[] storage first = queues[0];    // pointer to the inner array
-    queues.pop();                           // the inner array is cleared and gone
-    first.push(7);                          // writes through a stale pointer
+    lecturesByDay.push();                           // day 0 exists
+    uint256[] storage monday = lecturesByDay[0];    // pointer to that inner array
+    lecturesByDay.pop();                            // the inner array is cleared and gone
+    monday.push(9);                                 // writes through a stale pointer
 }
 ```
 
-The last line still compiles. It writes into storage that belongs to nothing, and that stray data can surface again in a later `queues.push()`. Do not hold a pointer across a `pop` or a reassignment of the thing it points into, and avoid statements whose left side points into an array that the right side changes.
+The last line still compiles. It writes into storage that belongs to nothing, and that stray data can surface again in a later `lecturesByDay.push()`. Do not hold a pointer across a `pop` or a reassignment of the thing it points into, and avoid statements whose left side points into an array that the right side changes.
 
 ## Array slices
 
@@ -94,7 +94,7 @@ function stripSelector(bytes calldata data) external pure returns (bytes calldat
 }
 ```
 
-A slice has the array type (`bytes calldata` here) but no `push` or other members, and an `end` below `start` or beyond the length fails. Slices are mostly used with `abi.decode(data[4:], (address, uint256))` to read the arguments of a call that arrived as raw bytes. A slice converts to `memory` when you need a copy.
+The slice converts implicitly to `bytes memory`, which is why `stripSelector` in the exercise can return it. A slice has the array type (`bytes calldata` here) but no `push` or other members, and an `end` below `start` or beyond the length fails. Slices are mostly used with `abi.decode(data[4:], (address, uint256))` to read the arguments of a call that arrived as raw bytes.
 
 <div class="callout"><strong>Watch out.</strong> A memory array cannot grow. Writing <code>.push</code> on one is a compile error, and writing past its length fails at runtime. Only dynamic arrays in storage can <code>push</code> and <code>pop</code>. Also never loop over a storage array that anyone can make arbitrarily long: the gas will eventually exceed the block limit.</div>
 

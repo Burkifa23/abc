@@ -20,7 +20,7 @@ function label(uint256 mark) public pure returns (string memory) {
 }
 ```
 
-The two branches need to have a common type, and the result takes that type. There is a trap with literals. Plain number literals are computed with unlimited precision, so `1.5 + 1.5` is fine and is just `3`. But a ternary forces the compiler to pick a real type for the result, and a fractional literal has none, so `1.5 + (flag ? 1.5 : 2.5)` is rejected even though `1.5 + 1.5` is accepted.
+The two branches need to have a common type, and the result takes that type. Two traps. First, literals: plain number literals are computed with unlimited precision, so `0.25 * 4` is simply `1`. A ternary forces the compiler to pick a real integer type for the result, and a fraction has none, so `0.25 * (vip ? 4 : 8)` is rejected although `0.25 * 4` is accepted. Second, signs: `x ? 1 : -1` mixes a positive and a negative literal, so the result must be a signed type, and it will not silently become a `uint`. Assign it to an `int`, or avoid the mix.
 
 ## Compound assignment, increment and decrement
 

@@ -17,8 +17,10 @@ const rows = [
   <text x="300" y="18" fill="var(--muted-fg)">slot = keccak256(key . 2)</text>
   <text x="540" y="18" fill="var(--muted-fg)">value</text>
   {rows.map((r, i) => (
+    <path d={`M194 47 L226 ${48 + i * 48}`} stroke="var(--border)" stroke-width="1.5" fill="none" />
+  ))}
+  {rows.map((r, i) => (
     <g transform={`translate(0 ${28 + i * 48})`}>
-      <path d="M194 47 H224" stroke="var(--border)" stroke-width="1.5" fill="none" />
       <rect x="226" y="0" width="408" height="40" rx="6" fill="none" stroke="var(--border)" stroke-width="1.5" />
       <text x="236" y="25" fill="currentColor" font-weight="600">{r.k}</text>
       <text x="300" y="25" fill="currentColor">{r.s}</text>
