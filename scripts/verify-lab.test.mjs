@@ -29,8 +29,8 @@ function check(name, dir, code, text, cleanup = false) {
 
 check('lab-good passes', join(fx, 'lab-good'), 0, /PASS/);
 check('lab-bad: starter already passes', join(fx, 'lab-bad'), 1, /FAIL: starter already passes/);
-check('starter does not compile', variant((d) => appendFileSync(join(d, 'src/Box.sol'), '// COMPILE_ERROR\n')), 1, /stub: build failed[sS]*FAIL: starter does not compile/, true);
-check('solution fails', variant((d) => writeFileSync(join(d, '.solution/src/Box.sol'), '// no marker\n')), 1, /stub: test failed[sS]*FAIL: solution fails/, true);
+check('starter does not compile', variant((d) => appendFileSync(join(d, 'src/Box.sol'), '// COMPILE_ERROR\n')), 1, /stub: build failed[\s\S]*FAIL: starter does not compile/, true);
+check('solution fails', variant((d) => writeFileSync(join(d, '.solution/src/Box.sol'), '// no marker\n')), 1, /stub: test failed[\s\S]*FAIL: solution fails/, true);
 check('extraCheck failing', withExtra('exit 1'), 1, /FAIL: extra check/, true);
 check('extraCheck sees real REPO_ROOT', withExtra('test -f "$REPO_ROOT/scripts/verify-lab.sh"'), 0, /PASS/, true);
 
