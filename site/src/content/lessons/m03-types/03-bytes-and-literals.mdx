@@ -33,7 +33,7 @@ One more difference from integers: with `bytesN` the first byte is the "high" en
 
 ## Address literals
 
-A hexadecimal number written in source that is 39 to 41 digits long and passes the **checksum** test is typed as `address payable`. The checksum (EIP-55) works by choosing the upper or lower case of each letter according to a hash of the address, so one mistyped character is almost always detected. If the case pattern is wrong, the compiler stops you with an error that even prints the correct spelling.
+A hexadecimal number written in source that is 39 to 41 digits long and passes the **checksum** test is typed as a plain `address` (wrap it in `payable(...)` when you want to send ether to it). The checksum (EIP-55) works by choosing the upper or lower case of each letter according to a hash of the address, so one mistyped character is almost always detected. If the case pattern is wrong, the compiler stops you with an error that even prints the correct spelling.
 
 ```solidity
 address constant TREASURER = 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed;
@@ -82,7 +82,7 @@ When a literal is put into a typed slot, these rules apply. They are summarised 
 - A decimal or hex integer literal converts to any integer type **if the value fits**. The zero literal `0` is also allowed for any `bytesN`.
 - A decimal literal never converts to `bytesN`. A hex literal such as `0x12345678` converts to `bytes4` only if its digits exactly fill the width (8 digits for 4 bytes). `bytes4 b = 0x12;` is an error.
 - Strings and `hex"..."` literals fit into a `bytesN` that is at least as long as the content.
-- A correctly checksummed address literal is an `address payable`.
+- A correctly checksummed address literal is an `address`; use `payable(...)` if it must receive ether.
 
 <div class="callout"><strong>Watch out.</strong> <code>"AB"</code> as a <code>bytes4</code> becomes <code>0x41420000</code> (padding on the right), but <code>0x4142</code> as a <code>bytes4</code> is rejected, and <code>uint32(0x4142)</code> is 0x00004142 (padding on the left). The same two bytes land in different places depending on the kind of literal.</div>
 

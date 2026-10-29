@@ -24,7 +24,7 @@ Lesson 5 of module 1 showed the EVM's data areas. Here are the three that a refe
 - **`memory`**: a temporary, writable workspace that lasts as long as the current function call. Arrays created with `new uint[](n)` are in memory, and their size is fixed once created: you cannot `push` to them.
 - **`calldata`**: the read-only bytes that were sent with the call. It cannot be modified. Using it for inputs means the contract does not copy the data anywhere, which saves gas.
 
-Value types (numbers, bools, addresses) have no location annotation, because they are just copied around as they are.
+Value types (numbers, bools, addresses) have no location annotation, because they are just copied around as they are. Mappings are the odd one out: they exist only in storage, so a mapping can never be a memory or calldata variable or an external parameter.
 
 ## What assignment does
 

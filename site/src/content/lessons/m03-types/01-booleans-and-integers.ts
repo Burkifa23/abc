@@ -6,7 +6,7 @@ export const quiz: Question[] = [
   { q: "Which block makes `uint8(250) + 10` give 4 instead of reverting?", options: ["`wrap { ... }`", "`unchecked { ... }`", "`pure { ... }`", "`assembly { ... }` is the only way"], answer: 1, explain: "`unchecked` switches off the overflow check for the code written directly inside the block." },
   { q: "What do `7 / 2` and `-7 / 2` evaluate to on integers?", options: ["3 and -4", "4 and -4", "3 and -3", "3.5 and -3.5"], answer: 2, explain: "Integer division truncates toward zero; there is no fractional part." },
   { q: "Why are `fixed` and `ufixed` not a good way to store prices in a contract?", options: ["They are too slow", "They are declared but cannot be assigned or used in arithmetic yet", "They only exist on testnets", "They always round up"], answer: 1, explain: "The language reserves the types but does not implement them. Contracts keep money as integers in the smallest unit." },
-  { q: "Spot the bug: `bool ok = (mask >> 2) & 1 == 1;` where `mask` is a `uint8`. What goes wrong?", options: ["Shifts need a signed operand", "`==` binds tighter than `&`, so `1 == 1` is evaluated first and `&` is applied to a number and a bool", "`bool` cannot hold a comparison", "Nothing, it is correct"], answer: 1, explain: "Precedence puts `==` above `&`. Write `((mask >> 2) & 1) == 1`. Here the mixed types even make it a compile error." },
+    { q: "Spot the bug: the author expects `uint8 x = 200; uint8 y = x << 1;` to revert because 400 does not fit in a uint8. What really happens?", options: ["It reverts with a Panic", "It does not compile", "`y` is 144; shifts are never overflow-checked, the high bit is just lost", "`y` is 255, the saturated maximum"], answer: 2, explain: "Shifts discard bits that fall off the end and do not revert, with or without `unchecked`. 400 mod 256 is 144." },
   { q: "What does `type(uint8).max` give?", options: ["256", "127", "255", "2**256 - 1"], answer: 2, explain: "A uint8 holds 8 bits, so the largest value is 2^8 - 1 = 255." },
   { q: "```solidity\nfunction f(uint x) public pure returns (uint) {\n    return 5 % x;\n}\n```\nWhat happens when `f(0)` is called?", options: ["Returns 0", "Returns 5", "Reverts with a Panic (division by zero)", "Returns the maximum uint"], answer: 2, explain: "Modulo by zero panics with code 0x12, just like division by zero." },
 ];
@@ -35,8 +35,9 @@ contract Scores {
     checks: [
       { type: "compiles" },
       { type: "abi", contract: "Scores", kind: "function", name: "clamp", inputs: ["uint8"], outputs: ["uint8"], stateMutability: "pure", message: "Has pure clamp(uint8) returning uint8" },
-      { type: "regex", pattern: "\\b100\\b", message: "Uses the cap 100" },
-      { type: "regex", pattern: "(if\\s*\\(|\\?)", message: "Compares x with the cap (if or ternary)" },
+      { type: "regex", pattern: "(x\\s*>\\s*100|100\\s*<\\s*x|x\\s*>=\\s*101|x\\s*<=\\s*100|x\\s*<\\s*101)", message: "Compares x with the cap 100" },
+      { type: "regex", pattern: "(return\\s+100\\s*;|\\?\\s*100\\s*:|:\\s*100\\s*;)", message: "Returns 100 when x is over the cap" },
+      { type: "regex", pattern: "(return\\s+x\\s*;|[?:]\\s*x\\s*;)", message: "Returns x itself when it is within the cap" },
     ],
   },
 };

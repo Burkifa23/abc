@@ -53,7 +53,8 @@ contract Curve {
       { type: "compiles" },
       { type: "abi", contract: "Curve", kind: "function", name: "quadruple", inputs: ["uint256"], outputs: ["uint256"], stateMutability: "pure", message: "Has pure quadruple(uint256) returning uint256" },
       { type: "regex", pattern: "function\\s*\\(\\s*uint256\\s*\\)\\s*(internal\\s+)?pure\\s+returns\\s*\\(\\s*uint256\\s*\\)\\s+\\w+", message: "A parameter has a function type" },
-      { type: "regex", pattern: "applyTwice\\s*\\(\\s*double\\s*,", message: "quadruple passes double to applyTwice" },
+      { type: "regex", pattern: "return\\s+(\\w+)\\s*\\(\\s*\\1\\s*\\(\\s*\\w+\\s*\\)\\s*\\)\\s*;", message: "applyTwice returns f(f(x))" },
+      { type: "regex", pattern: "return\\s+applyTwice\\s*\\(\\s*double\\s*,\\s*\\w+\\s*\\)\\s*;", message: "quadruple returns applyTwice(double, x)" },
     ],
   },
 };

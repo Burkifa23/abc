@@ -39,7 +39,7 @@ bool bitOne = ((flags >> 1) & 1) == 1;        // false: bit 1 is 0
 bool bitTwo = ((flags >> 2) & 1) == 1;        // true: bit 2 is 1
 ```
 
-Notice the brackets. `==` binds tighter than `&`, so without them the compiler would try `1 == 1` first and then `&` that against a number. Always parenthesise bit tricks.
+The brackets are not strictly required, because `&` binds tighter than `==`, but they make the intent obvious to the next reader. Shifts are a special case worth remembering: they are **never** overflow-checked and never revert, even outside `unchecked`. `uint8(200) << 1` quietly loses its top bit and gives 144.
 
 ### Arithmetic is checked
 
@@ -59,7 +59,7 @@ Two further rules. First, only code written *inside* the block is unchecked; a f
 
 Integer division **truncates toward zero**, so `7 / 2` is 3 and `-7 / 2` is -3. Dividing by zero, or taking `% 0`, panics with code `0x12`. The result of `%` takes the sign of the left operand: `-7 % 3` is -1.
 
-`**` is exponentiation: `2 ** 10` is 1024. It is right-associative, so `2 ** 3 ** 2` means `2 ** 9`. With variables it is checked like everything else. Also note that `0 ** 0` is 1.
+Division has one more overflow case: `type(int256).min / -1` would need +2^255, which does not fit, so in checked mode it panics. `**` is exponentiation: `2 ** 10` is 1024, and the exponent must be an unsigned type. It is right-associative, so `2 ** 3 ** 2` means `2 ** 9`. With variables it is checked like everything else. Also note that `0 ** 0` is 1.
 
 ## Fixed-point numbers
 

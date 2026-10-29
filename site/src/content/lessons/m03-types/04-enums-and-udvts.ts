@@ -53,8 +53,11 @@ contract Shop {
       { type: "regex", pattern: "enum\\s+Status\\s*\\{[^}]*Approved[^}]*\\}", message: "Declares enum Status with an Approved member" },
       { type: "regex", pattern: "type\\s+Price\\s+is\\s+uint128\\s*;", message: "Declares type Price is uint128" },
       { type: "regex", pattern: "status\\s*=\\s*Status\\.Approved\\s*;", message: "approve() sets status to Status.Approved" },
-      { type: "regex", pattern: "Price\\.wrap\\s*\\(", message: "Uses Price.wrap" },
-      { type: "regex", pattern: "Price\\.unwrap\\s*\\(", message: "Uses Price.unwrap" },
+      { type: "abi", contract: "Shop", kind: "function", name: "approve", inputs: [], stateMutability: "nonpayable", message: "Has approve() that changes state" },
+      { type: "abi", contract: "Shop", kind: "function", name: "toPrice", inputs: ["uint128"], outputs: ["uint128"], stateMutability: "pure", message: "Has pure toPrice(uint128)" },
+      { type: "abi", contract: "Shop", kind: "function", name: "fromPrice", inputs: ["uint128"], outputs: ["uint128"], stateMutability: "pure", message: "Has pure fromPrice(Price) (a uint128 in the ABI)" },
+      { type: "regex", pattern: "return\\s+Price\\.wrap\\s*\\(\\s*\\w+\\s*\\)\\s*;", message: "toPrice returns Price.wrap(argument)" },
+      { type: "regex", pattern: "return\\s+Price\\.unwrap\\s*\\(\\s*\\w+\\s*\\)\\s*;", message: "fromPrice returns Price.unwrap(argument)" },
     ],
   },
 };

@@ -52,7 +52,7 @@ function who() public view returns (address a, bytes4 sel) {
 function vote(uint256 option) public {}
 ```
 
-Older versions allowed `.gas()` and `.value()` on function values; they have been removed. Use the call options instead: `target.vote{gas: 50000, value: 1 ether}(2)`.
+Older versions allowed `.gas()` and `.value()` on function values; they have been removed. Use the call options instead: `target.donate{gas: 50000, value: 1 ether}()`, which only works if `donate` is declared `payable`.
 
 ## Conversions between function types
 

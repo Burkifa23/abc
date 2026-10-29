@@ -67,7 +67,10 @@ contract Roster {
       { type: "abi", contract: "Roster", kind: "function", name: "promote", inputs: ["uint256"], stateMutability: "nonpayable", message: "Has promote(uint256) that changes state" },
       { type: "regex", pattern: "sum\\s*\\(\\s*uint256\\[\\]\\s+calldata", message: "sum reads its array from calldata" },
       { type: "regex", pattern: "bump\\s*\\(\\s*uint256\\[\\]\\s+memory", message: "bump works on a memory copy" },
-      { type: "regex", pattern: "Student\\s+storage\\s+\\w+\\s*=\\s*students\\s*\\[", message: "promote takes a storage pointer to students[i]" },
+      { type: "regex", pattern: "\\+=\\s*xs\\s*\\[\\s*\\w+\\s*\\]", message: "sum adds each element of xs to the total" },
+      { type: "regex", pattern: "xs\\s*\\[\\s*\\w+\\s*\\]\\s*(\\+=\\s*1|\\+\\+)", message: "bump increments each element of xs" },
+      { type: "regex", pattern: "Student\\s+storage\\s+(\\w+)\\s*=\\s*students\\s*\\[", message: "promote takes a storage pointer to students[i]" },
+      { type: "regex", pattern: "\\.year\\s*(\\+=\\s*1|\\+\\+)", message: "promote increments year through the pointer" },
     ],
   },
 };

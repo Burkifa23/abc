@@ -45,7 +45,7 @@ contract Tags {
     checks: [
       { type: "compiles" },
       { type: "regex", pattern: "bytes4\\s+(public\\s+)?constant\\s+MAGIC\\s*=\\s*hex\\s*\"[0-9a-fA-F_]+\"", message: "MAGIC is a bytes4 constant set from a hex literal" },
-      { type: "regex", pattern: "string\\s+(public\\s+)?constant\\s+GREETING\\s*=\\s*unicode\\s*\"", message: "GREETING is a string constant set from a unicode literal" },
+      { type: "regex", pattern: "string\\s+(public\\s+)?constant\\s+GREETING\\s*=\\s*unicode\\s*\"[^\"]+\"", message: "GREETING is a string constant set from a unicode literal" },
     ],
   },
 };
