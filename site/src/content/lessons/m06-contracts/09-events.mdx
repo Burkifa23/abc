@@ -1,0 +1,75 @@
+---
+title: "Events"
+summary: "How a contract writes searchable entries into the transaction log: declaring, emitting, indexing and what the log can and cannot be used for."
+covers: ["Contracts", "Contracts > Events"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./09-events";
+
+A contract cannot send an email or ring a bell. But websites, wallets and dashboards still need to know when a student registered or a fee was paid. Reading all of a contract's storage on every block would be slow. Instead the contract writes a line in the **transaction log**, a cheap, append-only record attached to each transaction's receipt, and outside programs search that log. In Solidity, writing such a line is called emitting an **event**.
+
+## Declaring and emitting
+
+An event is declared with `event`, a name and a typed parameter list. It can sit at file level or inside a contract, interface or library, and contracts inherit the events of their bases. You fire it with `emit`:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Fees {
+    event Paid(address indexed student, uint256 indexed term, uint256 amount);
+
+    function pay(uint256 term) external payable {
+        emit Paid(msg.sender, term, msg.value);
+    }
+}
+```
+
+Each emitted event becomes a log entry tied to the **address of the contract that emitted it**, and stays on chain as long as the block itself does. Emitting costs far less than storing the same data in a state variable, but it does change state, so a `view` or `pure` function cannot emit.
+
+## Topics and data
+
+A log entry has two parts:
+
+- **Topics**: up to four 32-byte words that nodes can index and search by.
+- **Data**: the rest, ABI-encoded.
+
+By default, the first topic is the hash of the event's signature (`Paid(address,uint256,uint256)`, hashed with keccak256). Marking a parameter `indexed` puts it in a topic instead of the data. You may index **up to three** parameters of a normal event. Searching then looks like "give me all `Paid` logs from this contract where topic 1 is Kofi's address": the node answers using the topics without decoding anything.
+
+A topic is exactly one word. For value types that fit (addresses, integers, bools, `bytes32`) the value is stored as is. For a **reference type** such as `string`, `bytes` or an array, what lands in the topic is the **keccak256 hash** of the value. You can still look for "this exact string" by hashing it yourself, but you cannot read the original string back from the topic. If readers need the text, leave it unindexed, or emit it twice, once indexed and once not.
+
+Unindexed parameters are packed into the data section and can be decoded by anyone who knows the event's types.
+
+## Anonymous events
+
+Adding `anonymous` to a declaration leaves the signature hash out of the topics:
+
+```solidity
+event Ping(address indexed who, uint256 indexed a, uint256 indexed b, uint256 indexed c) anonymous;
+```
+
+That makes it cheaper to deploy and emit, and frees a topic slot, so an anonymous event can index **four** parameters. The cost is that you cannot search for it by name, only by the contract address. Since the log keeps data but not types, a reader must already know which event it is, and an anonymous event can even be shaped to look like another event.
+
+## Members and what contracts cannot do
+
+For a non-anonymous event, `Paid.selector` is a `bytes32` holding that signature hash, the same value found in the first topic. Handy when you test or decode logs from Solidity code.
+
+Logs are write-only from the contract's point of view: no contract can read them, **including the one that wrote them**. If your contract needs a number later, put it in storage. It is possible to prove a log exists with a Merkle proof, but only against block headers, and a contract can only see the last 256 block hashes, so that is rarely practical.
+
+## Reading events from outside
+
+Off-chain tools (libraries such as ethers.js or viem, a node's `eth_getLogs`, an indexer like The Graph) take the ABI, a contract address and a topic filter, and give back decoded entries. The compiler's ABI output lists your events with their `indexed` flags, which is exactly what those tools need. Those topics are beyond this course, but you will see them in the Web3 modules.
+
+<div class="callout"><strong>Watch out.</strong> An event is not proof that anything happened to storage. It records what your code <em>said</em>. If you emit <code>Paid</code> before a check that later fails, the whole transaction reverts and the log disappears with it, which is fine. But if you emit a misleading value (say the wrong amount), the chain keeps it, and every dashboard built on logs will show it. Emit after you have changed state, using the same variables you stored.</div>
+
+## Try it
+
+`Roster` should announce each enrolment. Declare an event with three indexed parameters and emit it from `enrol`.
+
+<CodeExercise id="enrol-event" {...exercises["enrol-event"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
