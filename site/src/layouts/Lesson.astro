@@ -10,7 +10,8 @@ const flat = groups.flatMap((g) => g.lessons);
 const i = flat.findIndex((l) => l.id === entry.id);
 const prev = flat[i - 1];
 const next = flat[i + 1];
-const exerciseIds = (body = "") => [...body.matchAll(/<CodeExercise[^>]*?id="([^"]+)"/g)].map((m) => m[1]).join(",");
+const re = /<CodeExercise[^>]*?id="([^"]+)"/g;
+const exerciseIds = (body: string | undefined) => Array.from((body ?? "").matchAll(re), (m) => m[1]).join(",");
 ---
 <Base title={`${entry.data.title} · Docs · Ashesi Blockchain Community`} description={entry.data.summary} current="docs">
   <div class="docs">
