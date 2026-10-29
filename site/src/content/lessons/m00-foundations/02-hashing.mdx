@@ -1,0 +1,70 @@
+---
+title: "Hash functions"
+summary: "Use a hash as a tamper-evident fingerprint and explain the properties that make it useful on a blockchain."
+covers: []
+---
+
+import HashPlayground from "../../../components/HashPlayground.astro";
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./02-hashing";
+
+Ashesi publishes the final exam timetable as a PDF. A student emails you a "copy" and you want to know: is it exactly the official file, or did someone quietly move the Calculus paper to a different day? Comparing two big files by eye is hopeless. What you want is a short **fingerprint** of each file that you can compare in a second.
+
+That fingerprint is a **hash**.
+
+## What a hash function does
+
+A **hash function** takes any input (a word, a sentence, a whole file) and returns a fixed-size output called a **hash** or **digest**. In this course we meet two: **SHA-256**, which Bitcoin uses, and **keccak-256**, which Ethereum uses. Both give 256 bits, shown as 64 hexadecimal characters (digits 0-9 and letters a-f).
+
+```text
+sha256("Ama pays Kofi 5")  -> 64 hex characters
+sha256("Ama pays Kofi 50") -> a completely different 64 hex characters
+```
+
+Try it. Type anything below, then change a single letter and watch both outputs.
+
+<HashPlayground />
+
+## Five properties to remember
+
+A hash function is useful because it behaves in these ways:
+
+1. **Deterministic.** The same input always gives the same hash. You and a friend on different laptops will agree.
+2. **Fixed size.** A one-letter input and a one-gigabyte input both give 64 hex characters.
+3. **Fast to compute.** Hashing a message takes a fraction of a millisecond.
+4. **Avalanche effect.** A tiny change in the input changes the output completely, not just a digit or two. You saw this in the playground.
+5. **One-way.** Given only a hash, there is no practical way to work backwards to the input. The only option is to guess inputs and hash them until one matches.
+
+A sixth property follows from these: it is **collision resistant**. A *collision* is two different inputs with the same hash. They must exist in theory (infinitely many inputs, finitely many outputs), but finding one on purpose is out of reach for SHA-256.
+
+## Why blockchains care
+
+Back to the exam timetable. If the registry also publishes the file's hash, you hash your copy and compare. A match means your copy is identical to the original; a mismatch means something was changed. You never had to trust the person who sent it.
+
+Blockchains use the same trick in three ways:
+
+- **Chaining.** Each block stores the hash of the previous block (lesson 1). Changing an old block changes its hash and breaks the chain.
+- **Summarising.** A block holding thousands of entries can still be fingerprinted by one short hash.
+- **Proof of work.** Finding a hash with a special shape is a deliberate puzzle (next lesson).
+
+Here is the chaining idea in plain pseudo-code:
+
+```js
+const block1 = { data: "Ama pays Kofi 5", prev: "0000" };
+block1.hash = sha256(block1.data + block1.prev);
+
+const block2 = { data: "Kofi pays Esi 2", prev: block1.hash };
+block2.hash = sha256(block2.data + block2.prev);
+```
+
+If anyone edits `block1.data`, `block1.hash` changes, so `block2.prev` no longer matches. Recomputing `block2.hash` fixes block 2, but then block 3 is wrong, and so on up the chain.
+
+<div class="callout"><strong>Watch out.</strong> A hash is <em>not</em> encryption. Encryption is meant to be reversed with a key; a hash cannot be reversed at all. Also, "one-way" does not protect short, guessable inputs: the hash of a four-digit PIN can be found by hashing all 10,000 PINs. Never treat a hash of something guessable as a secret.</div>
+
+## SHA-256 and keccak-256
+
+The playground shows two different answers for the same input. They are different algorithms, built on similar ideas. Ethereum and Solidity use keccak-256 (you will meet it as `keccak256(...)` in code). Everything you learn here applies to both.
+
+## Check your understanding
+
+<Quiz questions={quiz} />

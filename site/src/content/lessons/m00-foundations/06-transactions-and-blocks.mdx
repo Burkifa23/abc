@@ -1,0 +1,78 @@
+---
+title: "Transactions and blocks on Ethereum"
+summary: "Follow a transaction from your wallet to a block, and explain why it is all-or-nothing, ordered, and not instantly final."
+covers: ["Introduction to Smart Contracts > Blockchain Basics"]
+---
+
+import Figure from "../../../components/Figure.astro";
+import TxLifecycle from "../../../components/diagrams/TxLifecycle.astro";
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./06-transactions-and-blocks";
+
+At the end of the semester Ama pays her club dues to the treasurer, Kofi, from her phone. Seconds later, in another dorm, Ama (in a rush) also tries to send all her remaining balance to a friend. Both payments use the same money. The network cannot honour both, and it cannot ask Ama which one she meant. Somehow it has to pick one and reject the other, and all the nodes have to pick the *same* one.
+
+This lesson shows how Ethereum does that with transactions and blocks. It is also the foundation for everything in the Solidity course: smart contracts run inside transactions.
+
+## The blockchain as a shared database
+
+Ethereum is best understood as a **globally shared, transactional database**. Everyone can read it just by joining the network. But nobody can edit it directly. To change something, you must submit a **transaction**, and all the other participants must accept it.
+
+Think of a table of account balances. Reading is free and open to all. Writing means sending a transaction.
+
+## Transactions are all-or-nothing
+
+A **transaction** is a request to change the database. The word matters: a transaction is either applied completely or not at all.
+
+Take a transfer of 5 from Ama to Kofi. It involves two changes: subtract 5 from Ama, add 5 to Kofi. Because the transaction is atomic, you can never end up in a half-done state where Ama lost 5 but Kofi did not gain it. If any part fails, the whole transaction is cancelled and nothing changes. And while the transaction is being applied, no other transaction can interfere with it.
+
+```text
+Ama:  100 -> 95
+Kofi:  20 -> 25    // both happen, or neither does
+```
+
+Later in the course, you will see that a contract function can *revert*, which cancels the entire transaction in exactly this way.
+
+## Transactions are signed
+
+Every transaction is **signed** by its sender with their private key (lesson 4). Nodes verify the signature before accepting it. This is how the database protects access: only the holder of Ama's key can move Ama's funds. The signed transaction also includes a sender-specific counter (the nonce) so it cannot be replayed.
+
+## The double-spend problem and blocks
+
+Back to Ama's two payments. Which one comes first? In a peer-to-peer network, "first" is not objective: different nodes may hear about them in different orders. This is the **double-spend** problem.
+
+The solution is to not argue about it. The network selects one agreed **order** for transactions. Transactions are bundled into a **block**, executed in that order, and the block is shared with every node. If two transactions conflict, the one that ends up second is rejected: it simply does not become part of the block.
+
+Blocks are appended one after another in time, forming a linear sequence, hence the name blockchain. New blocks arrive at regular intervals; the exact interval is a protocol setting that can change, so check a block explorer such as Etherscan for current numbers.
+
+## Following one transaction
+
+<Figure caption="Wallet signs, transaction waits in the mempool, a block proposer includes it, the block is appended, the state updates.">
+  <TxLifecycle />
+</Figure>
+
+1. Your **wallet** builds the transaction and signs it with your private key.
+2. It is broadcast to nodes. Pending transactions wait in the **mempool**, a pool of transactions not yet in a block.
+3. A **block proposer** (a validator in proof of stake, lesson 5) chooses which pending transactions to include and in what order.
+4. The proposed block is attested by other validators and appended to the chain.
+5. Every node executes the transactions in the block, so everyone's copy of the **state** (balances, contract storage) is updated the same way.
+
+## Blocks can be reverted near the tip
+
+The mechanism that selects the order (attestation in proof of stake) means that, from time to time, recent blocks are reverted. This only happens at the **tip** of the chain, the newest blocks. The more blocks that are added on top of a block, the less likely it is to ever be reverted. A transaction that looks successful may still be dropped, or end up in a different block, if you look too early. Waiting is the cure: the longer you wait, the safer it is.
+
+<div class="callout"><strong>Watch out.</strong> Sending a transaction does not guarantee it lands in the next block, or in any specific block. The proposer chooses what goes in. Do not write an app that assumes "I sent it, therefore it happened now." Also, you cannot schedule a transaction to run by itself in the future: something has to send it. For timed actions, people use an automation service or an oracle.</div>
+
+## Why this matters for Solidity
+
+You do not need to understand the cryptography to write contracts. Treat these as promises the platform gives you:
+
+- state changes happen through transactions;
+- each transaction is signed by the sender, so the contract can rely on knowing who called it;
+- a transaction is all-or-nothing;
+- the order of transactions is decided by the network, not by the caller.
+
+Once you accept these as given, you can focus on the code. In the next module you will write your first smart contract and see how these promises show up in the language.
+
+## Check your understanding
+
+<Quiz questions={quiz} />
