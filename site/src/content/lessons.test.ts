@@ -3,7 +3,7 @@ import { Glob } from "bun";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import solc from "solc";
-import { buildInput, parseOutput } from "../lib/solc";
+import { SOLC_BUILD, buildInput, parseOutput } from "../lib/solc";
 import { runChecks } from "../lib/checks";
 
 // ponytail: solc-js loads once at import; the npm package is pinned to SOLC_BUILD's version.
@@ -12,6 +12,13 @@ const mdxFiles = [...new Glob("**/*.mdx").scanSync(root)].map((f) => f.replaceAl
 const codeLike = /[`;{]|function|contract|uint|mapping/;
 
 const build = (src: string) => parseOutput(solc.compile(buildInput(src)));
+
+test("finds lessons", () => expect(mdxFiles.length).toBeGreaterThan(0));
+
+test("solc package matches SOLC_BUILD", () => {
+  const v = SOLC_BUILD.match(/soljson-v([d.]+)+/)![1];
+  expect(solc.version().startsWith(v)).toBe(true);
+});
 
 for (const file of mdxFiles) {
   describe(`lesson ${file}`, async () => {
@@ -22,6 +29,11 @@ for (const file of mdxFiles) {
 
     test("has sidecar .ts", () => expect(has).toBe(true));
     test("has <Quiz", () => expect(mdx).toContain("<Quiz"));
+    test("mdx uses its sidecar", () => {
+      const slug = file.split("/").pop()!.replace(/.mdx$/, "");
+      expect(mdx).toContain(`from "./${slug}"`);
+      expect(mdx).toContain("questions={quiz}");
+    });
 
     test("quiz rules", () => {
       const quiz = mod.quiz;
