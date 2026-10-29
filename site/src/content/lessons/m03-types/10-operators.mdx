@@ -1,0 +1,104 @@
+---
+title: "Operators"
+summary: "The ternary operator, compound assignment, increment and decrement, delete, and the precedence table that decides how an expression is grouped."
+covers: ["Types", "Types > Operators", "Cheatsheet", "Cheatsheet > Order of Precedence of Operators"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./10-operators";
+
+You already use `+`, `-`, `==`, `&&` and friends from other languages, and they behave the way you expect on integers, booleans and bytes. This lesson covers the parts that are easy to get wrong or specific to Solidity: the one three-way operator, the shorthands, `delete`, and the rules about which operation happens first.
+
+## The ternary operator
+
+`condition ? a : b` picks one of two values. Only the chosen branch is evaluated, so the other one cannot cause a revert or cost gas.
+
+```solidity
+function label(uint256 mark) public pure returns (string memory) {
+    return mark >= 50 ? "pass" : "fail";
+}
+```
+
+The two branches need to have a common type, and the result takes that type. There is a trap with literals. Plain number literals are computed with unlimited precision, so `1.5 + 1.5` is fine and is just `3`. But a ternary forces the compiler to pick a real type for the result, and a fractional literal has none, so `1.5 + (flag ? 1.5 : 2.5)` is rejected even though `1.5 + 1.5` is accepted.
+
+## Compound assignment, increment and decrement
+
+If `a` is something you can assign to, then `a += e` means `a = a + e`. The same works for `-=`, `*=`, `/=`, `%=`, `|=`, `&=`, `^=`, `<<=` and `>>=`.
+
+The operators `a++` and `a--` mean `a += 1` and `a -= 1`, with a catch that matters inside bigger expressions. The **postfix** form (`a++`) gives back the *old* value, and the **prefix** form (`++a`) gives back the *new* one. The variable ends up the same either way.
+
+```solidity
+uint256 a = 5;
+uint256 x = a++;   // x == 5, a == 6
+uint256 y = ++a;   // a == 7, y == 7
+```
+
+In a plain statement like `i++;` or a loop header it makes no difference. Use the value of the expression only when you mean to, such as `id = nextId++;` to hand out the current number and then advance the counter. All of these are checked arithmetic by default, so `a--` on a zero `uint256` reverts.
+
+## delete
+
+`delete a` sets `a` back to the initial value of its type: `0` for numbers, `false` for a bool, the zero address, and so on. It is exactly like assigning that default.
+
+For compound types:
+
+- `delete arr` on a dynamic array makes it empty (length 0). On a fixed-size array it resets every element to its default and the length stays the same.
+- `delete arr[i]` resets only that one item. The length does not change and a zeroed **gap** remains. If you need to really remove items, shuffle the last one into the gap and `pop`, or use a mapping instead.
+- `delete theStruct` resets every field, and it goes into nested structs. Mapping fields are skipped, because their keys are unknown.
+- `delete someMapping` is not possible. `delete someMapping[key]` is, and resets that one entry.
+
+One more subtlety is that `delete x` behaves like an assignment of a new value to `x`. If `x` is a local variable that points at storage, you can't delete it, since local pointers can only be set from existing storage. And deleting a *copy* only changes the copy:
+
+```solidity
+uint256 total;
+
+function f() public {
+    uint256 copy = total;
+    delete copy;      // copy is 0, total unchanged
+    delete total;     // total is 0, copy unaffected
+}
+```
+
+## Order of precedence
+
+When an expression has several operators, precedence decides which grouping applies, like multiplication before addition. Here is the whole Solidity table, from tightest binding (evaluated first) to loosest.
+
+| Level | What | Operators |
+|---|---|---|
+| 1 | postfix `++ --`, `new T`, index `a[i]`, member `a.b`, call `f()`, parentheses | |
+| 2 | prefix `++ --`, unary `-`, `delete`, `!`, `~` | |
+| 3 | exponent | `**` |
+| 4 | multiply, divide, modulo | `* / %` |
+| 5 | add, subtract | `+ -` |
+| 6 | shifts | `<< >>` |
+| 7 | bitwise AND | `&` |
+| 8 | bitwise XOR | `^` |
+| 9 | bitwise OR | `\|` |
+| 10 | comparison | `< > <= >=` |
+| 11 | equality | `== !=` |
+| 12 | logical AND | `&&` |
+| 13 | logical OR | `\|\|` |
+| 14 | ternary, and all assignments | `? :` `= += -= ...` |
+| 15 | comma (tuples) | `,` |
+
+Some consequences worth memorising:
+
+- **Bitwise operators bind tighter than comparisons.** `flags & MASK == MASK` is read as `(flags & MASK) == MASK`. This is different from C, where `==` binds tighter than `&` and the same line is a classic bug.
+- **Shifts are looser than `+`.** `1 << n + 1` means `1 << (n + 1)`.
+- **`**` is right-associative**: `2 ** 3 ** 2` is `2 ** (3 ** 2)`, which is 512, not 64.
+- `&&` binds tighter than `||`, so `a || b && c` is `a || (b && c)`.
+- Assignment and the ternary operator group right to left, so `x = y = 0` works and `a ? b : c ? d : e` nests to the right.
+
+Reaching for parentheses when you are not sure is always fine, and it is kind to the next reader.
+
+<div class="callout"><strong>Watch out.</strong> <code>delete arr[i]</code> does not remove an element, it zeroes it. The array stays the same length, and a loop that sums or pays the items will quietly include the zero entry. Zero it deliberately, or swap with the last item and pop.</div>
+
+## Try it
+
+`Tally` should label a mark as pass or fail with a ternary, add to a running `total` with a compound assignment, and clear it with `delete`.
+
+<CodeExercise id="tally-operators" {...exercises["tally-operators"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

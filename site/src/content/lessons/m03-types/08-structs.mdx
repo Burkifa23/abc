@@ -1,0 +1,117 @@
+---
+title: "Structs"
+summary: "Group related fields into your own type, use it in storage and memory, and learn what happens when a struct holds a mapping or refers to itself."
+covers: ["Types", "Types > Reference Types"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./08-structs";
+
+Think of the form a student fills in to join a club: name, year group, and whether the fee is paid. Three facts, one record. If you kept them in three separate arrays you would have to keep three indexes in step forever. A **struct** is Solidity's answer: you define a new type that bundles named fields, and then you can pass the bundle around as one thing.
+
+## Declaring a struct
+
+A struct is declared with the `struct` keyword, a name, and a list of fields. It can sit inside a contract or at file level, where several contracts can share it.
+
+```solidity
+struct Member {
+    string name;
+    uint16 year;
+    bool feePaid;
+}
+```
+
+Fields can be of any type, including arrays, other structs and mappings. The one thing a struct cannot do is contain a field of its own type, because it would then be infinitely large. More on that below.
+
+You create a value either by listing the fields in order, or by naming them, which is clearer when there are many:
+
+```solidity
+Member memory a = Member("Ama", 2, false);
+Member memory b = Member({ name: "Kofi", year: 3, feePaid: true });
+```
+
+Every field must be given. Individual fields are read and written with a dot: `a.year = 4;`.
+
+## Structs in storage and in memory
+
+The data-location rules from the previous lesson apply unchanged. A struct state variable lives in storage; a struct created in a function lives in memory, and a copy between the two copies every field.
+
+```solidity
+Member[] members;                       // storage array of structs
+
+function join(string calldata name) external {
+    members.push(Member(name, 1, false));        // built in memory, copied into storage
+}
+
+function markPaid(uint256 i) external {
+    Member storage m = members[i];               // an alias, not a copy
+    m.feePaid = true;                            // updates the stored record
+}
+```
+
+Writing one field through a `storage` pointer costs a single storage write. Copying the whole struct into `memory` first, changing it, and copying it back works but touches every field. When you only need to update a record, take a storage pointer.
+
+A public state variable of struct type gets an automatic getter. It returns the fields as separate values, in order, and leaves out any array or mapping fields, because it cannot return those in one go.
+
+## A struct that holds a mapping
+
+A struct may contain a `mapping`. This is how you give each record its own lookup table, such as a list of who pledged how much to one fundraiser. The rule that comes with it follows from the fact that mappings only exist in storage:
+
+- A struct with a mapping field can live **only in storage**. You cannot build one in memory, so `Fund(...)` as an expression that creates a full struct is not allowed, and it cannot be a parameter or return value of a public or external function.
+- Copying such a struct to storage copies the ordinary fields and **skips the mapping**; the mapping is not copied.
+
+So you create an empty record by reaching it in storage, and then set the fields one by one:
+
+```solidity
+struct Fund {
+    address owner;
+    uint256 goal;
+    uint256 raised;
+    mapping(address => uint256) pledged;   // storage only
+}
+
+mapping(uint256 => Fund) funds;
+uint256 nextFund;
+
+function open(uint256 goal) external returns (uint256 id) {
+    id = nextFund++;
+    Fund storage f = funds[id];     // an empty Fund already "exists" at every key
+    f.owner = msg.sender;
+    f.goal = goal;
+}
+
+function pledge(uint256 id) external payable {
+    Fund storage f = funds[id];
+    f.raised += msg.value;
+    f.pledged[msg.sender] += msg.value;
+}
+```
+
+The campus idea here is a class fundraiser: each fund has an owner, a target, a running total, and a per-student record of who gave what. Each entry in `funds` is empty until you write to it, because storage reads as zero everywhere.
+
+## Recursive structs
+
+A struct cannot have a member of its own type, but it can still refer to itself *indirectly* through a dynamic array or a mapping. A dynamic array or mapping does not make the struct bigger, since its items live elsewhere:
+
+```solidity
+struct Course {
+    string code;
+    uint256[] prerequisites;           // ids of other courses
+    mapping(uint256 => Course) next;   // allowed: the mapping holds the nested values
+}
+```
+
+This is how you model trees and graphs: a struct with a list of ids pointing into a mapping or array of the same struct. The cycle must go through one of those two; a fixed-size array of the struct itself would still make it infinitely large. And since the `Course` above contains a mapping, it lives in storage only, as in the previous section.
+
+<div class="callout"><strong>Watch out.</strong> <code>Member memory m = members[i]; m.feePaid = true;</code> compiles and does nothing to the stored record, because <code>m</code> is a copy. Use <code>Member storage m</code> when you want to edit what the contract holds.</div>
+
+## Try it
+
+Finish the `Fundraiser`. The `Fund` struct needs a `pledged` mapping from address to amount. `open` makes a new fund owned by the caller and returns its id. `pledge` adds the payment to the fund's total and to the caller's own entry.
+
+<CodeExercise id="fundraiser-struct" {...exercises["fundraiser-struct"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
