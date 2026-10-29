@@ -1,0 +1,131 @@
+---
+title: "ABI encoding functions and bytes/string members"
+summary: "Turn values into bytes and back with the abi.* family, choose between encode and encodePacked, and glue bytes or strings together."
+covers: ["Units and Globally Available Variables", "Units and Globally Available Variables > Special Variables and Functions", "Cheatsheet", "Cheatsheet > ABI Encoding and Decoding Functions", "Cheatsheet > Members of bytes and string"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./03-abi-encoding-functions";
+
+Think about a parcel sent from Accra to Berekuso. The courier does not care what is inside; they care that it is in a box of a known shape with a clear label. Contracts talk to each other in the same way. Everything that crosses a call boundary, an argument, a return value or an event field, is packed into a flat sequence of bytes. The **ABI** (application binary interface) is the agreed packing format, and Solidity gives you a small group of functions in the `abi` namespace to pack and unpack by hand. You need them for low-level calls, for hashing structured data, and for signature schemes.
+
+## encode and decode
+
+`abi.encode(a, b, ...)` returns a `bytes memory` containing the arguments in the standard ABI layout. In that layout every value takes up whole 32-byte slots: a `uint8` is padded out to 32 bytes, an address is padded on the left, and dynamic things such as strings are stored as an offset to where the data lives, followed by the length and then the content. The layout is padded and a little wasteful, but it is unambiguous: you can always find where each argument starts.
+
+`abi.decode(data, (T1, T2, ...))` does the reverse. You hand it the bytes and a tuple of types, and it returns the values. The type list is not optional, because bytes carry no labels; you must know what was packed.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Parcel {
+    function pack(address student, uint256 mark, string calldata course) external pure returns (bytes memory) {
+        return abi.encode(student, mark, course);
+    }
+
+    function unpack(bytes calldata data) external pure returns (address, uint256, string memory) {
+        (address student, uint256 mark, string memory course) = abi.decode(data, (address, uint256, string));
+        return (student, mark, course);
+    }
+}
+```
+
+If the bytes are too short or the layout does not fit the types, `abi.decode` reverts. It does not guess.
+
+## encodePacked: smaller, but ambiguous
+
+`abi.encodePacked(...)` squeezes values together with no padding. Types shorter than 32 bytes use exactly their own size, strings and `bytes` are copied in with no length prefix, and array elements are still padded. The output is shorter, which is handy for building a key to hash. The price is that the result can be ambiguous: two different inputs can produce the same bytes.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Collide {
+    function sameBytes() external pure returns (bool) {
+        return keccak256(abi.encodePacked("ab", "c")) == keccak256(abi.encodePacked("a", "bc"));
+    }
+
+    function differentBytes() external pure returns (bool) {
+        return keccak256(abi.encode("ab", "c")) == keccak256(abi.encode("a", "bc"));
+    }
+}
+```
+
+`sameBytes()` returns `true`, because both calls produce the bytes `abc`; `differentBytes()` returns `false`, because the padded encoding records where each string ends. Imagine hashing a student's first and last name this way: "Ama" plus "Boateng" would collide with "AmaB" plus "oateng". When two or more dynamic values go into a hash, use `abi.encode`, or put a fixed-size separator or length between them. Packed encoding is also not meant to be decoded back, since the boundaries are gone.
+
+## Encoding a call
+
+Three functions prepare the calldata for a function call. They all return `bytes memory`, and you usually pass the result to the low-level `call` you will meet in lesson 5.
+
+| Function | What it does |
+|---|---|
+| `abi.encodeWithSelector(sel, args...)` | Puts a four-byte selector in front of the encoded arguments |
+| `abi.encodeWithSignature("name(type,...)", args...)` | Same, but computes the selector from a signature string |
+| `abi.encodeCall(fn, (args...))` | Takes the function itself, and the compiler checks the argument types |
+
+The **selector** is the first four bytes of the `keccak256` hash of the canonical signature, such as `setMark(uint256,uint8)`. Canonical means full type names with no spaces and no variable names: write `uint256`, never `uint`. `encodeWithSignature` only looks at the string; a typo like `setMark(uint,uint8)` compiles and then calls a function that does not exist. Because `encodeWithSelector` and `encodeWithSignature` do not check argument types against any real function, they are error-prone. `abi.encodeCall` is the safe one: the compiler checks that the argument types match the function you named, and the selector comes from the function itself.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+interface IMarks {
+    function setMark(uint256 studentId, uint8 mark) external;
+}
+
+contract Calldata {
+    function viaSelector() external pure returns (bytes memory) {
+        return abi.encodeWithSelector(IMarks.setMark.selector, 7, 85);
+    }
+
+    function viaSignature() external pure returns (bytes memory) {
+        return abi.encodeWithSignature("setMark(uint256,uint8)", 7, 85);
+    }
+
+    function viaCall() external pure returns (bytes memory) {
+        return abi.encodeCall(IMarks.setMark, (7, 85));
+    }
+}
+```
+
+All three return identical bytes. Now imagine the interface later changes to `setMark(uint8 mark, uint256 studentId)`. The two older forms keep compiling and quietly send nonsense, while `viaCall` stops compiling until you fix the argument list. That early failure is the reason to prefer it.
+
+## Members of bytes and string
+
+Two members glue pieces together:
+
+- `bytes.concat(a, b, ...)` returns one `bytes memory` made of all its arguments. Arguments can be `bytes`, `bytes1` to `bytes32`, or literals.
+- `string.concat(a, b, ...)` does the same for strings and returns a `string memory`.
+
+Before these existed, people reached for `abi.encodePacked` to join strings, which hid the intent. Use `string.concat` for text and `bytes.concat` for raw bytes.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Labels {
+    function tag(string calldata dept, string calldata code) external pure returns (string memory) {
+        return string.concat(dept, "-", code);
+    }
+
+    function join(bytes4 a, bytes calldata rest) external pure returns (bytes memory) {
+        return bytes.concat(a, rest, hex"00");
+    }
+}
+```
+
+`tag("CS", "314")` returns `CS-314`. Neither function adds a separator for you; you put in the dash yourself.
+
+<div class="callout"><strong>Watch out.</strong> <code>abi.encodePacked</code> mixed with dynamic types inside a hash is a classic source of collisions and signature-replay bugs. When in doubt, hash <code>abi.encode(...)</code>, which gives every argument a fixed place.</div>
+
+## Try it
+
+Complete the `Encoder` contract. Each function should return what its name says, using the right tool: `abi.encode` for the standard layout, `abi.encodePacked` for the compact layout, `abi.encodeCall` to prepare a type-checked call to `ITarget.setScore`, and `string.concat` to join a first and last name with a space.
+
+<CodeExercise id="encoder" {...exercises["encoder"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

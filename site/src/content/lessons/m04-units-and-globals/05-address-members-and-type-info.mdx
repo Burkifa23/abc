@@ -1,0 +1,162 @@
+---
+title: "Address members, contract-related and type information"
+summary: "A reference lesson: what you can ask an address, the keywords this, super and selfdestruct, what type(...) reveals, visibility and modifier keywords, and the words you may not use as names."
+covers: ["Units and Globally Available Variables", "Units and Globally Available Variables > Special Variables and Functions", "Units and Globally Available Variables > Reserved Keywords", "Cheatsheet", "Cheatsheet", "Cheatsheet > Members of address", "Cheatsheet > Contract-related", "Cheatsheet > Type Information", "Cheatsheet > Function Visibility Specifiers", "Cheatsheet > Modifiers"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./05-address-members-and-type-info";
+
+This is the last lesson of the module, and it is a wide one: the rest of the quick-reference list that Solidity keeps for global names. Treat it like the back page of an exam paper formula sheet. You do not memorise it; you learn what is on it so that you know where to look. Tables carry most of the content, and a few of the rows get a short explanation.
+
+## Members of every address
+
+Any value of type `address` has these members (lesson 2 of the types module introduced the type itself).
+
+| Member | Returns | What it does |
+|---|---|---|
+| `.balance` | `uint256` | Ether held by the account, in wei |
+| `.code` | `bytes memory` | The code stored at the address; empty for ordinary accounts |
+| `.codehash` | `bytes32` | Keccak-256 hash of that code |
+| `.call(bytes)` | `(bool, bytes memory)` | Low-level message call, forwarding all remaining gas by default |
+| `.delegatecall(bytes)` | `(bool, bytes memory)` | Runs the target's code against *your* storage |
+| `.staticcall(bytes)` | `(bool, bytes memory)` | Like `call`, but any state change inside it makes it fail |
+| `.send(amount)` | `bool` | Sends wei with a 2,300-gas stipend; returns false on failure |
+| `.transfer(amount)` | nothing | Same stipend; reverts on failure |
+
+`send` and `transfer` exist only on `address payable` and are marked deprecated. The gas stipend of 2,300 is enough for a receiver to emit an event and nothing more, and gas prices change over time, so a receiver that worked yesterday can fail tomorrow. The recommended way to pay is `call` with a value, followed by a check of the result.
+
+`.code` and `.codehash` let you test whether an address holds a contract. Be careful with that test: during its own constructor a contract has no code yet, so `.code.length == 0` is true even for a contract. Since EIP-7702, an ordinary account can also carry a delegation marker that points to code elsewhere, so "this has no code" no longer proves that "a human controls this". Do not build security on that check.
+
+The three low-level calls return `(bool success, bytes memory data)`, and a failure inside the callee does **not** revert you. If you ignore `success`, you continue as if the call worked.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Payroll {
+    error PayFailed(address to);
+
+    receive() external payable {}
+
+    function pay(address payable to, uint256 amount) external {
+        (bool ok, ) = to.call{value: amount}("");
+        if (!ok) revert PayFailed(to);
+    }
+
+    function peek(address target, bytes calldata data) external view returns (bytes memory) {
+        (bool ok, bytes memory out) = target.staticcall(data);
+        require(ok, "read failed");
+        return out;
+    }
+
+    function size(address who) external view returns (uint256) {
+        return who.code.length;
+    }
+}
+```
+
+`delegatecall` borrows the callee's code but keeps your storage, your balance and your `msg.sender`. It is how proxies work, and later modules return to it.
+
+## Contract-related names
+
+| Name | Meaning |
+|---|---|
+| `this` | The current contract, convertible to `address` |
+| `super` | The next contract up the inheritance chain |
+| `selfdestruct(recipient)` | Sends all the contract's ether to `recipient`; deprecated |
+
+`this` is a *type*, not just an address. Using `this.f()` makes an external call to your own function, which costs more than a plain internal call and changes `msg.sender` to the contract itself. To get the address, write `address(this)`.
+
+`super.f()` calls the version of `f` in the parent contract in the linearised inheritance order; a later module on inheritance covers this.
+
+`selfdestruct` is deprecated. Before the Cancun upgrade (EIP-6780) it removed the contract's code and storage. Now it sends the balance to the recipient but removes the contract only if it is called in the very transaction that created the contract. In every other case the code and storage stay on the chain. Do not use it as a kill switch: write an explicit pause or withdraw function.
+
+## Type information
+
+The `type(X)` expression asks the compiler about a type. All of the results are known at compile time.
+
+| Expression | Result |
+|---|---|
+| `type(C).name` | The contract's name, as a `string` |
+| `type(C).creationCode` | `bytes memory` of the code that deploys `C` |
+| `type(C).runtimeCode` | `bytes memory` of the code that stays on chain after deployment |
+| `type(I).interfaceId` | `bytes4` identifier of interface `I` (EIP-165) |
+| `type(T).min`, `type(T).max` | Smallest and largest value of integer type `T` |
+
+`interfaceId` is the XOR of the selectors of all functions the interface declares (not counting inherited ones). Contracts publish it so that callers can ask "do you support this interface?" before using it. `type(uint8).max` is 255 and `type(int8).min` is -128. Use them instead of typing the constant yourself, since they cannot be mistyped. `creationCode` is used in factories that deploy contracts with a computed address. You cannot read `type(C).creationCode` from inside `C` itself.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+interface IExam {
+    function submit(uint256 paper) external;
+    function mark(uint256 paper) external view returns (uint8);
+}
+
+contract Facts {
+    function top() external pure returns (uint8, int8) {
+        return (type(uint8).max, type(int8).min);
+    }
+
+    function iface() external pure returns (bytes4) {
+        return type(IExam).interfaceId;
+    }
+
+    function label() external pure returns (string memory) {
+        return type(Facts).name;
+    }
+}
+```
+
+## Visibility specifiers
+
+| Keyword | Callable from |
+|---|---|
+| `public` | Outside and inside; on a state variable it also generates a getter |
+| `external` | Outside only (to call it inside, you would write `this.f()`) |
+| `internal` | This contract and contracts that inherit from it |
+| `private` | This contract only |
+
+Remember that `private` hides a name from other *contracts*, not data from the world. Everyone can read the chain's storage.
+
+## Modifier keywords
+
+The word "modifier" here covers every keyword you can place on a function, variable or event, not just the `modifier` construct you write yourself.
+
+| Keyword | Applies to | Effect |
+|---|---|---|
+| `pure` | functions | No reading or writing state |
+| `view` | functions | No writing state |
+| `payable` | functions | May receive ether with the call |
+| `constant` | state variables | Fixed at compile time; takes no storage slot |
+| `immutable` | state variables | Set once in the constructor, then read-only; stored in the code |
+| `transient` | state variables | Value lives only for the current transaction (EIP-1153), then resets to zero |
+| `anonymous` | events | Does not store the event's signature as a topic |
+| `indexed` | event parameters | Stores that parameter as a searchable topic |
+| `virtual` | functions, modifiers | May be changed by a derived contract |
+| `override` | functions, modifiers, public variables | Changes something inherited |
+
+`transient` state variables need Cancun-era tooling (0.8.28 or newer for the default pipeline) and are limited to value types. They suit things like a reentrancy lock that must be reset for free when the transaction ends.
+
+## Reserved keywords
+
+Some words are held back for future language features. You cannot use them as names today, and the compiler will complain if you try:
+
+`after`, `alias`, `apply`, `auto`, `byte`, `case`, `copyof`, `default`, `define`, `final`, `implements`, `in`, `inline`, `let`, `macro`, `match`, `mutable`, `null`, `of`, `partial`, `promise`, `reference`, `relocatable`, `sealed`, `sizeof`, `static`, `supports`, `switch`, `typedef`, `typeof`, `var`
+
+Words like `default`, `in` and `final` are tempting variable names, so this list explains a few baffling compile errors. Add the unit words from lesson 1 (`wei`, `gwei`, `ether`, `seconds`, `minutes`, `hours`, `days`, `weeks`) to the list of words to avoid.
+
+<div class="callout"><strong>Watch out.</strong> <code>.call</code> returns <code>false</code> on failure instead of reverting. A payout loop that forgets to check the <code>bool</code> will cheerfully record "paid" for a transfer that never happened.</div>
+
+## Try it
+
+Complete the `Treasury`. `maxMark` returns the largest `uint8`, `gradeId` returns the interface identifier of `IGrade`, and `payOut` sends `amount` wei to `to` with a low-level call, reverting with `TransferFailed` if it does not succeed. The finished contract must compile without any warnings.
+
+<CodeExercise id="treasury" {...exercises["treasury"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
