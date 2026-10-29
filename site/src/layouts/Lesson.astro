@@ -10,6 +10,7 @@ const flat = groups.flatMap((g) => g.lessons);
 const i = flat.findIndex((l) => l.id === entry.id);
 const prev = flat[i - 1];
 const next = flat[i + 1];
+const exerciseIds = (body = "") => [...body.matchAll(/<CodeExercise[^>]*?id="([^"]+)"/g)].map((m) => m[1]).join(",");
 ---
 <Base title={`${entry.data.title} · Docs · Ashesi Blockchain Community`} description={entry.data.summary} current="docs">
   <div class="docs">
@@ -19,7 +20,7 @@ const next = flat[i + 1];
         {groups.map((g) => (
           <>
             <h4>{g.title}</h4>
-            {g.lessons.map((l) => <a href={href(l.id)} data-lesson-link={l.id} aria-current={l.id === entry.id ? "page" : undefined}>{l.data.title}</a>)}
+            {g.lessons.map((l) => <a href={href(l.id)} data-lesson-link={l.id} data-exercises={exerciseIds(l.body)} aria-current={l.id === entry.id ? "page" : undefined}>{l.data.title}</a>)}
           </>
         ))}
       </nav>
@@ -29,7 +30,7 @@ const next = flat[i + 1];
       <span class="eyebrow">Docs</span>
       <h1>{entry.data.title}</h1>
       <p class="lead">{entry.data.summary}</p>
-      <article data-lesson={entry.id}><slot /></article>
+      <article data-lesson={entry.id} data-exercises={exerciseIds(entry.body)}><slot /></article>
 
       <h2>Docs sections covered</h2>
       <ul>
@@ -48,13 +49,9 @@ const next = flat[i + 1];
   import { createProgress } from "../lib/progress";
   const paint = () => {
     const p = createProgress();
-    // ponytail: exercise ids only known for the current lesson (data-exercises, filled by Task 4)
-    const art = document.querySelector<HTMLElement>("article[data-lesson]");
-    const cur = art?.dataset.lesson;
-    const own = (art?.dataset.exercises || "").split(",").filter(Boolean);
     document.querySelectorAll<HTMLElement>("[data-lesson-link]").forEach((a) => {
       const id = a.dataset.lessonLink!;
-      a.toggleAttribute("data-done", p.isDone(id, id === cur ? own : []));
+      a.toggleAttribute("data-done", p.isDone(id, (a.dataset.exercises || "").split(",").filter(Boolean)));
     });
   };
   paint();

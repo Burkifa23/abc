@@ -1,0 +1,91 @@
+---
+import type { Check } from "../lib/checks";
+const { id, starter, checks, solution } = Astro.props as { id: string; starter: string; checks: Check[]; solution: string };
+---
+<section class="ex" data-id={id} data-starter={starter} data-solution={solution} data-checks={JSON.stringify(checks)}>
+  <div class="editor" style="height:320px"></div>
+  <div class="bar">
+    <button type="button" class="run">Run checks</button>
+    <button type="button" class="reset">Reset</button>
+    <button type="button" class="sol">Show solution</button>
+  </div>
+  <ul class="results" aria-live="polite"></ul>
+  <pre class="errs" hidden></pre>
+</section>
+
+<style>
+  .ex { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 12px; margin: 24px 0; }
+  .editor { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .bar { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+  button { font: inherit; padding: 6px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--muted); color: var(--fg); cursor: pointer; }
+  .run { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+  button:disabled { opacity: 0.6; cursor: wait; }
+  .results { list-style: none; padding: 0; margin: 0; }
+  .results li { padding: 2px 0; }
+  .results li[data-ok="false"] { color: var(--muted-fg); }
+  .errs { background: var(--muted); color: var(--fg); padding: 12px; border-radius: var(--radius); overflow-x: auto; font-family: var(--mono); font-size: 13px; }
+</style>
+
+<script>
+  import loader from "@monaco-editor/loader";
+  import { compile } from "../lib/solc";
+  import { runChecks, type Check } from "../lib/checks";
+  import { createProgress } from "../lib/progress";
+
+  // ponytail: pinned to the monaco-editor version @monaco-editor/loader 1.7.0 targets
+  loader.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs" } });
+  const isDark = () => {
+    const t = document.documentElement.dataset.theme;
+    return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  };
+
+  document.querySelectorAll<HTMLElement>(".ex").forEach(async (root) => {
+    const { id, starter = "", solution = "" } = root.dataset;
+    const checks: Check[] = JSON.parse(root.dataset.checks!);
+    const lesson = root.closest<HTMLElement>("article[data-lesson]")?.dataset.lesson;
+    const key = `abc:code:${lesson}:${id}`;
+    const q = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!;
+    const run = q<HTMLButtonElement>(".run"), sol = q<HTMLButtonElement>(".sol");
+    const saved = (() => { try { return localStorage.getItem(key); } catch { return null; } })();
+
+    const monaco = await loader.init();
+    const editor = monaco.editor.create(q(".editor"), {
+      value: saved ?? starter, language: "sol", automaticLayout: true, minimap: { enabled: false },
+      scrollBeyondLastLine: false, theme: isDark() ? "vs-dark" : "vs",
+    });
+    document.querySelectorAll("[data-theme-toggle]").forEach((b) =>
+      b.addEventListener("click", () => setTimeout(() => monaco.editor.setTheme(isDark() ? "vs-dark" : "vs"))));
+    editor.onDidChangeModelContent(() => { try { localStorage.setItem(key, editor.getValue()); } catch { /* ignore */ } });
+
+    q(".reset").addEventListener("click", () => editor.setValue(starter));
+    let confirm = false;
+    sol.addEventListener("click", () => {
+      if (!confirm) { confirm = true; sol.textContent = "Click again to confirm"; return; }
+      confirm = false; sol.textContent = "Show solution"; editor.setValue(solution);
+    });
+
+    run.addEventListener("click", async () => {
+      const label = "Run checks";
+      run.disabled = true; run.textContent = "Loading compiler…";
+      const list = q("ul"), errs = q("pre");
+      try {
+        const source = editor.getValue();
+        const result = await compile(source);
+        const res = runChecks(source, result, checks);
+        list.replaceChildren(...res.map((r) => {
+          const li = document.createElement("li");
+          li.dataset.ok = String(r.ok);
+          li.textContent = `${r.ok ? "✓" : "✗"} ${r.message}`;
+          return li;
+        }));
+        const msgs = result.errors.map((e) => e.formattedMessage).join("\n");
+        errs.hidden = !msgs; errs.textContent = msgs;
+        if (res.every((r) => r.ok) && lesson) createProgress().markExercise(lesson, id!, true);
+        run.textContent = label;
+      } catch {
+        run.textContent = "Compiler failed to load. Retry";
+      }
+      run.disabled = false;
+    });
+  });
+</script>
