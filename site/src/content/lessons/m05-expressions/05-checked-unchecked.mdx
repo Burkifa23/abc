@@ -36,15 +36,16 @@ Sometimes you know the arithmetic cannot overflow, or you want modular wrapping 
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-contract Wrap {
-    function wraps(uint256 a, uint256 b) external pure returns (uint256) {
+contract Tickets {
+    // A uint8 ticket counter: 250 + 10 = 260, which does not fit in 8 bits.
+    function wrapsAround(uint8 sold, uint8 extra) external pure returns (uint8) {
         unchecked {
-            return a - b; // wraps(2, 3) == 2**256 - 1
+            return sold + extra; // wrapsAround(250, 10) == 4
         }
     }
 
-    function reverts(uint256 a, uint256 b) external pure returns (uint256) {
-        return a - b; // reverts(2, 3) panics
+    function stopsAtLimit(uint8 sold, uint8 extra) external pure returns (uint8) {
+        return sold + extra; // stopsAtLimit(250, 10) panics with 0x11
     }
 }
 ```
@@ -83,19 +84,20 @@ The check and the switch each have limits, and a few operations ignore the whole
 
 **Explicit conversions truncate and never check.** If a `uint256` variable holds 300, then `uint8(x)` gives 44 with no panic, because the conversion just keeps the low byte. The single exception is converting an out-of-range integer to an `enum`, which does panic (`0x21`).
 
-**Shifts never check.** `x << 3` is, in intent, "multiply by 8", but it silently drops the bits that fall off the top, while `x * 8` would revert:
+**Shifts never check.** `x << 2` is, in intent, "multiply by 4", but it silently drops the bits that fall off the top, while `x * 4` would revert:
 
 ```solidity
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-contract Shifts {
-    function shifted() external pure returns (uint256) {
-        return type(uint256).max << 3; // no revert: high bits are lost
+contract Doubling {
+    // For x = 40000, the true answer 160000 is too big for a uint16.
+    function viaShift(uint16 x) external pure returns (uint16) {
+        return x << 2; // no revert: the top bits are dropped, giving 28928
     }
 
-    function multiplied() external pure returns (uint256) {
-        return type(uint256).max * 8; // reverts: Panic(0x11)
+    function viaMultiply(uint16 x) external pure returns (uint16) {
+        return x * 4; // reverts with Panic(0x11)
     }
 }
 ```
@@ -130,7 +132,7 @@ Since version 0.8.22 the compiler recognises the simplest form of this pattern f
 
 ## Try it
 
-`weightedSum` should add up `marks[0] + marks[1] + ...` with a `for` loop whose counter is incremented inside an `unchecked` block. Keep the addition to `sum` outside it, so it stays checked.
+`sumMarks` should add up `marks[0] + marks[1] + ...` with a `for` loop whose counter is incremented inside an `unchecked` block. Keep the addition to `sum` outside it, so it stays checked.
 
 <CodeExercise id="unchecked-loop-counter" {...exercises["unchecked-loop-counter"]} />
 

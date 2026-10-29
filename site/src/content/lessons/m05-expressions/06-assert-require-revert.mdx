@@ -44,7 +44,7 @@ contract Library {
 }
 ```
 
-The name and argument types give the error its four-byte selector, so a custom error with no arguments costs only 4 bytes of return data, whereas a string reason costs 68 or more (selector, offset, length, then the text padded to 32-byte words). That is why custom errors are the modern default. Longer explanations belong in a NatSpec comment, which costs nothing at run time.
+The name and argument types give the error its four-byte selector, so a custom error with no arguments costs only 4 bytes of return data, whereas any non-empty string reason costs at least 100 bytes (selector, offset, length, then the text padded to 32-byte words). That is why custom errors are the modern default. Longer explanations belong in a NatSpec comment, which costs nothing at run time.
 
 ## assert: for things that must never happen
 
