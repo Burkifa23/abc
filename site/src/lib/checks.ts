@@ -20,7 +20,11 @@ export function runChecks(source: string, result: CompileResult, checks: Check[]
       case "noWarnings":
         return { ok: !result.errors.some((e) => e.severity === "warning"), message: "No compiler warnings" };
       case "regex":
-        return { ok: new RegExp(c.pattern, c.flags).test(code), message: c.message };
+        try {
+          return { ok: new RegExp(c.pattern, c.flags).test(code), message: c.message };
+        } catch (e) {
+          return { ok: false, message: `Invalid check pattern: ${c.pattern}` };
+        }
       case "abi": {
         const hit = (result.contracts[c.contract] ?? []).some((i) =>
           i.type === c.kind && i.name === c.name && same(c.inputs, i.inputs) &&
