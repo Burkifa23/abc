@@ -17,8 +17,12 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
+    env:
+      STRICT_COVERAGE: ${{ vars.STRICT_COVERAGE }}
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: cd site && bun install && bun test
       - uses: withastro/action@v3
         with: { path: site }
       - id: deploy

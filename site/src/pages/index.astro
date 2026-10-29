@@ -2,6 +2,7 @@
 import Base from "../layouts/Base.astro";
 import LabCard from "../components/LabCard.astro";
 import { labs, socials } from "../data";
+import { modules } from "../content/modules";
 const base = import.meta.env.BASE_URL;
 const pillars = [
   { t: "Civic, not speculative", d: "We build for real African problems: elections, procurement, land registries. No token pumps." },
@@ -20,7 +21,7 @@ const pillars = [
         with smart contracts. You start with ledgers and finish by shipping open-source code.
       </p>
       <div class="hero-actions">
-        <a class="btn btn-primary" href={`${base}docs/`}>Get started</a>
+        <a class="btn btn-primary" href={`${base}docs/`}>Start learning</a>
         <a class="btn btn-outline" href={`${base}labs/`}>Browse labs</a>
       </div>
     </section>
@@ -30,6 +31,20 @@ const pillars = [
         {pillars.map((p) => (
           <div class="card"><h3>{p.t}</h3><p>{p.d}</p></div>
         ))}
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">Course</span>
+          <h2>Learn Solidity, module by module.</h2>
+        </div>
+        <div class="grid">
+          {modules.map((m, i) => (
+            <a class="card" href={`${base}docs/#${m.id}`}><h3>{i}. {m.title}</h3></a>
+          ))}
+        </div>
       </div>
     </section>
 
