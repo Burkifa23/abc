@@ -8,6 +8,8 @@ import Figure from "../../../components/Figure.astro";
 import ChainOfBlocks from "../../../components/diagrams/ChainOfBlocks.astro";
 import HashPlayground from "../../../components/HashPlayground.astro";
 import MiningDemo from "../../../components/MiningDemo.astro";
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./03-blocks-and-mining";
 
 ## Hashes
 
@@ -26,3 +28,5 @@ Placeholder text. Change one character and the whole hash changes.
 Placeholder text. Find a nonce so the hash starts with zeros.
 
 <MiningDemo />
+
+<Quiz questions={quiz} />

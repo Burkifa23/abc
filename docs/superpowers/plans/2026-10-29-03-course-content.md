@@ -34,12 +34,13 @@ import CodeExercise from "../../../components/CodeExercise.astro";
 <Figure>…</Figure>            {/* when the table names a diagram */}
 
 ## Try it
-<CodeExercise id="ex1" starter={`…`} checks={[…]} solution={`…`} />   {/* when the table names an exercise */}
+<CodeExercise id="ex1" {...exercises["ex1"]} />   {/* when the table names an exercise; literal id="…" stays FIRST */}
 
 ## Check your understanding
 <Quiz questions={[ /* ≥ 5: at least 2 "what does this code do", 1 "spot the bug", explanations for every option set */ ]} />
 ```
 
+- Every lesson passes `bun test src/content/lessons.test.ts` (quiz rules + exercises compiled with solc 0.8.38: starter fails, solution passes, `compiles` check present).
 - **Exercises:** the starter compiles, unless the exercise is about fixing a compile error. The starter fails at least one check. The `solution` passes every check with the compiler pinned in plan 01. Checks use exact ABI types (`uint256`, not `uint`).
 - **Quiz answers:** spread the correct option's position across A/B/C/D within each lesson. Each `explain` says why the right answer is right.
 - **Reading length:** about 8–15 minutes per lesson in m00–m08. m09 lessons may be shorter.
