@@ -1,0 +1,11 @@
+{
+  "n": 8,
+  "slug": "campus-elections",
+  "title": "Secure Campus Elections",
+  "kind": "build",
+  "summary": "Build a campus election contract with registered voters, one vote each, and a tamper-proof tally.",
+  "concepts": ["mappings", "access control", "events", "custom errors"],
+  "adaptedFrom": "Plan.md Workshop 3; Solidity docs \"Voting\"",
+  "docs": ["m07-by-example/01-voting"],
+  "openFiles": ["README.md", "src/Election.sol"]
+}
