@@ -270,5 +270,33 @@
     "dir": "10-fundraising",
     "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F10-fundraising%2Fdevcontainer.json",
     "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/10-fundraising"
+  },
+  {
+    "n": 11,
+    "slug": "anonymous-access",
+    "title": "Anonymous Club Access",
+    "kind": "build",
+    "summary": "Prove you're a member without revealing who you are, and stop copycats with commit-reveal.",
+    "concepts": [
+      "keccak256",
+      "abi.encodePacked",
+      "commitments",
+      "nullifiers",
+      "commit-reveal",
+      "front-running"
+    ],
+    "adaptedFrom": "Plan.md Workshop 4",
+    "docs": [
+      "m04-units-and-globals/04-errors-math-crypto",
+      "m09-under-the-hood/05-abi-specification",
+      "m07-by-example/03-blind-auction"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/ClubAccess.sol"
+    ],
+    "dir": "11-anonymous-access",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F11-anonymous-access%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/11-anonymous-access"
   }
 ]
