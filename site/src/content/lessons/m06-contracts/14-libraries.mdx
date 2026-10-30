@@ -1,0 +1,89 @@
+---
+title: "Libraries"
+summary: "Reusable code that lives outside your contracts: internal library functions that get copied in, external ones that run through delegatecall, linking, and the rules libraries follow."
+covers: ["Contracts", "Contracts > Libraries"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./14-libraries";
+
+Every department in a university needs to compute a class average. Instead of each department writing its own spreadsheet formula, the registry publishes one tested formula that everyone uses. A **library** is that shared formula: a block of code that many contracts use without copying the source by hand. It is declared like a contract, but with the keyword `library`, and it comes with a set of limits that follow from the fact that it has no state of its own.
+
+## What a library is not
+
+A library cannot have state variables, cannot inherit or be inherited, cannot receive Ether, and cannot be destroyed. It is stateless code. If it needs to work on data, the data is passed in by the caller. That is how a library function can operate on your contract's storage: you hand it a `storage` reference, and it changes what that reference points to.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+library Tally {
+    function sum(uint256[] storage marks) internal view returns (uint256 total) {
+        for (uint256 i = 0; i < marks.length; i++) {
+            total += marks[i];
+        }
+    }
+
+    function dropLast(uint256[] storage marks) internal {
+        marks.pop();
+    }
+}
+
+contract Course {
+    uint256[] public marks;
+
+    function add(uint256 m) external {
+        marks.push(m);
+    }
+
+    function totalMarks() external view returns (uint256) {
+        return Tally.sum(marks);
+    }
+}
+```
+
+You call a library function as `LibraryName.function(...)`. It looks like a call to a base contract, and indeed a library is a bit like an invisible base contract: its internal functions can use internal types freely, and memory values are passed by reference without a copy.
+
+## Two very different kinds of function
+
+What the compiler does depends on the visibility of the function you call.
+
+**Internal functions** are pulled into the calling contract's own code. The compiler copies the library function (and anything it calls) into your contract, as if you had written it there. The library is never deployed and no address is involved. There is no extra call, so it is cheap, and the function can take any type, including `storage` pointers, mappings, and enums.
+
+**`external` or `public` functions** are real functions in a separately deployed library. Your contract reaches them with a `DELEGATECALL`: the library's code runs, but in your contract's context. `address(this)`, `msg.sender`, `msg.value` and storage are all yours. Because the library is a separate address, your compiled contract has to know where it lives. The compiler leaves a placeholder in the bytecode, and you fill in the address when you deploy, a step called **linking**. Bytecode with unfilled placeholders is incomplete and must not be deployed.
+
+External library calls are genuine EVM calls, so a `memory` argument or a value is copied, even for the `self` parameter. The only exceptions are `storage` references, and internal functions, which copy nothing.
+
+```solidity
+library Rounding {
+    // public: lives at its own address, reached with DELEGATECALL, must be linked
+    function best(uint256[] memory marks) public pure returns (uint256 top) {
+        for (uint256 i = 0; i < marks.length; i++) {
+            if (marks[i] > top) top = marks[i];
+        }
+    }
+}
+```
+
+The address of a deployed library can be read with `address(Rounding)`.
+
+External library functions can also use types that ordinary contract ABIs cannot express, such as storage pointers and recursive structs. For that reason their selectors are computed from an internal naming scheme and differ from what the contract ABI rules would give.
+
+## The call guard
+
+A library is meant to be run through `DELEGATECALL`, but nothing stops someone sending it a plain `CALL`. If that were allowed, a state-changing library function would be running on the library's own (empty) storage, and in old versions this could even be used to destroy it. To prevent that, the compiler adds a guard to the library's runtime code. At deployment, the library's own address is written into its code; at run time, every function that is not `view` or `pure` compares the current address with that stored one. If they match, the code is being run directly via `CALL`, and the function reverts. So `view` and `pure` library functions can be called directly, but anything that modifies state only works via `DELEGATECALL`.
+
+This means that the code stored on the chain for a library is not the same as the `deployedBytecode` the compiler reports. Neither tool nor test should compare them.
+
+<div class="callout"><strong>Watch out.</strong> A <code>public</code> library function is a decision to deploy and link. Forgetting to link produces bytecode with a placeholder in it, which cannot be deployed. If you only need a small helper, use <code>internal</code>: it needs no deployment, no linking and no extra call. Choose <code>public</code> or <code>external</code> for a library only when you want one deployed copy shared by many large contracts to keep their size down.</div>
+
+## Try it
+
+Complete the internal library `Marks`, which works on a `uint256[] storage`. `total` must add up all entries, and `removeAt` must delete an entry without leaving a gap: copy the last element over it, then pop.
+
+<CodeExercise id="marks-library" {...exercises["marks-library"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
