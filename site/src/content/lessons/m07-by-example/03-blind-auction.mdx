@@ -1,0 +1,178 @@
+---
+title: "Blind auction"
+summary: "Sealed bids with commit and reveal: hiding a bid behind a hash, proving it later, and checking that the deposit really covers the claimed value."
+covers: ["Solidity by Example", "Solidity by Example > Blind Auction"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import Figure from "../../../components/Figure.astro";
+import CommitReveal from "../../../components/diagrams/CommitReveal.astro";
+import { quiz, exercises } from "./03-blind-auction";
+
+The open auction from the last lesson has a flaw that has nothing to do with code quality: everything on a blockchain is public. If Ama bids 40 and Kofi sees it in the mempool (the waiting room for pending transactions), Kofi can bid 41 and win by the smallest margin possible. Anyone who sees the numbers can undercut or outbid everybody else at the last moment. A **blind** (sealed-bid) auction fixes this by keeping bids secret until bidding is over. The trick is not encryption but a handshake in two moves: **commit**, then **reveal**.
+
+The civic build for this idea is [Lab 16, Sealed-Bid Auction](/abc/labs/). Here we study the mechanism with a hostel-room auction.
+
+## Commit now, prove later
+
+A **commitment** is a hash of your bid. A hash function such as `keccak256` turns any input into a fixed 32-byte fingerprint. It has two properties that matter here: you cannot work backwards from the fingerprint to the input, and you cannot find a different input with the same fingerprint. Publishing the fingerprint is therefore like sealing your bid in an envelope and handing it over: nobody can read it, but you cannot change what is inside either.
+
+<Figure caption="In the commit phase the chain sees only a hash and a deposit. In the reveal phase the bidder opens the envelope, and the contract recomputes the hash and checks the deposit before accepting the bid.">
+  <CommitReveal />
+</Figure>
+
+What exactly goes into the envelope? Three things:
+
+```solidity
+function blind(uint256 value, bool fake, bytes32 secret)
+    public pure returns (bytes32)
+{
+    return keccak256(abi.encodePacked(value, fake, secret));
+}
+```
+
+- `value` is what you really offer, in wei.
+- `fake` says whether this is a decoy that should not count.
+- `secret` is a random 32-byte string only you know.
+
+The **secret** is not decoration. Bids are usually round, guessable numbers. Without a secret an observer could hash 10, 11, 12... and so on, compare the results with your published fingerprint, and read your bid. A long random secret makes that brute force pointless.
+
+The **fake** flag exists because of what else is public: the deposit. To make a bid binding, each bidder sends ether along with the commitment, and that amount is visible. An observer cannot read the value, but a deposit of 50 tells them the bid is probably around 50 or lower. By also submitting decoy commitments with large deposits, you hide which of your bids is the real one. Fake bids get their deposit back at reveal time.
+
+`abi.encodePacked` glues the three values together without padding, and because all three have fixed sizes (32 bytes, 1 byte and 32 bytes) the glued result is unambiguous. If you packed two variable-length items such as strings next to each other, different pairs could produce identical bytes, so always keep dynamic types apart or use `abi.encode`.
+
+## The contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract SealedRoomBids {
+    struct Sealed {
+        bytes32 hash;     // the commitment
+        uint256 deposit;  // ether sent with it
+    }
+
+    address payable public immutable fund;
+    uint256 public immutable revealStart;
+    uint256 public immutable revealEnd;
+
+    mapping(address => Sealed[]) public sealedBids;
+    mapping(address => uint256) public pendingReturns;
+
+    address public leader;
+    uint256 public leadingBid;
+    bool public settled;
+
+    error TooEarly(uint256 time);
+    error TooLate(uint256 time);
+    error LengthMismatch();
+    error AlreadySettled();
+    error TransferFailed();
+
+    modifier onlyBefore(uint256 t) {
+        if (block.timestamp >= t) revert TooLate(t);
+        _;
+    }
+    modifier onlyAfter(uint256 t) {
+        if (block.timestamp <= t) revert TooEarly(t);
+        _;
+    }
+
+    constructor(uint256 biddingSeconds, uint256 revealSeconds, address payable fund_) {
+        fund = fund_;
+        revealStart = block.timestamp + biddingSeconds;
+        revealEnd = revealStart + revealSeconds;
+    }
+
+    function blind(uint256 value, bool fake, bytes32 secret)
+        public pure returns (bytes32)
+    {
+        return keccak256(abi.encodePacked(value, fake, secret));
+    }
+
+    function commit(bytes32 hash) external payable onlyBefore(revealStart) {
+        sealedBids[msg.sender].push(Sealed(hash, msg.value));
+    }
+}
+```
+
+The timeline is controlled by two modifiers that compare `block.timestamp` against a boundary, the same technique as the previous lesson. There are three windows: bidding (before `revealStart`), revealing (between the two timestamps) and settlement (after `revealEnd`). A bidder can commit as many envelopes as they like, so `sealedBids` maps each address to an array.
+
+## Revealing, and the deposit check
+
+```solidity
+function reveal(
+    uint256[] calldata values,
+    bool[] calldata fakes,
+    bytes32[] calldata secrets
+) external onlyAfter(revealStart) onlyBefore(revealEnd) {
+    Sealed[] storage mine = sealedBids[msg.sender];
+    uint256 n = mine.length;
+    if (values.length != n || fakes.length != n || secrets.length != n) revert LengthMismatch();
+
+    uint256 refund = 0;
+    for (uint256 i = 0; i < n; i++) {
+        Sealed storage s = mine[i];
+        if (s.hash != blind(values[i], fakes[i], secrets[i])) continue;  // wrong opening, try again later
+
+        refund += s.deposit;
+        s.hash = bytes32(0);   // an envelope can only be opened once
+
+        if (!fakes[i] && s.deposit >= values[i] && _tryLead(msg.sender, values[i])) {
+            refund -= values[i];   // this much stays locked as the live bid
+        }
+    }
+    pendingReturns[msg.sender] += refund;
+}
+
+function _tryLead(address bidder, uint256 value) private returns (bool) {
+    if (value <= leadingBid) return false;
+    if (leader != address(0)) pendingReturns[leader] += leadingBid;
+    leader = bidder;
+    leadingBid = value;
+    return true;
+}
+```
+
+Walk through one pass of the loop. First the contract recomputes the hash from the three revealed items and compares it with the stored commitment. If they differ, the opening is wrong, and the bid is skipped, so the bidder can try again before the window closes. If they match, the whole deposit is added to a running `refund`, and the hash is overwritten with zero so the same envelope cannot be opened twice.
+
+Then comes the line that matters most:
+
+```solidity
+if (!fakes[i] && s.deposit >= values[i] && _tryLead(...))
+```
+
+Three conditions must all hold for the bid to count: it is not a fake, **the deposit covers the value**, and it is actually higher than the current leader. The middle one is easy to forget. Suppose a bidder commits value 100 with a deposit of 1. Without the comparison, the contract would crown them leader at 100 while holding only 1 of their money. At the end, the contract pays 100 to the welfare fund, and the missing 99 comes out of other bidders' deposits. The deposit check keeps every promise backed by real ether.
+
+When a bid does become the leading one, its `value` is subtracted from the refund because that part must stay in the contract. The unused part of the deposit (deposit minus value) and all the decoy deposits flow back. If someone is later outbid, `_tryLead` credits the old leader's amount to `pendingReturns`, exactly like the open auction.
+
+Notice that `reveal` never sends ether. Everything goes into `pendingReturns`, and a separate `withdraw()` (the one from the last lesson) lets people pull it out. A failing recipient therefore cannot jam the reveal loop.
+
+## Settlement
+
+```solidity
+function settle() external onlyAfter(revealEnd) {
+    if (settled) revert AlreadySettled();
+    settled = true;
+    (bool ok, ) = fund.call{value: leadingBid}("");
+    if (!ok) revert TransferFailed();
+}
+```
+
+Once the reveal window is over, anyone may call `settle()` to pay the winning amount to the fund. The `settled` flag is set before the external call, the same discipline as before.
+
+One consequence of this design deserves a sentence: a bidder who never reveals (or reveals wrongly until the window shuts) forfeits the deposit. That is a feature, since it punishes people who commit and then walk away, but it must be explained to users clearly.
+
+<div class="callout"><strong>Watch out.</strong> A hash of a guessable value is not a secret. If your commitment is just <code>keccak256(abi.encodePacked(value))</code>, anyone can try likely values until one matches. Always mix in a long random secret that never touches the chain until reveal time.</div>
+
+## Try it
+
+Complete `blind` in the contract below so that a commitment is the Keccak-256 hash of the packed `value`, `fake` and `secret`, in that order.
+
+<CodeExercise id="blind-commit" {...exercises["blind-commit"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

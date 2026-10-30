@@ -1,0 +1,137 @@
+---
+title: "Simple open auction"
+summary: "A hostel-room auction where everyone sees every bid, and why outbid bidders should pull their money back instead of being paid automatically."
+covers: ["Solidity by Example", "Solidity by Example > Blind Auction"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./02-open-auction";
+
+The best single-occupancy room in the new hostel wing is oversubscribed, so the warden decides to auction the right to book it for a term. The proceeds go to the hostel welfare fund. In an **open auction** everyone sees every bid as it arrives, and the highest bid when the clock runs out wins. Writing one in Solidity is easy. Writing one in which nobody can jam the auction or steal from it is the real lesson, and it comes down to one design choice: how do you give money back to people who have been outbid?
+
+The Solidity documentation presents this example as the first half of its "Blind Auction" chapter, then builds the secret-bid version on top of it. We follow the same order. The sealed-bid version is the next lesson, and [Lab 16, Sealed-Bid Auction](/abc/labs/) turns it into a civic project with tests.
+
+## The state
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract RoomAuction {
+    address payable public immutable welfareFund;
+    uint256 public immutable closesAt;
+
+    address public leader;
+    uint256 public leadingBid;
+    bool public settled;
+
+    // money owed back to bidders who were outbid
+    mapping(address => uint256) public pendingReturns;
+
+    event NewLeader(address indexed bidder, uint256 amount);
+    event Settled(address indexed winner, uint256 amount);
+
+    error TooLate();
+    error StillRunning();
+    error BidTooLow(uint256 leadingBid);
+    error AlreadySettled();
+    error TransferFailed();
+
+    constructor(uint256 durationSeconds, address payable fund) {
+        welfareFund = fund;
+        closesAt = block.timestamp + durationSeconds;
+    }
+}
+```
+
+The two `immutable` values are fixed at deployment. The deadline is an absolute timestamp calculated once, so later calls only need to compare `block.timestamp` against it. The `pendingReturns` mapping is the star of the show: it is a ledger of what each outbid person is owed, not a pile of payments the contract has already sent.
+
+## Placing a bid
+
+```solidity
+function bid() external payable {
+    if (block.timestamp >= closesAt) revert TooLate();
+    if (msg.value <= leadingBid) revert BidTooLow(leadingBid);
+
+    if (leader != address(0)) {
+        pendingReturns[leader] += leadingBid;
+    }
+    leader = msg.sender;
+    leadingBid = msg.value;
+    emit NewLeader(msg.sender, msg.value);
+}
+```
+
+A `payable` function receives ether, and the amount arrives in `msg.value`. There is no separate "amount" parameter, which means the bidder cannot claim to have sent one number while sending another. If the new offer beats the leader, the previous leader's money is **recorded** in `pendingReturns`, then the new leader is stored. The contract holds the ether of the current leader plus everything it owes to others.
+
+Because we handled the checks first and state second, a failing bid changes nothing. A reverted transaction also sends the ether back to the bidder automatically, so a "too low" bid costs only the gas spent.
+
+## Why not just send the money back?
+
+The obvious design refunds the previous leader inside `bid()`:
+
+```solidity
+// tempting, but dangerous
+(bool ok, ) = leader.call{value: leadingBid}("");
+require(ok);
+```
+
+The trouble is that `leader` might be a contract, and the contract's code runs when it receives ether. A malicious bidder can deploy a contract whose receive function always reverts. Once that contract is the leader, every later bid first tries to refund it, the refund reverts, and so does the whole `bid()`. Nobody can ever outbid it. The attacker holds the auction hostage with a single winning bid, perhaps a small one.
+
+The root problem: **one party's behaviour should not be able to block a step everyone else depends on.** The cure is the **withdraw pattern**, also called pull payment. Instead of pushing money to people during `bid()`, we only update the ledger. Each person later calls a function to pull out their own money, and if their account refuses it, the only person hurt is themselves.
+
+```solidity
+function withdraw() external returns (bool) {
+    uint256 amount = pendingReturns[msg.sender];
+    if (amount == 0) return false;
+
+    pendingReturns[msg.sender] = 0;          // zero it BEFORE sending
+
+    (bool ok, ) = msg.sender.call{value: amount}("");
+    if (!ok) {
+        pendingReturns[msg.sender] = amount; // give the claim back
+        return false;
+    }
+    return true;
+}
+```
+
+Three details deserve attention.
+
+**Zero first, send second.** The ledger entry is cleared before the ether leaves. If the recipient is a contract that calls `withdraw()` again from inside its receive function (a *reentrancy* attack), it finds an entry of zero and gets nothing the second time. If we sent first and cleared afterwards, the second call would see the old amount and be paid again, and the contract could be drained. Later in the course the security module treats this pattern in full.
+
+**Why `call` and not `transfer`.** Solidity also has `transfer` and `send`, which forward a fixed 2300 gas. That figure was meant to make reentrancy impossible, but gas prices change, and a fixed allowance can make an honest contract wallet fail while giving no real security. Using them is now discouraged. Use `call`, with the checks-effects-interactions order above doing the actual protecting.
+
+**Return a flag, do not revert.** If the transfer fails, we restore the entry and return `false` rather than reverting. The caller learns what happened and no state is lost. Reverting would work too; the version here follows the style of the documentation's example, where the status is a return value.
+
+## Ending the auction
+
+```solidity
+function settle() external {
+    if (block.timestamp < closesAt) revert StillRunning();
+    if (settled) revert AlreadySettled();
+
+    settled = true;
+    emit Settled(leader, leadingBid);
+
+    (bool ok, ) = welfareFund.call{value: leadingBid}("");
+    if (!ok) revert TransferFailed();
+}
+```
+
+Settlement is a separate, public function that **anyone** may call once the deadline has passed. Again the sequence is: check conditions, record the result (`settled = true`, emit the event), and only then talk to the outside world. The flag stops the fund being paid twice. Note that a reverting `welfareFund` would block only `settle()`, never the bidders' ability to withdraw, because the two paths are independent. In a production contract you would also think about an auction that nobody bid in: the `leader` is the zero address and the amount is 0.
+
+This split into three phases (collect bids, pay the winner, let losers withdraw) is a pattern you will meet constantly. A related lesson in the checks-effects-interactions habit: write the state down before you call out.
+
+<div class="callout"><strong>Watch out.</strong> Never loop over bidders to refund them all in one transaction. One reverting recipient, or simply too many recipients for the block gas limit, jams the entire loop. Record what each person is owed and let them collect it themselves.</div>
+
+## Try it
+
+Complete `withdraw()` for the `RoomAuction` below. It must return `false` when nothing is owed, clear the ledger entry before sending, use `call` for the transfer, and restore the entry if the transfer fails.
+
+<CodeExercise id="withdraw" {...exercises["withdraw"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
