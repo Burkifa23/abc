@@ -1,0 +1,29 @@
+{
+  "name": "Lab 20: Open-Source Africa Capstone",
+  "build": {
+    "dockerfile": "../Dockerfile"
+  },
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}/labs/20-open-source-africa",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "README.md",
+        "src/interfaces/ICivicElection.sol"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "NomicFoundation.hardhat-solidity"
+      ],
+      "settings": {
+        "files.exclude": {
+          ".solution": true,
+          "out": true,
+          "cache": true,
+          "lab.json": true
+        }
+      }
+    }
+  },
+  "postAttachCommand": "forge build --silent && echo 'Run: forge test'"
+}

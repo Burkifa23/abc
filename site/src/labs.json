@@ -525,5 +525,34 @@
     "dir": "19-deploy",
     "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F19-deploy%2Fdevcontainer.json",
     "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/19-deploy"
+  },
+  {
+    "n": 20,
+    "slug": "open-source-africa",
+    "title": "Open-Source Africa Capstone",
+    "kind": "build",
+    "summary": "Ship your civic contracts as one tested, documented, open-source library.",
+    "concepts": [
+      "interfaces",
+      "conformance tests",
+      "code coverage",
+      "formatting",
+      "NatSpec",
+      "releasing"
+    ],
+    "adaptedFrom": "Plan.md Workshop 7 + Solana freeform app",
+    "docs": [
+      "m02-source-and-structure/03-comments-and-natspec",
+      "m02-source-and-structure/05-style-guide",
+      "m08-security/05-recommendations"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/interfaces/ICivicElection.sol"
+    ],
+    "extraCheck": "forge fmt --check && forge coverage --report summary | node \"$REPO_ROOT/scripts/coverage-gate.mjs\" 90",
+    "dir": "20-open-source-africa",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F20-open-source-africa%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/20-open-source-africa"
   }
 ]

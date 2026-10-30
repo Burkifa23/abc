@@ -1,0 +1,12 @@
+{
+  "n": 20,
+  "slug": "open-source-africa",
+  "title": "Open-Source Africa Capstone",
+  "kind": "build",
+  "summary": "Ship your civic contracts as one tested, documented, open-source library.",
+  "concepts": ["interfaces", "conformance tests", "code coverage", "formatting", "NatSpec", "releasing"],
+  "adaptedFrom": "Plan.md Workshop 7 + Solana freeform app",
+  "docs": ["m02-source-and-structure/03-comments-and-natspec", "m02-source-and-structure/05-style-guide", "m08-security/05-recommendations"],
+  "openFiles": ["README.md", "src/interfaces/ICivicElection.sol"],
+  "extraCheck": "forge fmt --check && forge coverage --report summary | node \"$REPO_ROOT/scripts/coverage-gate.mjs\" 90"
+}
