@@ -497,5 +497,33 @@
     "dir": "18-fortune-teller-dapp",
     "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F18-fortune-teller-dapp%2Fdevcontainer.json",
     "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/18-fortune-teller-dapp"
+  },
+  {
+    "n": 19,
+    "slug": "deploy",
+    "title": "Deploy",
+    "kind": "learn",
+    "summary": "Write a tested deploy script, ship to a local chain, and learn safe habits for public networks.",
+    "concepts": [
+      "forge script",
+      "vm.envOr",
+      "broadcast",
+      "keystores",
+      "anvil",
+      "cast"
+    ],
+    "adaptedFrom": "Solana: deploy to devnet + build for mainnet",
+    "docs": [
+      "m09-under-the-hood/01-using-the-compiler",
+      "m09-under-the-hood/06-metadata"
+    ],
+    "openFiles": [
+      "README.md",
+      "script/Deploy.s.sol",
+      "src/Counter.sol"
+    ],
+    "dir": "19-deploy",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F19-deploy%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/19-deploy"
   }
 ]
