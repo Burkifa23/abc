@@ -1,0 +1,11 @@
+{
+  "n": 12,
+  "slug": "tic-tac-toe",
+  "title": "Tic-Tac-Toe",
+  "kind": "learn",
+  "summary": "Run many tic-tac-toe games on-chain with enums, 2-D arrays and storage pointers.",
+  "concepts": ["enum", "fixed 2-D arrays", "struct in mapping", "storage references", "custom errors"],
+  "adaptedFrom": "Solana: Anchor tic-tac-toe parts 1 & 2",
+  "docs": ["m03-types/04-enums-and-udvts", "m03-types/07-arrays-and-slices", "m03-types/06-data-location", "m05-expressions/01-control-structures"],
+  "openFiles": ["README.md", "src/TicTacToe.sol"]
+}

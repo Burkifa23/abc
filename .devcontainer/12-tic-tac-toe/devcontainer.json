@@ -1,0 +1,29 @@
+{
+  "name": "Lab 12: Tic-Tac-Toe",
+  "build": {
+    "dockerfile": "../Dockerfile"
+  },
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}/labs/12-tic-tac-toe",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "README.md",
+        "src/TicTacToe.sol"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "NomicFoundation.hardhat-solidity"
+      ],
+      "settings": {
+        "files.exclude": {
+          ".solution": true,
+          "out": true,
+          "cache": true,
+          "lab.json": true
+        }
+      }
+    }
+  },
+  "postAttachCommand": "forge build --silent && echo 'Run: forge test'"
+}
