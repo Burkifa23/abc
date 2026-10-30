@@ -1,0 +1,105 @@
+---
+title: "Contributing to Solidity and the brand guide"
+summary: "How to take part in the compiler project: reporting issues, pull requests, the policy on AI-assisted work, tests, fuzzing, templates, documentation style and language design, plus the rules for using the Solidity name and logo."
+covers: ["Contributing", "Contributing > Team Calls", "Contributing > How to Report Issues", "Contributing > Workflow for Pull Requests", "Contributing > AI-Assisted Contributions", "Contributing > Running the Compiler Tests", "Contributing > Running the Fuzzer via AFL", "Contributing > Whiskers", "Contributing > Documentation Style Guide", "Contributing > Solidity Language Design", "Solidity Brand Guide", "Solidity Brand Guide > The Solidity Brand", "Solidity Brand Guide > Solidity Brand Name", "Solidity Brand Guide > Solidity Logo License", "Solidity Brand Guide > Solidity Logo Guidelines", "Solidity Brand Guide > Credits"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./12-contributing";
+
+The language you are learning is built in the open, and some of its biggest contributions have come from people who started as users. This last lesson is a map of how the project accepts help, followed by the rules for using the Solidity name and logo in your own club posters, talks and tools.
+
+## Ways to help
+
+The project welcomes: reporting issues; fixing and answering GitHub issues (the ones labelled "good first issue" are meant as an entry point for outsiders); improving the documentation; translating it; helping other users on the Q&A site and the Matrix chat; and joining the language design discussion on the forum. A good way to start is to build the compiler from source, which shows you the components. Participation is covered by a **Contributor Code of Conduct**, which applies in issues, pull requests and chat channels.
+
+### Team calls
+
+There is a public team call every Wednesday at 3 PM Central European time, held on Jitsi. Anyone with an issue or pull request to discuss, or who just wants to hear what the team is working on, can join. Topics can be added to the agenda, and are taken at the next call.
+
+### How to report issues
+
+Use the GitHub issue tracker, and include: the Solidity version, the source code if relevant, your operating system, steps to reproduce, and the actual versus the expected behaviour. The most valuable thing you can add is a **minimal reproduction**: strip the code to the bare minimum that still shows the problem. It often clarifies a misunderstanding along the way, so you may answer your own question. Questions about the design of the language belong on the forum, not the tracker.
+
+### Workflow for pull requests
+
+1. Fork the repository and branch from `develop`, the main development branch.
+2. Make small, reviewable changes. Commit messages should say *why*, not only *what* (a tiny change can skip this).
+3. To pick up new work from `develop`, **rebase** your branch rather than merging; it makes review easier.
+4. A new feature needs test cases under `test/`. For a larger change, discuss it first on the compiler-development Matrix channel, which is separate from the user-help channels.
+5. Add a line to `Changelog.md` for features and bug fixes, in the style of existing entries.
+6. Follow the project's coding style, and build and test locally even though continuous integration will also run.
+7. Run through the review checklist before you submit. Every PR is reviewed carefully, and the checklist prevents most common back-and-forth.
+
+### AI-assisted contributions
+
+The project does not forbid AI tools, but it applies the same standard to every contribution however it was produced, and demands openness about it. In plain terms:
+
+- When you submit AI-generated code, you are stating that you have **reviewed** it, **understand** it, **can explain** it, and **tested** it as thoroughly as if you had typed it yourself.
+- If AI tools produced code, tests or documentation in any part of your contribution, you **must disclose** this in the pull request.
+- A PR found to contain undisclosed AI-generated content may be closed.
+
+The effect is that the reviewer's time is not spent on code its author cannot defend. Using a tool is acceptable; passing off its output unseen is not.
+
+## Running the compiler tests
+
+The tests are of several kinds, most of them bundled into a C++ test application called `soltest`, started directly or via the `scripts/soltest.sh` wrapper. The script `scripts/tests.sh` runs nearly everything: unit tests, command-line tests and compile tests. Some optional dependencies are involved: an EVM implementation (evmone) for semantic and gas tests, and SMT solvers (z3, Eldarica, cvc5) for the formal-verification tests. If you lack one, skip its group with flags such as `--no-semantic-tests` or `--no-smt`. On Windows you need permission to create symbolic links, or several tests fail.
+
+You can run a subset by filtering on suite and test name (with `*` wildcards), and the help output lists useful options such as showing progress, picking one test, and more detailed reports. To debug with GDB, build in `Debug` mode so symbols exist.
+
+**Syntax tests** check that the compiler gives the right messages for invalid code and accepts valid code. Each is a small `.sol` file in the syntax test folder with the expectation written as comments after a `// ----` separator:
+
+```solidity
+contract test {
+    uint256 variable;
+    uint128 variable;
+}
+// ----
+// DeclarationError: (36-52): Identifier already declared.
+```
+
+The code above does not compile on purpose: the test passes because the compiler reports exactly the error written after the separator. The number range gives the character position of the error, and the file name should describe what is being tested (one aspect per file, and one contract per file unless you test inheritance). If the contract should compile cleanly, leave out the separator. A tool called `isoltest` runs these and, when a test fails, offers to **edit** the file in your editor, **update** the expectation to match the real output, **skip** it, or **quit**.
+
+**Command-line tests** check the compiler binary end to end, one scenario per sub-folder of `test/cmdlineTests/`, run with `cmdlineTests.sh` (which accepts include and exclude patterns). They come in three kinds: standard JSON tests (an `input.json` and an expected `output.json`), CLI tests (an `input.sol` or `input.yul`, with optional `args`, `stdin`, `output`, `err` and `exit` files) and script tests (a `test.sh` or `test.py`).
+
+## Running the fuzzer via AFL
+
+**Fuzzing** feeds a program random, mutated inputs to find crashes. The project has a special binary, `solfuzzer`, which takes source code and fails only on an *internal* problem (a segmentation fault, an internal compiler error), not on ordinary errors in the code you give it, so fuzzers can uncover bugs in the compiler itself. The usual fuzzer is **AFL**. The procedure: install AFL; build `solfuzzer` using AFL's compiler wrappers so it is instrumented (if AFL complains that the binary is not instrumented, try the clang-based wrappers); collect a small **corpus** of example sources (from the syntax tests or extracted from the docs with `scripts/isolate_tests.py`, each file under about a kilobyte and ideally one per feature, possibly trimmed with `afl-cmin`); run `afl-fuzz` with an input folder, output folder and the binary; and finally filter the many near-identical findings with `scripts/uniqueErrors.sh`.
+
+## Whiskers
+
+**Whiskers** is the project's small string-templating system, similar to Mustache, used in the compiler to keep generated code readable. Its markers are `<` and `>` rather than double braces, because braces are the block delimiters of Yul, while angle brackets are not valid there, so templates for Yul stay unambiguous. Rules in brief:
+
+- `<name>` is replaced by the value of variable `name`, with no escaping and no repeated substitution.
+- `<#name>...</name>` repeats its body once for every set of variables supplied, replacing any `<inner>` markers each time; top-level variables are visible inside. Lists are resolved one level deep only.
+- `<?name>...<!name>...</name>` is a conditional on a boolean, taking the first part when true and the second otherwise. With `<?+name>...<!+name>...</+name>` the test is whether a string is non-empty.
+
+For example, the template `Hello <who>: <#xs><x>;</xs>` with `who = "Ada"` and two sets of variables giving `x` as `a` and `b` yields `Hello Ada: a;b;`.
+
+## Documentation style guide
+
+For people writing docs for Solidity: use international English and avoid local slang; use **Title Case** for headings (capitalise main words, not articles, conjunctions and prepositions unless they start the title); expand contractions ("do not", not "don't"); use passive voice for technical reference (what the language defines) and active voice when recommending how to apply something; and prefer the terms "function parameters" and "return variables" over input and output parameters. Every code block that starts with `pragma solidity`, `contract`, `library` or `interface` is run through the compiler by continuous integration, so examples must work; each should start with a pragma covering the widest range of versions where the code is valid, for example `pragma solidity >=0.4.0 <0.9.0;`. Before submitting, run the documentation checker script, which installs its dependencies and finds broken links and syntax problems.
+
+## Solidity language design
+
+The place to propose and debate language ideas, in their early form, is the **Solidity forum**. As proposals firm up, the implementation discussion moves to GitHub issues. The team also holds language-design calls on selected topics, announced on the forum, and posts surveys there. To see what is planned, check the GitHub project board; issues in the **design backlog** still need specification and will be discussed on a design call or a regular team call. The `breaking` branch shows changes planned for the next breaking release, as opposed to the default `develop`. For quick questions there is also a developer chat room for compiler and language work.
+
+## The Solidity brand guide
+
+If you print "Solidity" on a workshop poster, build a tool with the name in it, or place the logo on a website, the brand guide tells you what is expected.
+
+**The brand.** Solidity is an open-source community project run by a core team. The team belongs to the **Argot Collective**, a non-profit that develops and maintains the language. The project was originally started and sponsored by the Ethereum Foundation.
+
+**The name.** "Solidity" refers to the Solidity programming language and nothing else. Do not use it for another language; do not use it so as to mislead or imply that unrelated tools, documents or modules are associated with the language; and do not use it in a way that leaves people unsure whether the language is open source and free to use.
+
+**The logo licence.** The logo is licensed under **Creative Commons Attribution 4.0 International** (CC BY 4.0), the most permissive Creative Commons licence. You may *share* it (copy and redistribute in any medium or format) and *adapt* it (remix, transform and build on it) for any purpose, even commercial. The condition is attribution: give appropriate credit, link to the licence, and say whether you changed the logo, in any reasonable manner but never in a way that suggests the core team endorses you or your use.
+
+**Logo guidelines.** In addition, keep the logo's proportions: do not stretch or crop it. And do not change its colours unless it is absolutely necessary.
+
+**Credits.** The guide was derived in part from the Python Software Foundation Trademark Usage Policy and the Rust Media Guide, which is a useful reminder that open projects often borrow each other's governance documents.
+
+<div class="callout"><strong>Watch out.</strong> The licence lets you reuse the <em>logo</em>, not claim the project's blessing. A tool called, say, "Solidity Studio Pro" with the logo and no explanation could easily read as an official product. Say plainly what you built and credit the source.</div>
+
+## Check your understanding
+
+<Quiz questions={quiz} />
