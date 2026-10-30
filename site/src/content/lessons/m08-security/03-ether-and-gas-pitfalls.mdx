@@ -24,7 +24,7 @@ If a contract does receive ether through `receive` or `fallback`, remember that 
 
 ## Why transfer and send fell out of favour
 
-Solidity gives an address three ways to push ether: `transfer`, `send` and `call{value: ...}`. The first two forward a fixed **stipend of 2300 gas**. The idea was that 2300 gas is enough to log an event and not enough to do anything dangerous, so a reentrant call would be impossible. For years this looked like a neat protection.
+Solidity gives an address three ways to push ether: `transfer`, `send` and `call{value: ...}`. The first two forward a fixed **stipend of 2300 gas**. The idea was that 2300 gas is enough to log an event and not enough to do anything dangerous, so a reentrant call would be impossible. For years this looked like a neat protection. Recent compilers mark both as deprecated and warn when you use them.
 
 It stopped being one. The stipend is a constant, but the cost of operations is not. EIP-1884 raised the price of reading storage, and EIP-2929 raised it again for the first access to a slot in a transaction. An honest recipient, such as a multisig wallet or a proxy that reads its implementation address from storage, may now need more than 2300 gas just to receive money, and a `transfer` to it fails. Meanwhile the protection was always partial, because reentrancy needs no ether transfer at all: any call into another contract hands over control. So the stipend breaks good users and stops few bad ones.
 
@@ -69,7 +69,7 @@ Mitigations: avoid iterating over user-controlled lists; process in bounded batc
 
 The EVM limits nested calls to 1024 levels. In the early days an attacker could build up 1,000 nested calls in a contract of their own and then call yours, so your own external call would fail for lack of depth. If your code assumed it would succeed, you were exposed.
 
-This attack is dead in practice. Since EIP-150 (the Tangerine Whistle fork), a call may forward at most **63/64 of the remaining gas**. Each level of nesting loses a sixtieth-fourth, so reaching depth 1024 would require a starting gas amount far above any block limit. You will see the 1024 figure in old advice. It is worth knowing but not worth designing around. One related fact that confuses beginners: the call stack depth and the 1024-slot *expression* stack are unrelated limits that happen to share a number.
+This attack is dead in practice. Since EIP-150 (the Tangerine Whistle fork), a call may forward at most **63/64 of the remaining gas**. Each level of nesting loses a sixty-fourth, so reaching depth 1024 would require a starting gas amount far above any block limit. You will see the 1024 figure in old advice. It is worth knowing but not worth designing around. One related fact that confuses beginners: the call stack depth and the 1024-slot *expression* stack are unrelated limits that happen to share a number.
 
 If a call does fail for lack of depth, `.send()`, `.call()`, `.delegatecall()` and `.staticcall()` return `false`. High-level calls to other contracts revert.
 

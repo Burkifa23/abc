@@ -59,7 +59,7 @@ The two generators agree on everything a sensible program depends on. They diffe
 
 ### Semantic-only changes
 
-I compiled each example below with solc 0.8.38 both ways and ran it, so the numbers are real.
+Each example below was compiled with solc 0.8.38 both ways and run, so the numbers are real.
 
 **1. State variables are initialised in a new order under inheritance.** The old order: zero everything, then evaluate base constructor arguments, then run every variable initialiser in the whole hierarchy base-to-derived, and only then run the constructors. The new order handles one contract at a time, base first: initialise its variables, then run its constructor. This matters when one contract's initial value depends on another's constructor:
 

@@ -101,7 +101,7 @@ Three details deserve attention.
 
 **Zero first, send second.** The ledger entry is cleared before the ether leaves. If the recipient is a contract that calls `withdraw()` again from inside its receive function (a *reentrancy* attack), it finds an entry of zero and gets nothing the second time. If we sent first and cleared afterwards, the second call would see the old amount and be paid again, and the contract could be drained. Later in the course the security module treats this pattern in full.
 
-**Why `call` and not `transfer`.** Solidity also has `transfer` and `send`, which forward a fixed 2300 gas. That figure was meant to make reentrancy impossible, but gas prices change, and a fixed allowance can make an honest contract wallet fail while giving no real security. Using them is now discouraged. Use `call`, with the checks-effects-interactions order above doing the actual protecting.
+**Why `call` and not `transfer`.** Solidity also has `transfer` and `send`, which forward a fixed 2300 gas. That figure was meant to make reentrancy impossible, but gas prices change, and a fixed allowance can make an honest contract wallet fail while giving no real security. Using them is now discouraged. Recent compilers mark both as deprecated and warn when you use them. Use `call`, with the checks-effects-interactions order above doing the actual protecting.
 
 **Return a flag, do not revert.** If the transfer fails, we restore the entry and return `false` rather than reverting. The caller learns what happened and no state is lost. Reverting would work too; the version here follows the style of the documentation's example, where the status is a return value.
 

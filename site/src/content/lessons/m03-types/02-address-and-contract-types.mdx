@@ -42,7 +42,7 @@ An address converts explicitly to and from `uint160`, `bytes20`, and contract ty
 | `.delegatecall(data)` | runs the other contract's code **against your own storage** |
 | `.staticcall(data)` | like `call`, but any state change inside makes it fail |
 
-`transfer` and `send` pass along only 2300 gas, enough to log an event but not enough for the receiver to do anything clever. That limit was meant to prevent re-entrancy but breaks with receivers that legitimately need more, and gas prices have changed over time. Modern code usually uses `call` with a value, checks the returned flag, and defends against re-entrancy in another way (a later module). For now just remember the shape:
+`transfer` and `send` pass along only 2300 gas, enough to log an event but not enough for the receiver to do anything clever. That limit was meant to prevent re-entrancy but breaks with receivers that legitimately need more, and gas prices have changed over time. Modern code usually uses `call` with a value, checks the returned flag, and defends against re-entrancy in another way (a later module). Recent compilers mark both as deprecated and warn when you use them. For now just remember the shape:
 
 ```solidity
 (bool ok, ) = payable(student).call{value: refund}("");

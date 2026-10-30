@@ -74,7 +74,7 @@ An `immutable` may be assigned while the contract is being built, so it can depe
 
 - It may be assigned where it is declared or in the constructor, but not in an ordinary function or a modifier: those can run after deployment. During the constructor itself you may assign more than once, and reading it there is fine (from compiler 0.8.21 onward).
 - Reading is unrestricted. If you never assign it, it stays at the default value.
-- Same types as constants, minus strings: only value types are supported.
+- Same types as constants, minus `string` and `bytes`: only value types are supported.
 
 Under the hood, the creation code takes the runtime code and **patches the value into every place it is used** before storing it. So `opensAt` is not in storage at all; it is a 32-byte constant inside the deployed code. Each immutable takes a full 32 bytes in the code, even if the type is smaller.
 

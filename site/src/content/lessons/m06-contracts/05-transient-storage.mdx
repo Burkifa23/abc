@@ -21,7 +21,7 @@ Transient storage arrived with Ethereum's Cancun upgrade (EIP-1153), with two ne
 - **Scope.** Each contract has its own transient store, private to it, just like its normal storage. All the frames of calls into that contract within one transaction share the same store.
 - **Reverts.** If a call reverts, its transient writes are undone, including those of calls it made.
 
-The figure from the previous module lays out where transient storage sits among the EVM's data areas.
+The data-areas figure from Module 1, lesson 05 shows where transient storage sits among the EVM's data areas.
 
 <Figure caption="Transient storage sits beside persistent storage, with the same slot structure but a one-transaction lifetime.">
   <DataLocations />

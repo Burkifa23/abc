@@ -81,7 +81,7 @@ The reply has three main parts. `errors` lists problems, each with a `severity` 
 
 ## Choosing the EVM version
 
-The compiler can aim its output at a particular fork of the EVM, so that it only uses opcodes that fork has. On the command line it is `--evm-version <name>`; in JSON it is `settings.evmVersion`. The default for the 0.8.38 and 0.8.39 compilers is **osaka**. I checked this for 0.8.38 by compiling with no setting and reading the `evmVersion` the compiler wrote into the metadata.
+The compiler can aim its output at a particular fork of the EVM, so that it only uses opcodes that fork has. On the command line it is `--evm-version <name>`; in JSON it is `settings.evmVersion`. The default for the 0.8.38 compiler is **osaka**; you can confirm it by compiling with no setting and reading the `evmVersion` recorded in the metadata.
 
 The list of fork names runs from `homestead` through to `osaka`, with `amsterdam` marked experimental, and targets up to `berlin` are deprecated. The changes that matter in practice are:
 

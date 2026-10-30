@@ -50,7 +50,7 @@ export const exercises: Record<string, { starter: string; solution: string; chec
       { type: "noWarnings" },
       { type: "abi", contract: "ScholarshipPayout", kind: "function", name: "pay", inputs: ["address", "uint256"], outputs: [], stateMutability: "nonpayable", message: "Has pay(address, uint256)" },
       { type: "regex", pattern: "\\.call\\s*\\{\\s*value\\s*:\\s*amount\\s*\\}", message: "Sends the amount with call{value: amount}" },
-      { type: "regex", pattern: "revert\\s+SendFailed\\s*\\(", message: "Reverts with SendFailed when the call fails" },
+      { type: "regex", pattern: "if\\s*\\(\\s*!\\s*\\w+\\s*\\)\\s*revert\\s+SendFailed\\s*\\(|require\\s*\\(\\s*\\w+\\s*,\\s*SendFailed\\s*\\(", message: "Reverts with SendFailed when the call fails" },
       { type: "regex", pattern: "^(?![\\s\\S]*\\.(transfer|send)\\s*\\()[\\s\\S]*$", message: "No longer uses transfer or send" },
     ],
   },

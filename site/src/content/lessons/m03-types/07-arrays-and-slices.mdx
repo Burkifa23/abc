@@ -48,11 +48,11 @@ function tag(string memory course, string memory section) public pure returns (s
 
 ## Array literals
 
-An inline list such as `[10, 20, 30]` is an **array literal**. It is always a *fixed-size memory array*, and its element type is taken from the first item's smallest fitting type: `10` fits in `uint8`, so this one is `uint8[3] memory`. That is a problem as soon as a later item does not fit:
+An inline list such as `[10, 20, 30]` is an **array literal**. It is always a *fixed-size memory array*, and its element type is the smallest type that every item fits in: here `uint8`, so this one is `uint8[3] memory`. A fixed array never converts to one with a different element type, so even this small literal cannot be assigned to a `uint256[3]` variable:
 
 ```solidity
 uint256[3] memory ok = [uint256(10), 20, 300]; // convert the first item; the rest follow
-// uint256[3] memory bad = [10, 20, 300];       // error: 300 does not fit in uint8
+// uint256[3] memory bad = [10, 20, 300];       // error: the literal is uint16[3], not uint256[3]
 ```
 
 You also cannot assign a literal to a dynamic memory array (`uint256[] memory x = [1, 2, 3]` is rejected), because fixed and dynamic arrays are different types. Create the dynamic array with `new` and fill it.

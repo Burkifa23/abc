@@ -72,7 +72,7 @@ export const exercises: Record<string, { starter: string; solution: string; chec
       { type: "abi", contract: "TicketDesk", kind: "function", name: "owed", inputs: ["address"], outputs: ["uint256"], stateMutability: "view", message: "Has the public owed(address) ledger" },
       { type: "regex", pattern: "revert\\s+NothingOwed\\s*\\(", message: "Reverts with NothingOwed when nothing is owed" },
       { type: "regex", pattern: "owed\\s*\\[\\s*msg\\.sender\\s*\\]\\s*=\\s*0\\s*;[\\s\\S]*\\.call\\s*\\{\\s*value\\s*:", message: "Zeroes the ledger entry before the call{value: ...}" },
-      { type: "regex", pattern: "revert\\s+PayoutFailed\\s*\\(", message: "Reverts with PayoutFailed when the send fails" },
+      { type: "regex", pattern: "if\\s*\\(\\s*!\\s*\\w+\\s*\\)\\s*revert\\s+PayoutFailed\\s*\\(|require\\s*\\(\\s*\\w+\\s*,\\s*PayoutFailed\\s*\\(", message: "Reverts with PayoutFailed when the send fails" },
     ],
   },
 };

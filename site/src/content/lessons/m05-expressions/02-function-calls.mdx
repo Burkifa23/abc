@@ -56,7 +56,7 @@ contract Desk {
 
 The call through `this` costs more than an internal call, and it changes `msg.sender`, so use it rarely. It also cannot be used inside a constructor: the contract does not exist at its address until the constructor finishes.
 
-An external call is not a transaction of its own. It is a **message call** inside the transaction that started everything, so a user signs once and pays gas once for the whole chain of calls (the message-calls lesson in the first module described this).
+An external call is not a transaction of its own. It is a **message call** inside the transaction that started everything, so a user signs once and pays gas once for the whole chain of calls (Module 1, lesson 06 described this).
 
 ## Sending ether and gas with a call
 

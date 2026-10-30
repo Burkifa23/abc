@@ -85,7 +85,7 @@ The `type(X)` expression asks the compiler about a type. All of the results are 
 | `type(I).interfaceId` | `bytes4` identifier of interface `I` (EIP-165) |
 | `type(T).min`, `type(T).max` | Smallest and largest value of integer type `T` |
 
-`interfaceId` is the XOR of the selectors of all functions the interface declares (not counting inherited ones). Contracts publish it so that callers can ask "do you support this interface?" before using it. `type(uint8).max` is 255 and `type(int8).min` is -128. Use them instead of typing the constant yourself, since they cannot be mistyped. `creationCode` is used in factories that deploy contracts with a computed address. You cannot read `type(C).creationCode` from inside `C` itself.
+`interfaceId` is the XOR of the selectors of all functions the interface declares (not counting inherited ones). Contracts publish it so that callers can ask "do you support this interface?" before using it. `type(uint8).max` is 255 and `type(int8).min` is -128. Use them instead of typing the constant yourself, since they cannot be mistyped. `creationCode` is used in factories that deploy contracts with a computed address. You cannot read `type(C).creationCode` or `type(C).runtimeCode` inside `C` itself, or inside any contract that `C` inherits from: `C`'s bytecode contains theirs, so the reference would be circular and the compiler rejects it. A contract that inherits *from* `C` may read them.
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -139,7 +139,7 @@ The word "modifier" here covers every keyword you can place on a function, varia
 | `virtual` | functions, modifiers | May be changed by a derived contract |
 | `override` | functions, modifiers, public variables | Changes something inherited |
 
-`transient` state variables need Cancun-era tooling (0.8.28 or newer for the default pipeline) and are limited to value types. They suit things like a reentrancy lock that must be reset for free when the transaction ends.
+`transient` state variables need Cancun-era tooling (Solidity 0.8.28 or newer) and are limited to value types. They suit things like a reentrancy lock that must be reset for free when the transaction ends.
 
 ## Reserved keywords
 
