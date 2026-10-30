@@ -434,5 +434,33 @@
     "dir": "16-procurement",
     "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F16-procurement%2Fdevcontainer.json",
     "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/16-procurement"
+  },
+  {
+    "n": 17,
+    "slug": "land-registry",
+    "title": "Immutable Land Title Registry",
+    "kind": "build",
+    "summary": "One plot, one title: map land to unique NFTs, freeze disputes and keep the full ownership history.",
+    "concepts": [
+      "inheritance",
+      "virtual/override hooks",
+      "ERC-721",
+      "abi.encode ids",
+      "access control"
+    ],
+    "adaptedFrom": "Plan.md Workshop 6",
+    "docs": [
+      "m06-contracts/11-inheritance",
+      "m06-contracts/12-multiple-inheritance",
+      "m09-under-the-hood/05-abi-specification"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/LandRegistry.sol",
+      "src/ERC721Minimal.sol"
+    ],
+    "dir": "17-land-registry",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F17-land-registry%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/17-land-registry"
   }
 ]
