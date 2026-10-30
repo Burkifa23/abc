@@ -13,6 +13,8 @@ The script must:
 
 Tests are numbered `test_01` to `test_07` and match the list above (01 deploys, 02 and 03 are the environment, 04 the contract, 05 to 07 the guards and the file).
 
+The script reads settings through a small helper, `_env(name)`, and writes through `_outFile()`; both are given. The tests swap them for per-test versions, because environment variables are shared by every test in a run (forge runs tests in parallel) and one test would otherwise leak into another. When you run the script for real, `_env` reads the real environment.
+
 ```bash
 forge test               # run all tests
 forge test --mt test_05  # run one step

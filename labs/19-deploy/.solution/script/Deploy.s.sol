@@ -12,9 +12,9 @@ contract Deploy is Script {
     /// OWNER (default: the account running the script) and INITIAL_COUNT (default 0).
     /// An empty variable counts as unset.
     function config() public view returns (address owner, uint256 initial) {
-        string memory rawOwner = vm.envOr("OWNER", string(""));
+        string memory rawOwner = _env("OWNER");
         owner = bytes(rawOwner).length == 0 ? msg.sender : vm.parseAddress(rawOwner);
-        string memory rawInitial = vm.envOr("INITIAL_COUNT", string(""));
+        string memory rawInitial = _env("INITIAL_COUNT");
         initial = bytes(rawInitial).length == 0 ? 0 : vm.parseUint(rawInitial);
     }
 
@@ -22,7 +22,7 @@ contract Deploy is Script {
         (address owner, uint256 initial) = config();
         // Guards come first: refuse before anything is broadcast.
         if (owner == address(0)) revert ZeroOwner();
-        if (block.chainid == 1 && keccak256(bytes(vm.envOr("CONFIRM_MAINNET", string("")))) != keccak256("yes")) {
+        if (block.chainid == 1 && keccak256(bytes(_env("CONFIRM_MAINNET"))) != keccak256("yes")) {
             revert MainnetNotConfirmed();
         }
 
@@ -30,8 +30,19 @@ contract Deploy is Script {
         counter = new Counter(owner, initial);
         vm.stopBroadcast();
 
-        // Record where it went, so a frontend can find it: deployments/<chainid>.json
+        // Record where it went, so a frontend can find it.
         string memory json = vm.serializeAddress("deployment", "counter", address(counter));
-        vm.writeJson(json, string.concat("./deployments/", vm.toString(block.chainid), ".json"));
+        vm.writeJson(json, _outFile());
+    }
+
+    /// Where the settings come from: the process environment. "" means unset. Given.
+    /// The tests replace this function, so tests running in parallel do not share one environment.
+    function _env(string memory name) internal view virtual returns (string memory) {
+        return vm.envOr(name, string(""));
+    }
+
+    /// Where the deployment is recorded: deployments/<chainid>.json. Given. The tests give each test its own file.
+    function _outFile() internal view virtual returns (string memory) {
+        return string.concat("./deployments/", vm.toString(block.chainid), ".json");
     }
 }
