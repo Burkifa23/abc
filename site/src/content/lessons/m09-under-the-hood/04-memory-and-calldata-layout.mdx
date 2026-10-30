@@ -29,16 +29,16 @@ I confirmed these numbers by running a contract that reads `mload(0x40)` before 
 
 Other rules to know:
 
-- Every element of a memory array takes a full 32-byte word, even for `bytes1[]` or `uint8[]`. The exceptions are `bytes` and `string`, which are packed bytes (rounded up to a whole word at the end). A `bytes1[5]` array occupies 160 bytes plus a length word; `new bytes(5)` occupies one word of length and one of data.
+- Every element of a memory array takes a full 32-byte word, even for `bytes1[]` or `uint8[]`. The exceptions are `bytes` and `string`, which are packed bytes (rounded up to a whole word at the end). A fixed `bytes1[5]` in memory is 160 bytes with no length word, while a dynamic `bytes1[]` holding five items is those 160 bytes plus a 32-byte length word. By contrast `new bytes(5)` takes one word of length and one of data.
 - A multi-dimensional memory array is an array of pointers to the inner arrays.
 - A dynamic array's length is its first word, followed by the elements.
-- Some operations need a temporary area bigger than the 64-byte scratch space. They use the memory at the free pointer but do *not* move it, because the data is short-lived. That memory may or may not be zero, so never assume that "free" memory is cleared.
+- A few operations want a scratch area larger than 64 bytes. The compiler borrows the memory at the free pointer for them and leaves the pointer where it was, since the data dies quickly. Whatever is sitting there may be dirty, so never treat unallocated memory as zeroed.
 
-<div class="callout"><strong>Watch out.</strong> Do not reach for <code>msize</code> to find a "definitely clean" region of memory and then use it for something lasting without moving the free memory pointer. The next allocation will land on top of your data. If you write assembly that allocates, read <code>mload(0x40)</code>, use that address, and store the new pointer back yourself.</div>
+<div class="callout"><strong>Watch out.</strong> It is tempting to use <code>msize</code> to locate memory nobody has touched and park long-lived data there. If the free memory pointer is not advanced, the next allocation overwrites that data. When assembly needs to allocate, read <code>mload(0x40)</code>, build at that address, and write the updated pointer back yourself.</div>
 
 ### How memory differs from storage
 
-The packing you saw in the last lesson does not exist in memory. An array of four `uint8` values, `uint8[4]`, fits into one storage slot but takes 128 bytes (four words) in memory. A struct shows the same effect:
+The packing you saw in the last lesson does not exist in memory. An array of three `uint16` values, `uint16[3]`, takes 6 bytes of a single storage slot but 96 bytes (three words) in memory. A struct shows the same effect:
 
 ```solidity
 contract Venue {
@@ -61,9 +61,9 @@ Constructor arguments are special. When you deploy, the constructor's arguments 
 
 ## Cleaning up variables
 
-The EVM only understands 256-bit words. A `uint8` holds 8 bits of information, so the other 248 bits of its word are "dirty" if they contain anything but zeros (or sign bits). The compiler's job is to make sure junk in those bits cannot change the result. It cleans a value *before any operation that could be affected by it*: before writing it to memory (it may be hashed or sent as call data) or to storage (otherwise someone could observe the garbled word).
+Every EVM value is a 256-bit word, yet a `uint8` carries only 8 bits of meaning. If the other 248 bits hold anything but zeros (or copies of the sign bit), the word is dirty, and stray bits could change a comparison or a hash. So the compiler scrubs a value just before an operation that would notice: before it goes into memory, where it might be hashed or sent in a call, and before it goes into storage, where the garbage would become visible later.
 
-Two things it deliberately does not do. It skips cleaning when the next operation ignores the extra bits, so a `bool` heading into a `jumpi` (which treats any non-zero value as true) is not cleaned. And it does not clean anything for you when you read or write the variable from inline assembly.
+It also leaves two cases alone. If the next instruction ignores the high bits, nothing is cleaned: a `bool` feeding a `jumpi` is used as is, because any non-zero value counts as true. And inline assembly gets no cleanup guarantee at all when it reads or writes a narrow variable.
 
 Here is what happens to an invalid value of each type:
 

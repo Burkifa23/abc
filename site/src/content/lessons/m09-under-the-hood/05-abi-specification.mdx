@@ -18,7 +18,7 @@ The ABI is **not self-describing**. The bytes carry no type labels, so a decoder
 
 ## The function selector
 
-The first four bytes of the call data pick the function. They are the first four bytes (the high-order end) of the Keccak-256 hash of the function's **signature**: the name, then the types of the parameters in parentheses, separated by single commas and with no spaces. Only the *canonical* type names count, with no data location: `uint` must be written `uint256`, and so on.
+Four bytes at the front of the call data say which function is wanted. To get them, write the function's **signature** as text (the name, then the parameter types in brackets, joined by bare commas with no spaces), hash it with Keccak-256, and keep the leftmost four bytes of the result. Only the *canonical* type names count, with no data location: `uint` must be written `uint256`, and so on.
 
 For the most famous function in the ecosystem, the signature is `transfer(address,uint256)`, and its hash begins `a9059cbb`. So every ERC-20 transfer call begins with the bytes `0xa9059cbb`.
 
@@ -36,7 +36,7 @@ The ABI knows these elementary types:
 - `address`: like `uint160`, treated as an address. `bool`: like `uint8` restricted to 0 and 1.
 - `bytes<M>`: M bytes, from 1 to 32.
 - `function`: a 20-byte address followed by a 4-byte selector, encoded like `bytes24`.
-- `fixed<M>x<N>` and `ufixed<M>x<N>`: fixed-point numbers, value `v / 10**N`. Solidity itself cannot yet use them for real.
+- `fixed<M>x<N>` and `ufixed<M>x<N>`: fixed-point numbers of M bits (a multiple of 8 from 8 to 256) with N decimal places (1 to 80), value `v / 10**N`. Solidity itself cannot yet use them for real.
 
 Fixed-size arrays are written `T[k]`. Dynamic ones are `bytes`, `string` and `T[]` (UTF-8 for strings). Several types can be grouped as a **tuple**, `(T1,T2,...)`, and tuples nest. Arrays of zero elements exist in the spec but the compiler does not support them.
 
@@ -164,7 +164,7 @@ An anonymous event omits topic 0, so it can use four indexed parameters, and it 
 
 A topic holds only 32 bytes. For values that fit (every static type) the topic is the usual encoding. For "complex" types (`string`, `bytes`, arrays, structs) the topic is instead the **Keccak-256 hash of a special in-place encoding**. This lets you search for a known string, but you can never decode the original from the topic. For example, an event `Tagged(string indexed label, uint256 n)` emitted with `"lab"` has topic 1 equal to `keccak256("lab")`, which I confirmed.
 
-The in-place encoding is: for `bytes` and `string`, just the contents with no padding and no length; for a struct, the concatenation of its members, each padded to a multiple of 32 bytes (even `bytes` and `string`); for an array, the concatenation of its elements, likewise padded, with no length prefix. Because of this, the encoding of a struct is ambiguous when it contains more than one dynamic array, so always re-check the event data rather than trusting a search by indexed topic alone. If you need both fast search and readability, emit two parameters holding the same value, one indexed and one not.
+The in-place encoding is: for `bytes` and `string`, just the contents with no padding and no length; for a struct, the concatenation of its members, each rounded up to whole 32-byte words, including any `bytes` or `string` member; for an array, the concatenation of its elements, likewise padded, with no length prefix. Because of this, the encoding of a struct is ambiguous when it contains more than one dynamic array, so always re-check the event data rather than trusting a search by indexed topic alone. If you need both fast search and readability, emit two parameters holding the same value, one indexed and one not.
 
 ## Errors
 

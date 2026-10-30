@@ -19,8 +19,8 @@ State variables are placed in the order you declare them, starting from box (slo
 - The first item in a slot sits at the low-order end (the right-hand end, when you write the slot out as hex).
 - A value type uses only the bytes it needs.
 - If the next value does not fit in what remains of the slot, it starts a new slot.
-- Structs and arrays always start a new slot, and their members are packed by the same rules inside.
-- Whatever follows a struct or array also starts a new slot.
+- A struct or an array begins on a fresh slot, with its own members packed by these same rules.
+- The variable declared right after a struct or array also begins on a fresh slot.
 
 Now a concrete case. A registrar sells seats in a workshop:
 
@@ -88,7 +88,7 @@ Mappings and dynamic arrays have unpredictable size, so they cannot sit "in betw
 </Figure>
 
 - **Dynamic array.** Slot `p` stores the length. The elements start at `keccak256(p)` and follow one after another, packed if they are smaller than 32 bytes. So element `i` of a `uint256[]` is at `keccak256(p) + i`.
-- **Mapping.** Slot `p` stays empty; it exists only to make two neighbouring mappings land in different places. The value for key `k` is at `keccak256(h(k) . p)`, where `.` is concatenation and `h` pads a value-type key to 32 bytes (a `string` or `bytes` key is used as raw bytes, without padding).
+- **Mapping.** Slot `p` stays empty; it exists only to make two neighbouring mappings land in different places. To find the value for key `k`, hash the key and the slot together: `keccak256(h(k) . p)`. Here `.` joins the two byte strings, and `h` turns the key into bytes: a value-type key is padded out to 32 bytes, while a `string` or `bytes` key contributes its raw bytes unpadded.
 - **Non-value results.** If the stored value is a struct or array, the computed slot marks where it begins, and you add the member's offset to reach inside it.
 - **Arrays of arrays** apply the rule again. For a `uint16[][] grid` at slot `p`, element `grid[i][j]` is in slot `keccak256(keccak256(p) + i) + floor(j / 16)` (16 values of 2 bytes fit in a slot) at bit position `(j % 16) * 16`.
 

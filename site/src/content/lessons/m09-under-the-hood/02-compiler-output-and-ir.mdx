@@ -97,13 +97,13 @@ contract Counter {
 
 ```solidity
 contract Order {
-    function f(uint8 a) public pure returns (uint8) {
-        return a++ * 10 + a;
+    function bump(uint8 n) public pure returns (uint8) {
+        return n++ * 7 + n;
     }
 }
 ```
 
-For `f(3)`, the old output is `33` and IR gives `34`. Function arguments are evaluated in the same order by both, with one exception: `addmod` and `mulmod` evaluate their arguments right to left in the old generator and left to right in IR. (`addmod(x++, x++, x)` starting from `x = 10` gave `1` old and `9` IR.) The lesson: never put two side effects on the same variable in one expression.
+For `bump(4)`, the old output is `32` and IR gives `33`. Function arguments are evaluated in the same order by both, with one exception: `addmod` and `mulmod` evaluate their arguments right to left in the old generator and left to right in IR. (`addmod(x++, x++, x)` starting from `x = 10` gave `1` old and `9` IR.) The lesson: never put two side effects on the same variable in one expression.
 
 **5. The free memory pointer is capped.** IR refuses any allocation that would push the pointer past `type(uint64).max`; it reverts. The old generator has no limit, so a gigantic allocation runs out of gas while zeroing the array instead.
 
