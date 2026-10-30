@@ -1,0 +1,105 @@
+---
+title: "Withdrawal from contracts"
+summary: "Why paying many people from inside one transaction is fragile, and how recording a debt and letting each person collect it keeps one bad recipient from blocking everyone."
+covers: ["Common Patterns", "Common Patterns > Withdrawal from Contracts"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./06-withdrawal-pattern";
+
+The drama society sells tickets for its end-of-term play through a contract. Two days before opening night the venue floods, and the organiser cancels the show. Everyone must get their money back. The obvious code is a loop that walks through all ticket holders and sends each their refund. It is also the code that will fail on the worst possible day, and the reason is a design principle worth learning once and applying everywhere: **do not make your own progress depend on someone else accepting your payment.**
+
+## The push version and how it jams
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+// fragile: pushes money to everyone in one go
+contract PushTicketDesk {
+    address public immutable organiser;
+    address[] public holders;
+    mapping(address => uint256) public paid;
+
+    error NotOrganiser();
+    error RefundFailed(address holder);
+
+    constructor() {
+        organiser = msg.sender;
+    }
+
+    function buy() external payable {
+        if (paid[msg.sender] == 0) holders.push(msg.sender);
+        paid[msg.sender] += msg.value;
+    }
+
+    function cancelAndRefundAll() external {
+        if (msg.sender != organiser) revert NotOrganiser();
+        for (uint256 i = 0; i < holders.length; i++) {
+            address holder = holders[i];
+            uint256 amount = paid[holder];
+            paid[holder] = 0;
+            (bool ok, ) = holder.call{value: amount}("");
+            if (!ok) revert RefundFailed(holder);
+        }
+    }
+}
+```
+
+Two things can go wrong. First, one ticket holder might be a contract whose `receive` function always reverts, whether by malice (a prankster who wants to stop the refunds) or by accident (a wallet that cannot receive plain ether). The `if (!ok) revert` line then undoes the whole loop, and no one is ever refunded. The failure of a single recipient has become *everyone's* failure. Second, even if all recipients are honest, a big enough list needs more gas than a block holds, and the loop can never complete. Dropping the `revert` and skipping failures only hides the first problem, and it leaves money stuck while the books say it was returned.
+
+The same flaw shows up in any design where each new participant's action pays off a previous one. If paying the old leader is a required step of becoming the new leader, a leader who cannot be paid freezes the position forever. The root cause is identical: progress is gated on an outside party behaving well.
+
+## The pull version
+
+Flip who does the work. Instead of sending the money, the contract only **records that it owes it**. Each person later runs a transaction of their own to collect.
+
+```solidity
+mapping(address => uint256) public owed;
+
+function cancel() external {
+    if (msg.sender != organiser) revert NotOrganiser();
+    cancelled = true;                      // one cheap write, no loop
+}
+
+function claimRefund() external {
+    if (!cancelled) revert StillOn();
+    owed[msg.sender] += paid[msg.sender];
+    paid[msg.sender] = 0;
+}
+
+function withdraw() external {
+    uint256 amount = owed[msg.sender];
+    if (amount == 0) revert NothingOwed();
+
+    owed[msg.sender] = 0;                  // effect first
+
+    (bool ok, ) = msg.sender.call{value: amount}("");
+    if (!ok) revert PayoutFailed();        // the revert restores the entry
+}
+```
+
+Look at what changed. Cancelling is now one write, so it cannot run out of gas however many people bought tickets. The refund for each person is a separate transaction, paid for by that person, so a hostile recipient can only break *their own* withdrawal: their call reverts, their entry is restored, and nobody else is affected. The prankster has gained nothing.
+
+Notice also that `withdraw` follows the ordering you learned in the reentrancy lesson: the ledger entry is zeroed *before* the ether is sent. Pull payments move the risk around, but they do not remove it. A recipient can still call back in the middle of the transfer, so the effect must come first.
+
+### What it costs
+
+Nothing is free. People have to know that money is waiting for them and spend gas to fetch it, so the user experience is a little clumsier. It is common to emit an event when a debt is recorded so that front ends can tell users. For internal accounting between your own trusted contracts the pattern is overkill. For payments to *outside* addresses, especially unknown ones, it is the default choice.
+
+## Where you will meet it
+
+You already saw it in the open auction: outbid bidders are credited in a mapping and collect later. The same idea appears in token sales with refunds, revenue sharing between collaborators and prize payouts. Whenever you catch yourself writing a loop that sends ether, ask what happens if the third recipient refuses it.
+
+<div class="callout"><strong>Watch out.</strong> Pull payments protect the contract from stalling, but they do not protect the books. Always keep the sum of recorded debts at or below the contract's holdings, and zero each entry before you pay it.</div>
+
+## Try it
+
+The ticket desk below records refunds in `owed` but has no way to collect them. Write `withdraw()`: revert with `NothingOwed` if the caller is owed nothing, zero their entry before sending, send with `call`, and revert with `PayoutFailed` if the send fails.
+
+<CodeExercise id="pull" {...exercises["pull"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

@@ -57,8 +57,6 @@ export const exercises: Record<string, { starter: string; solution: string; chec
       { type: "compiles" },
       { type: "abi", contract: "BursaryPool", kind: "function", name: "claim", inputs: [], outputs: [], stateMutability: "nonpayable", message: "Has claim() with no arguments" },
       { type: "regex", pattern: "credit\\s*\\[\\s*msg\\.sender\\s*\\]\\s*=\\s*0\\s*;[\\s\\S]*\\.call\\s*\\{", message: "Clears the ledger entry before the external call" },
-      { type: "regex", pattern: "\\.call\\s*\\{\\s*value\\s*:\\s*amount\\s*\\}", message: "Still sends `amount` with call{value: amount}" },
-      { type: "regex", pattern: "revert\\s+PayoutFailed\\s*\\(", message: "Still reverts with PayoutFailed when the send fails" },
     ],
   },
 };

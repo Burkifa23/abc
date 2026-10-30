@@ -1,0 +1,106 @@
+---
+title: "State machines"
+summary: "Modelling a contract's life as stages, using modifiers to allow each function only in the right stage, and letting the clock move the stage forward."
+covers: ["Common Patterns", "Common Patterns > State Machine"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import Figure from "../../../components/Figure.astro";
+import StateMachine from "../../../components/diagrams/StateMachine.astro";
+import { quiz, exercises } from "./08-state-machine";
+
+A campus hackathon runs in phases. Teams can sign up at the start. Then the building phase opens and sign-ups must stop. After that, projects are submitted and judged, and finally the results are fixed. If a team could register while the judges were scoring, or the scores could be changed after the event, the competition would be meaningless. The contract needs to know *which phase it is in* and refuse functions that do not belong to that phase.
+
+Many contracts have this shape. They have **stages**, different functions are valid in different stages, and some calls (or the passage of time) move the contract from one stage to the next. Programmers call this a **state machine**. The idea is old and useful: instead of scattering "is it too late?" checks through every function, name the stages and enforce them in one place.
+
+## Naming the stages
+
+An `enum` is the natural tool, because it lists a fixed set of named values:
+
+```solidity
+enum Stage { Registration, Building, Judging, Closed }
+Stage public stage = Stage.Registration;
+```
+
+Enums are stored as small integers starting from 0, and a new state variable starts at the first value unless you set it. In the ABI an enum appears as a `uint8`, so a front end reads `stage` as 0, 1, 2 or 3.
+
+<Figure caption="The hackathon's four stages. Time moves the contract forward. Each function names the one stage in which it may run.">
+  <StateMachine />
+</Figure>
+
+## Guarding functions with a modifier
+
+The check "only in this stage" is the same everywhere, so it becomes a modifier. Because the stage is a parameter, a single modifier covers all stages:
+
+```solidity
+error WrongStage(Stage required, Stage actual);
+
+modifier atStage(Stage required) {
+    if (stage != required) revert WrongStage(required, stage);
+    _;
+}
+
+function register(string calldata team) external atStage(Stage.Registration) {
+    // ...
+}
+```
+
+Now `register` simply cannot run during the building or judging phases. The rule is written once, visible in the function's signature, and a reader can scan the contract to see which function belongs to which stage.
+
+## Letting time move the stage
+
+Some transitions should happen on their own when a deadline passes, even though nothing on the chain "wakes up" at that moment. A contract only runs when someone calls it. The trick is to apply pending transitions *at the start of every call*:
+
+```solidity
+uint256 public immutable opened = block.timestamp;
+
+modifier timedTransitions() {
+    if (stage == Stage.Registration && block.timestamp >= opened + 2 days) {
+        stage = Stage.Building;
+    }
+    if (stage == Stage.Building && block.timestamp >= opened + 5 days) {
+        stage = Stage.Judging;
+    }
+    if (stage == Stage.Judging && block.timestamp >= opened + 6 days) {
+        stage = Stage.Closed;
+    }
+    _;
+}
+```
+
+The three `if` statements are checked in order and each looks at the *updated* stage, so a call that arrives after day 6 will fall through all three and land in `Closed` in one go. Nobody has to run a separate "advance" function.
+
+### Order of modifiers matters
+
+The modifier changes `stage` *before* the `_;`, and that change is visible to everything that runs after it, including the next modifier and the function body. This is the reason for a firm rule: **put `timedTransitions` first and `atStage` after it.**
+
+```solidity
+function submit(bytes32 projectHash)
+    external
+    timedTransitions
+    atStage(Stage.Building)
+{
+    // ...
+}
+```
+
+Reverse them and `atStage` looks at the stale stage, so a call on day 2 that should have been the first moment of `Building` is refused. The order is read left to right, and the earlier one's changes are seen by the later one.
+
+### Two caveats
+
+First, **a transition only lasts if the call succeeds.** Suppose someone calls `submit` on day 7. The modifier moves the stage to `Closed` and then `atStage(Stage.Building)` reverts. A revert undoes every write in the transaction, including the stage change. The stage variable on the chain still says `Building` afterwards. That is correct, but it surprises people: reading `stage` from outside shows the last *stored* value, not what the clock now implies. If a front end needs the true current stage, compute it in a `view` function from the same timestamps.
+
+Second, the stage is only as good as the code that moves it. Keep every transition in one or two places, not spread across functions, so a reader can check them all.
+
+<div class="callout"><strong>Watch out.</strong> A state machine whose functions forget to carry <code>atStage</code> has no state machine at all. Review every external function and ask which stage it belongs to. If the answer is "any", say so deliberately.</div>
+
+## Try it
+
+The starter has three functions and no stage logic, so every function runs at any time. Add a `Stage` enum with the four stages (Registration, Building, Judging, Closed), a public `stage` variable, the modifiers `atStage(Stage)` and `timedTransitions()`, and put them on the functions: `register` in Registration, `submit` in Building, `score` in Judging. Put `timedTransitions` before `atStage`.
+
+<CodeExercise id="stages" {...exercises["stages"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
