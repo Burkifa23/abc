@@ -47,6 +47,7 @@ Unindexed parameters are packed into the data section and can be decoded by anyo
 Adding `anonymous` to a declaration leaves the signature hash out of the topics:
 
 ```solidity
+// fragment: an event declaration, shown without its contract
 event Ping(address indexed who, uint256 indexed a, uint256 indexed b, uint256 indexed c) anonymous;
 ```
 

@@ -41,7 +41,8 @@ contract Attendance {
 Parameters are declared like local variables: type, optional data location, name. A name can be left out for a parameter you never use, which also silences the compiler's "unused" warning. Inside the function a parameter is an ordinary local variable, and you may assign to it.
 
 ```solidity
-function award(address, uint256 marks) external { /* first parameter ignored */ }
+// fragment: the first parameter is unnamed because it is never used
+function award(address, uint256 marks) external { /* ... */ }
 ```
 
 ## Return variables
@@ -64,7 +65,7 @@ contract Marks {
 }
 ```
 
-Two styles are shown. In the first, the returned values have **names**: they exist from the start, hold their type's default value (0 here) until you assign them, and the function ends by reaching the closing brace. In the second, you write `return (x, y)` with a tuple whose length and types match the declared outputs (after implicit conversion). You can mix them, but an early `return` out of a function with named outputs must carry the values explicitly.
+Two styles are shown. In the first, the returned values have **names**: they exist from the start, hold their type's default value (0 here) until you assign them, and the function ends by reaching the closing brace. In the second, you write `return (x, y)` with a tuple whose length and types match the declared outputs (after implicit conversion). With named outputs, a bare `return;` is also legal: it leaves the function and returns the variables' current values, so any you never assigned come back as zero. With unnamed outputs, a bare `return;` is a compile error, because there are no variables to return, so you must give the values.
 
 Only value-like data can come out of an `external` or `public` function. You cannot return mappings, internal function types or `storage` references from them. Internal functions have no such limit.
 
@@ -98,7 +99,7 @@ A function with no keyword is non-payable: it is allowed to change state but rej
 
 On top of the list above:
 
-1. Reading a state variable (persistent or transient). Reading an `immutable` also counts.
+1. Reading a state variable (persistent or transient). Reading an `immutable` counts too: it is not available at compile time, so such a function needs `view`, not `pure`.
 2. Looking at `address(this).balance` or any `<address>.balance`.
 3. Using the members of `block`, `tx` or `msg`, **except** `msg.sig` and `msg.data`, which come from the call itself and not from the chain.
 4. Calling a function that is not `pure`.
@@ -125,7 +126,7 @@ contract Fees {
 }
 ```
 
-A `pure` function may still `revert` or call `require`. Undoing earlier changes is not itself a change to state, which is also how the EVM sees it.
+A `pure` function may still `revert` or call `require`. (Note that all of `require`'s arguments, including a message or error expression, are evaluated even when the condition holds.) Undoing earlier changes is not itself a change to state, which is also how the EVM sees it.
 
 ### How strongly it is enforced
 

@@ -51,7 +51,7 @@ Computed values such as `block.number` or a constructor argument are not allowed
 ## What it moves, and what it does not
 
 - **Moves:** all ordinary (persistent) state variables, including those inherited from base contracts. They keep their relative order and are all shifted by the same amount.
-- **Does not move:** `transient` variables (lesson 5) live in a separate address space, so the specifier ignores them. The element data of mappings and dynamic arrays is placed by hashing, so it was never in a straight line to begin with, and it always lands somewhere inside `uint256` range whatever the base slot is.
+- **Does not move:** `transient` variables (lesson 05 of this module) live in a separate address space, so the specifier ignores them. The element data of mappings and dynamic arrays is placed by hashing, so it was never in a straight line to begin with, and it always lands somewhere inside `uint256` range whatever the base slot is.
 - **Cannot wrap around:** if the fixed-size variables would run past the last slot of storage, compilation fails. A contract with `uint256[3]` placed two slots before the end has nowhere to put the last one.
 
 Inheritance has one rule: only the **most derived** contract specifies the layout, and it applies to the whole family. The specifier cannot be used on abstract contracts, interfaces or libraries at all.

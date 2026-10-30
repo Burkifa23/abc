@@ -35,7 +35,7 @@ The rules:
 
 If there is no `receive`, but there *is* a `payable` fallback, the fallback takes plain transfers. If neither exists, the transfer is rejected and reverts, so the ether goes back to the sender.
 
-**The 2300-gas trap.** `.send` and `.transfer` pass along only 2300 gas, enough for little more than a log. A `receive` that writes to storage, creates a contract, sends ether or makes a call that does real work will run out of gas under those two methods. They are deprecated for exactly this reason; the usual replacement is a `.call{value: ...}("")`, which forwards the sender's chosen gas. A contract that wants to receive ether safely from any sender should keep `receive` small.
+**The 2300-gas trap.** `.send` and `.transfer` pass along only 2300 gas, enough for little more than a log. A `receive` that writes to storage, creates a contract, sends ether or makes a call that does real work will run out of gas under those two methods. They are deprecated for exactly this reason; the usual replacement is a `.call{value: ...}("")`, which forwards the sender's chosen gas. A contract that wants to receive ether safely from any sender should keep `receive` small. The same limit applies to a payable `fallback` that serves as the entry point for plain transfers when there is no `receive`: through `.send` and `.transfer` it too gets only 2300 gas.
 
 ## `fallback()`: everything else
 
@@ -92,9 +92,9 @@ Both show up in the ABI as separate entries, `label(uint256)` and `label(string)
 
 **Resolution.** At a call site, the compiler looks at the overloads in scope and keeps those where every argument can be *implicitly converted* to the parameter type. Exactly one candidate left means it is chosen; none or several means a compile error. The **return types are not considered**.
 
-This is where literals bite. Suppose a contract has `f(uint8)` and `f(uint256)`. The call `f(50)` is ambiguous: `50` converts implicitly to both. `f(256)` is fine, because 256 does not fit `uint8`, so only the `uint256` version is a candidate. To pick on purpose, give the argument a type: `f(uint8(50))`.
+This is where literals bite. Suppose a contract has `rank(uint8 seat)` and `rank(uint256 seat)`. The call `rank(7)` is ambiguous: `7` converts implicitly to both. `rank(1000)` is fine, because 1000 does not fit `uint8`, so only the `uint256` version is a candidate. To pick on purpose, give the argument a type: `rank(uint8(7))`.
 
-**External types must differ too.** Two functions can have different Solidity types but the same type in the ABI. For example, a function taking a contract type `Vault` and one taking `address` both look like `address` from outside. That is rejected: the externally visible signatures would collide.
+**External types must differ too.** Two functions can have different Solidity types but the same type in the ABI. For example, one function taking a contract type `Club` and another taking a plain `address` both look like `address` from outside. That is rejected: the externally visible signatures would collide.
 
 ## Try it
 

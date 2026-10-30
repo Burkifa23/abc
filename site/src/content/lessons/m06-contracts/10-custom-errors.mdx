@@ -39,9 +39,9 @@ contract TermFee {
 }
 ```
 
-An error value can only be created in two places: after `revert`, or as the second argument of `require`. The second form needs Solidity 0.8.26 with the via-IR pipeline, or 0.8.27 with the legacy one. The compiler allocates memory for the error only if the condition fails, so `require(cond, Err(...))` is about as cheap as `if (!cond) revert Err(...)`. Named arguments work too: `revert Underpaid({paid: msg.value, fee: fee})`.
+An error value can only be created in two places: after `revert`, or as the second argument of `require`. The second form needs Solidity 0.8.26 with the via-IR pipeline, or 0.8.27 with the legacy one. The compiler allocates memory for the error only if the condition fails, so `require(cond, Err(...))` is about as cheap as `if (!cond) revert Err(...)`. Like all function-style arguments, the expression passed to `require` is evaluated even when the condition holds, so keep it cheap. Named arguments work too: `revert Underpaid({paid: msg.value, fee: fee})`.
 
-A revert undoes every state change made in the current call, and hands the error data to the caller. For a user, that is the wallet or tool showing the message; for another contract, it is something it can catch with `try`/`catch` (lesson earlier in this course). Remember that only reverts coming from an **external call** can be caught. A revert in an internal call, or in the same function, simply ends the whole call.
+A revert undoes every state change made in the current call, and hands the error data to the caller. For a user, that is the wallet or tool showing the message; for another contract, it is something it can catch with `try`/`catch` (Module 5, lesson 07). Remember that only reverts coming from an **external call** can be caught. A revert in an internal call, or in the same function, simply ends the whole call.
 
 ## What goes on the wire
 

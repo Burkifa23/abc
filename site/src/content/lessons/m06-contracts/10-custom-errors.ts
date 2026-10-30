@@ -19,6 +19,8 @@ pragma solidity ^0.8.24;
 contract Canteen {
     mapping(address => uint256) public credit;
 
+    // Hint: an error is declared like an event, with the error keyword and typed parameters,
+    // and raised with: revert ErrorName(arg1, arg2);
     // TODO: declare error LowCredit(uint256 have, uint256 need)
 
     function topUp() external payable {
