@@ -56,7 +56,7 @@ export const exercises: Record<string, { starter: string; solution: string; chec
       { type: "compiles" },
       { type: "abi", contract: "SignatureChecker", kind: "function", name: "recoverSigner", inputs: ["bytes32", "bytes"], outputs: ["address"], stateMutability: "pure", message: "Has recoverSigner(bytes32,bytes) pure returns (address)" },
       { type: "regex", pattern: "ecrecover\\s*\\(\\s*digest\\s*,\\s*v\\s*,\\s*r\\s*,\\s*s\\s*\\)", message: "Calls ecrecover(digest, v, r, s)" },
-      { type: "regex", pattern: "==\\s*address\\s*\\(\\s*0\\s*\\)", message: "Checks for the zero address" },
+      { type: "regex", pattern: "==\\s*address\\s*\\(\\s*0\\s*\\)\\s*\\)\\s*revert\\s+InvalidSignature", message: "Reverts when the recovered signer is the zero address" },
       { type: "regex", pattern: "revert\\s+InvalidSignature\\s*\\(", message: "Reverts with InvalidSignature on bad input" },
       { type: "regex", pattern: "0x7f{31}5d576e7357a4501ddfe92f46681b20a0", flags: "i", message: "Rejects high-s (malleable) signatures with the lower-half bound" },
     ],
