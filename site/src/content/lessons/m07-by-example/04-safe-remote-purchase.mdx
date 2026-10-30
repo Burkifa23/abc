@@ -1,0 +1,143 @@
+---
+title: "Safe remote purchase"
+summary: "A second-hand textbook sale between two strangers, built as a small state machine with double deposits so that cheating never pays."
+covers: ["Solidity by Example", "Solidity by Example > Safe Remote Purchase"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./04-safe-remote-purchase";
+
+Every January students sell last semester's textbooks to the incoming cohort. The trouble is trust. If the buyer pays first, the seller may vanish with the money. If the seller hands over the book first, the buyer may claim it never arrived and keep it. Between strangers on different campuses, somebody has to go first, and that somebody is exposed.
+
+A smart contract can act as **escrow**, a neutral holder of the money, but it cannot see the physical book. Its only information is what the two people tell it by calling functions. So the design must make sure that lying never helps. The Solidity documentation calls its version of this "safe remote purchase". This lesson builds a campus version and, more importantly, shows how to structure a contract as a **state machine**, a pattern you will use in nearly every contract that has a lifecycle.
+
+## States instead of flags
+
+A purchase passes through stages in a fixed order. Instead of a handful of booleans (`isLocked`, `isPaid`, `isDone`) that could be combined into impossible situations, we use a single `enum`.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract TextbookEscrow {
+    enum State { Listed, Locked, Delivered, Closed }
+
+    State public state;
+    address payable public immutable seller;
+    address payable public buyer;
+    uint256 public immutable price;
+
+    event Withdrawn();
+    event Booked(address indexed buyer);
+    event Received(address indexed buyer);
+    event SellerPaid();
+
+    error WrongState(State actual);
+    error NotSeller();
+    error NotBuyer();
+    error OddDeposit();
+    error WrongDeposit();
+    error TransferFailed();
+
+    constructor() payable {
+        seller = payable(msg.sender);
+        price = msg.value / 2;
+        if (price * 2 != msg.value) revert OddDeposit();
+    }
+}
+```
+
+An `enum` gives the stages readable names while storing a small number. `State public state` starts at the first member, `Listed`. The constructor is `payable`, so the seller can attach ether when creating the listing. The seller puts down **twice** the price, and the contract halves it to find the price. If the amount is odd, the halving would lose a wei, so it refuses. Using an `enum` also means `state` can never hold two values at once. A bunch of booleans could, and every combination would need its own reasoning.
+
+Here is the whole life of a sale:
+
+| From | Action | Who | To |
+|---|---|---|---|
+| Listed | `abort()` | seller | Closed |
+| Listed | `confirmPurchase()` with 2x price | buyer | Locked |
+| Locked | `confirmReceived()` | buyer | Delivered |
+| Delivered | `payOutSeller()` | seller | Closed |
+
+## Guarding with modifiers
+
+Each function must only run in the right stage, and by the right person. Repeating `if` statements everywhere is noisy and invites mistakes, so we use **modifiers**, small reusable checks that wrap a function body (the `_;` marks where the function itself runs).
+
+```solidity
+modifier inState(State expected) {
+    if (state != expected) revert WrongState(state);
+    _;
+}
+
+modifier onlySeller() {
+    if (msg.sender != seller) revert NotSeller();
+    _;
+}
+
+modifier onlyBuyer() {
+    if (msg.sender != buyer) revert NotBuyer();
+    _;
+}
+```
+
+`inState` takes an argument, which makes it a tiny state-machine gate: `inState(State.Locked)` reads like a sentence. Naming the parameter `expected` avoids a clash with the state variable `state`; a parameter with the same name would shadow it and the check would compare a value to itself.
+
+When a function lists several modifiers, they run in the order written, so `onlyBuyer inState(State.Locked)` checks the person first and the stage second. For our purposes the order only changes which error appears first, but remember it, since modifiers can also contain side effects.
+
+## The four transitions
+
+```solidity
+function abort() external onlySeller inState(State.Listed) {
+    state = State.Closed;
+    emit Withdrawn();
+    _send(seller, address(this).balance);
+}
+
+function confirmPurchase() external payable inState(State.Listed) {
+    if (msg.value != 2 * price) revert WrongDeposit();
+    buyer = payable(msg.sender);
+    state = State.Locked;
+    emit Booked(msg.sender);
+}
+
+function confirmReceived() external onlyBuyer inState(State.Locked) {
+    state = State.Delivered;
+    emit Received(msg.sender);
+    _send(buyer, price);
+}
+
+function payOutSeller() external onlySeller inState(State.Delivered) {
+    state = State.Closed;
+    emit SellerPaid();
+    _send(seller, 3 * price);
+}
+
+function _send(address payable to, uint256 amount) private {
+    (bool ok, ) = to.call{value: amount}("");
+    if (!ok) revert TransferFailed();
+}
+```
+
+Follow the money. The seller deposits 2p. The buyer deposits 2p, so the contract holds 4p. When the buyer confirms receipt, they get back p, which is their deposit minus the price they owe, and the contract still holds 3p. The seller then withdraws 3p: their own 2p back plus the p paid by the buyer. Everyone ends up exactly where an honest sale would put them.
+
+Now see why lying does not pay. If the buyer never confirms, their 2p and the seller's 2p both stay locked; the buyer has lost money too and has gained nothing, so refusing is pointless. If the seller never sends the book, the buyer simply does not confirm and the seller's deposit stays frozen along with the buyer's. Nobody profits from bad faith; both gain from cooperating. That is the incentive structure the doubled deposits create. It does not enforce honesty, it removes the reward for dishonesty.
+
+Two safety habits show up in the code. First, **state changes happen before sending ether**: `state` moves on before `_send` runs, so if the recipient re-enters the contract, the function it re-enters is already in the wrong state and reverts. Second, **payouts are separate transitions**. The buyer's refund and the seller's payout are two functions, so a seller whose account rejects ether cannot prevent the buyer from receiving theirs.
+
+Older tutorials end a contract's life with `selfdestruct`. Since the Cancun upgrade (EIP-6780) that no longer deletes the contract's code or storage, except when called in the very transaction that created it, so a `Closed` state is the correct way to end a lifecycle.
+
+## What the contract still cannot do
+
+Be honest about the limits. There is no timeout, so a buyer who disappears after locking leaves the money stuck forever. A real deployment would add a deadline after which one side can reclaim funds, or hand disputes to a trusted arbiter. And since the contract cannot see the physical world, it only works when both people have a reason to behave. The pattern fits goods that are cheap compared with the deposits, and it is a nice illustration of **mechanism design**: shaping incentives with code.
+
+<div class="callout"><strong>Watch out.</strong> A modifier that forgets the <code>_;</code> never runs the function body, and one that names its parameter the same as a state variable silently checks the wrong thing. Keep guard modifiers tiny, and always test the failing case, not only the happy path.</div>
+
+## Try it
+
+Write the `inState(State)` modifier. It must revert with `WrongState` carrying the current state when the contract is not in the expected one, and otherwise let the function run.
+
+<CodeExercise id="in-state" {...exercises["in-state"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
