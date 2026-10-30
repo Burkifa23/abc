@@ -1,0 +1,132 @@
+---
+title: "Compiler output and the IR pipeline"
+summary: "How to read the assembly solc prints, and the second code generator that goes through Yul, including every place where the two disagree about what your code means."
+covers: ["Analysing the Compiler Output", "Solidity IR-based Codegen Changes", "Solidity IR-based Codegen Changes > Semantic Only Changes", "Solidity IR-based Codegen Changes > Internals"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import { quiz, exercises } from "./02-compiler-output-and-ir";
+
+When you ask yourself "what did the compiler really do with my code?", the honest answer is in its assembly output. Reading it is a skill worth having: you can compare two ways of writing the same expression, spot why a function costs more than expected, and confirm that a refactor changed nothing. The second half of the lesson covers the compiler's newer code generator, which goes through an intermediate language called Yul, and the handful of places where it gives a different answer from the old one.
+
+## Reading `--asm`
+
+Take a contract so small that nothing hides:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Bell {
+    function rings() external pure returns (uint256) {
+        return 3;
+    }
+}
+```
+
+`solc --asm Bell.sol` prints human-readable EVM assembly. The binary from `--bin` is the same code as bare bytes, which nobody can follow. The assembly has a fixed shape:
+
+- It begins with the **creation (constructor) code**: set up the free memory pointer, reject any ether sent (the contract has no payable function), copy the runtime code into memory and `return` it. That returned code is what gets stored on-chain.
+- The deployed (runtime) code is nested inside as `sub_0: assembly { ... }`.
+- At the very end sits `auxdata`, the encoded metadata hash. Lesson 6 decodes it.
+- Comments such as `/* "Bell.sol":73:135 function rings() ... */` link instructions to the source range that produced them.
+- Code that comes from the compiler rather than from you, such as ABI encoding helpers, is attributed to a file called `#utility.yul`. You can see those generated sources with `--combined-json generated-sources,generated-sources-runtime`.
+
+Inside the runtime part, the first thing you will recognise is the **function dispatcher**. Trimmed for this contract:
+
+```text
+mstore(0x40, 0x80)                      // set the free memory pointer
+callvalue dup1 iszero tag_1 jumpi       // no ether accepted...
+revert(0x00, 0x00)                      // ...otherwise stop
+tag_1:
+pop
+jumpi(tag_2, lt(calldatasize, 0x04))    // fewer than 4 bytes: no selector
+shr(0xe0, calldataload(0x00))           // take the first four bytes
+dup1  0x4127278c  eq  tag_3  jumpi      // is it the selector of rings()?
+tag_2:
+revert(0x00, 0x00)                      // nothing matched
+```
+
+The constant `0x4127278c` is the first four bytes of the hash of `rings()`, which lesson 5 explains. A contract with many functions has a longer list here, and with the optimizer on the list becomes a binary search; that is the effect of the `runs` setting mentioned earlier.
+
+Two habits help. Ask for `solc --optimize --asm` as well, to see the optimized version, where constant expressions are folded and duplicate blocks merged. And when you wonder whether two spellings of an expression, say `x * 2` and `x + x`, compile to the same code, strip the source comments from both outputs and compare them with a diff tool. The format is for people, not programs, and it may change between minor compiler versions, so never parse it in a build pipeline.
+
+## The IR-based code generator
+
+Solidity can turn your source into EVM opcodes in two ways. The original ("old codegen") translates directly. The newer one (the "IR-based" or "new codegen") first produces Yul, a small low-level language we meet in lesson 8, and then compiles that. Turn it on with `solc --via-ir` or `"viaIR": true` in JSON. The goal is code that is easier to audit, and a Yul optimizer that can reason across function boundaries, which the old pipeline cannot.
+
+The two generators agree on everything a sensible program depends on. They differ in corners where no one should have been relying on behaviour, but "no one should" is not "no one does". The differences below come in two kinds: semantic-only changes, which could silently alter existing code, and internals.
+
+### Semantic-only changes
+
+I compiled each example below with solc 0.8.38 both ways and ran it, so the numbers are real.
+
+**1. State variables are initialised in a new order under inheritance.** The old order: zero everything, then evaluate base constructor arguments, then run every variable initialiser in the whole hierarchy base-to-derived, and only then run the constructors. The new order handles one contract at a time, base first: initialise its variables, then run its constructor. This matters when one contract's initial value depends on another's constructor:
+
+```solidity
+contract Base {
+    uint public seed;
+    constructor() { seed = 7; }
+    function peek() public view returns (uint) { return seed; }
+}
+
+contract Kid is Base {
+    uint public copy = peek();
+}
+```
+
+`Kid.copy` is `0` with the old generator and `7` with IR, because under IR `Base`'s constructor has already run when `copy` is initialised.
+
+**2. Deleting a storage struct clears the whole slot.** If a struct's members do not fill a slot, the old generator zeroed only the members. IR writes zero over the entire slot. So if you once stored extra data in that padding (some upgrade schemes do), `delete` now wipes it, and so does shortening an array of structs. I tested a `struct P { uint64 a; uint64 b; }` with a stray byte written into the unused part of its slot by assembly: the old output kept it, IR cleared it.
+
+**3. Modifiers are real functions, and parameters are passed on.** A modifier that runs `_;` twice executes the body twice. In the old generator, parameters and return variables each have one fixed place, so the second run sees what the first left behind. IR gives each run fresh values.
+
+```solidity
+contract Counter {
+    modifier twice() { _; _; }
+
+    function tally(uint8 n) public pure twice returns (uint8 total) {
+        total += n;
+    }
+}
+```
+
+`tally(5)` returns `10` with the old generator and `5` with IR, since IR resets `total` to zero before the second run.
+
+**4. Order of evaluation changes.** The old generator leaves it unspecified. IR tries for source order, left to right, but does not promise it. With side effects in an expression the answers differ:
+
+```solidity
+contract Order {
+    function f(uint8 a) public pure returns (uint8) {
+        return a++ * 10 + a;
+    }
+}
+```
+
+For `f(3)`, the old output is `33` and IR gives `34`. Function arguments are evaluated in the same order by both, with one exception: `addmod` and `mulmod` evaluate their arguments right to left in the old generator and left to right in IR. (`addmod(x++, x++, x)` starting from `x = 10` gave `1` old and `9` IR.) The lesson: never put two side effects on the same variable in one expression.
+
+**5. The free memory pointer is capped.** IR refuses any allocation that would push the pointer past `type(uint64).max`; it reverts. The old generator has no limit, so a gigantic allocation runs out of gas while zeroing the array instead.
+
+### Internals
+
+**Internal function pointers.** The old generator stores code offsets, which differ between creation time and the deployed code. To let a pointer cross from constructor to runtime through storage, it packs both offsets into one value. IR has no such trouble: each function gets a small integer ID, handed out in sequence, and a call through a pointer goes to a generated dispatch function containing a `switch` on that ID. ID `0` means "uninitialised" and the dispatch function panics when it sees it. (The old generator initialises pointers to a special panicking function, which costs a storage write at construction time.) One consequence: the compiler may drop any internal function never mentioned by name, so setting a function-type variable from inline assembly does not guarantee that function exists in the dispatch table. Reference it somewhere in ordinary Solidity too.
+
+**Cleanup.** Values narrower than 256 bits can carry junk in their upper bits. The old generator cleans only *before* an operation that cares about those bits. IR cleans *after* every operation that could create junk, and relies on the optimizer to delete the redundant ones. You can see the difference when inline assembly peeks at the raw word:
+
+```solidity
+contract Peek {
+    function f(uint16 v) public pure returns (uint raw, uint ok) {
+        v = ~v;
+        assembly { raw := v }
+        ok = v;
+    }
+}
+```
+
+For `f(1)`, `ok` is `0xfffe` both ways, but `raw` is `0xff…fffe` (all high bits set) with the old generator and `0xfffe` with IR. Lesson 4 covers cleanup in more detail.
+
+<div class="callout"><strong>Watch out.</strong> Switching <code>viaIR</code> on is not a free optimization flag. If your contract depends on any of the five behaviours above, or on the old generator's raw-word quirks in assembly, the same source can now mean something else. Run your whole test suite under both pipelines and compare before you deploy a build compiled the other way.</div>
+
+## Check your understanding
+
+<Quiz questions={quiz} />
