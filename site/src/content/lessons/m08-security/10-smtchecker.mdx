@@ -1,0 +1,175 @@
+---
+title: "Formal verification with the SMTChecker"
+summary: "Asking the compiler to prove or refute the assert statements and arithmetic safety of your contract, how to switch it on and tune it, and how to read what it tells you."
+covers: ["SMTChecker and Formal Verification", "SMTChecker and Formal Verification > Tutorial", "SMTChecker and Formal Verification > SMTChecker Options and Tuning", "SMTChecker and Formal Verification > Abstraction and False Positives", "SMTChecker and Formal Verification > Real World Assumptions"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import { quiz, exercises } from "./10-smtchecker";
+
+A test checks that your contract works for the inputs you thought to try. A fuzzer tries many more. Neither can tell you that *no* input breaks a rule. **Formal verification** is the attempt to do exactly that: turn the code and the rule into mathematics and have a program search for a counterexample, or prove there is none. Solidity ships a tool for it inside the compiler, the **SMTChecker**. It will not verify your whole system, but for small, important rules ("the hall is never overbooked", "this subtraction never underflows") it is remarkably useful, and it costs one compiler flag.
+
+## What it does
+
+You state your rules with two familiar statements:
+
+- `require(condition)` is read as an **assumption**: "from here on, the condition holds."
+- `assert(condition)` is read as a **claim to prove**: "in every possible execution that gets here, this is true."
+
+The checker explores every possible input and every possible sequence of calls to your public functions. If it finds a way to break an `assert`, it reports a **counterexample**: concrete values and a transaction trace that lead to the failure. If it cannot find one, it prints nothing at all about that property, and that silence means the property was *proved* (assuming no bugs in the checker or the underlying solver).
+
+Beyond your own asserts, it can automatically check the following **verification targets**:
+
+- `assert` statements;
+- arithmetic `underflow` and `overflow`;
+- division by zero (`divByZero`);
+- trivial conditions and unreachable code (`constantCondition`);
+- popping an empty array (`popEmptyArray`);
+- out-of-bounds index access (`outOfBounds`);
+- a transfer that the contract's balance cannot cover (`balance`).
+
+Since Solidity 0.8.7, underflow and overflow are *not* checked by default, so ask for them. In 0.8 arithmetic is checked at run time, so an "overflow" finding means "there is an input that makes this line revert". That is not always a bug, but you should decide on purpose whether it is acceptable.
+
+## An example: the lecture hall
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract HallBooking {
+    uint8 public booked;
+    uint8 public immutable capacity;
+
+    constructor(uint8 cap) {
+        capacity = cap;
+    }
+
+    function book(uint8 seats) external {
+        require(booked + seats <= capacity);
+        booked += seats;
+        assert(booked <= capacity);     // the rule we want proved
+    }
+
+    function release(uint8 seats) external {
+        booked -= seats;                // can this underflow?
+    }
+}
+```
+
+Here the `require` is the assumption, the `assert` is the claim. With the `require` in place the claim is provable: if the sum is within capacity before the update, it still is afterwards, so the checker says nothing about it. Delete the `require` and the assertion becomes false. The checker would find a call such as booking more seats than remain, together with a trace showing the constructor, any earlier bookings and the failing call. With `overflow` switched on it also notes that `booked + seats` may exceed 255 in the `uint8`. And in `release`, with `underflow` on, it points out that releasing more seats than are booked makes the subtraction revert. You can decide that this is the right behaviour, or add a clear custom error.
+
+## Switching it on
+
+Nothing runs until you pick an engine, and then it applies to all the files compiled together. With the command-line compiler:
+
+```bash
+solc HallBooking.sol \
+  --model-checker-engine chc \
+  --model-checker-targets assert,overflow,underflow \
+  --model-checker-timeout 20000
+```
+
+or, in the compiler's JSON interface, in `settings.modelChecker`:
+
+```json
+{
+  "engine": "chc",
+  "targets": ["assert", "overflow", "underflow"],
+  "timeout": 20000
+}
+```
+
+The older way, `pragma experimental SMTChecker;`, still works for compatibility but is deprecated and will be removed in 0.9.0. Be aware that adding it to even one file turns the checker on for all files.
+
+### The main options
+
+- **Engine** (`--model-checker-engine all|bmc|chc|none`). Two engines exist. **BMC**, the bounded model checker, looks at each function in isolation, ignores loops, and is prone to false alarms but quick to find shallow bugs. **CHC**, based on constrained Horn clauses, models the contract as something that can be called any number of times in any order, supports loops, and can prove far more. By default both run, CHC first, and anything it cannot prove is handed to BMC. The current documentation marks BMC as deprecated, so prefer `chc`. The reports say which engine produced each warning.
+- **Targets** (`--model-checker-targets`). A comma-separated list from the table above. Splitting the targets across runs can make a big contract tractable.
+- **Timeout** (`--model-checker-timeout`, in milliseconds, 0 for none). By default each solver query is limited by a resource count that takes roughly a few seconds, which is more deterministic than wall-clock time. Raise it when you get "might happen here" results.
+- **Solvers** (`--model-checker-solvers z3,cvc5,eld,smtlib2`). The engines use automated theorem provers. z3 is built into the JavaScript compiler and used by both engines. cvc5 is used only by BMC. Eldarica (`eld`) is used only by CHC, and only if z3 is off. `smtlib2` writes the queries out so you can feed another solver of your own. Most people never change this. Some engine and solver combinations do nothing, such as CHC with cvc5.
+- **Contracts** (`--model-checker-contracts "File.sol:Name"`). By default every deployable contract is analysed as the deployed one, including parents on their own. Naming the contracts you care about avoids that wasted effort.
+- **Trusted external calls** (`--model-checker-ext-calls=trusted`). By default a call through an interface is assumed to reach unknown code. This mode instead assumes the address really holds the type it is declared as. It is useful for checking that implementations obey an interface but is much more expensive.
+- **Reporting.** `--model-checker-show-proved-safe`, `--model-checker-show-unproved` and `--model-checker-show-unsupported` list what was proved, what was not, and which language features had to be approximated. The `--model-checker-invariants` option can also report inferred invariants, such as `booked <= capacity`.
+
+## Reading the answers
+
+Two kinds of warning matter:
+
+- **"... happens here."** The checker found a way to violate the property and, usually, shows a counterexample. Study it. It may be a real bug, or a false positive caused by abstraction (below).
+- **"... might happen here."** The solver ran out of time without proving or refuting. This is a statement about the tool's limit, not about your code. Increase the timeout, simplify the code, add assumptions, or accept that the property is too hard for it.
+
+## Abstraction and false positives
+
+The checker has to be *sound*: if it says nothing, the property holds. To guarantee this for features it cannot model exactly, it replaces them with an over-approximation, a description that permits more behaviours than are really possible. The price is that it may report a failure that cannot actually happen. In short: **no warning means safe, but a warning does not always mean broken.**
+
+Common approximations:
+
+- **Aliasing.** When you assign a reference type (an array, say), the checker forgets what it knew about other references of the same type and data location, because any of them might point to the same data.
+
+```solidity
+contract Aliasing {
+    uint256[] private marks;
+    uint256[][] private groups;
+
+    function touch(uint256[] storage other) private {
+        marks[0] = 5;
+        other[0] = 7;
+        assert(marks[0] == 5);     // may be flagged: `other` could alias `marks`
+    }
+
+    function run(uint256 i) external {
+        touch(groups[i]);          // in reality never aliases `marks`
+    }
+}
+```
+
+The caller only ever passes an element of `groups`, which cannot be `marks`, but the checker does not track that. Its warning is a false positive. If you are sure, add a `require` that gives the solver the missing fact.
+- **Unsupported features**, such as inline assembly, are treated as doing anything, so the properties that depend on them may not be provable.
+- **Hash and signature functions** (`keccak256`, `ecrecover`, ABI encoding and similar) are modelled as *uninterpreted functions*: the checker cannot compute them, but knows the same inputs give the same output. That is enough for some proofs.
+- **External calls to unknown code** may do anything, including calling back into your contract. This is how the checker can find reentrancy bugs for you:
+
+```solidity
+interface IStranger {
+    function callback() external;
+}
+
+contract Treasury {
+    uint256 public total;
+    bool private locked;
+    IStranger public stranger;
+
+    modifier lock() {
+        require(!locked);
+        locked = true;
+        _;
+        locked = false;
+    }
+
+    function add(uint256 x) external lock {
+        total += x;
+    }
+
+    function ping() external lock {
+        uint256 before = total;
+        stranger.callback();       // unknown code, free to re-enter
+        assert(before == total);   // holds only because of the lock
+    }
+}
+```
+
+The checker can work out that when `callback` runs, `locked` is true, so a re-entrant `add` is impossible and the assertion holds. Remove `lock` from `add`, and it can synthesise a re-entrant call that changes `total`, and show it to you as the failing trace.
+
+## Real-world assumptions
+
+A few things are possible in the EVM but are assumed never to happen, because they are physically out of reach:
+
+- the length of a dynamic storage array overflowing on `push`: reaching 2^256 - 1 elements would take billions of years;
+- an address's ether balance overflowing.
+
+Balances need one more rule. A contract can receive ether without any of its code running, through `selfdestruct` from another contract or by being a block's fee recipient (`block.coinbase`). So the checker lets the balance grow by at least `msg.value` between calls, and assumes `address(this).balance >= msg.value` in the constructor, since the address may have been funded before deployment. You saw the same facts in the gas lesson, and they are why `balance == totalOwed` is not a property you can assert.
+
+<div class="callout"><strong>Watch out.</strong> A proof only covers the properties you wrote. If the <code>assert</code> says the wrong thing, or you assumed something with <code>require</code> that is not true in deployment, the checker can be perfectly right and the contract still wrong. Formal verification tells you whether you built the thing as specified, not whether the specification is what you wanted.</div>
+
+## Check your understanding
+
+<Quiz questions={quiz} />
