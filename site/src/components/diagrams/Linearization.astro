@@ -1,0 +1,49 @@
+---
+---
+<svg viewBox="0 0 640 260" role="img" aria-labelledby="lin-t" font-family="var(--mono)" font-size="11">
+  <title id="lin-t">C3 linearization of a diamond. Contract A is the base, B and C both derive from A, and D is B, C. The linear order is D, C, B, A, and each super call moves one step to the right along that order.</title>
+  <defs>
+    <marker id="lin-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="currentColor" />
+    </marker>
+  </defs>
+  <text x="110" y="16" text-anchor="middle" fill="currentColor" font-weight="600">Inheritance graph</text>
+  <g stroke-width="1.5" fill="none">
+    <rect x="70" y="28" width="80" height="34" rx="8" stroke="var(--border)" />
+    <rect x="10" y="108" width="80" height="34" rx="8" stroke="var(--border)" />
+    <rect x="130" y="108" width="80" height="34" rx="8" stroke="var(--border)" />
+    <rect x="70" y="188" width="80" height="34" rx="8" stroke="currentColor" stroke-width="2" />
+    <path d="M60 106 L90 66" stroke="currentColor" marker-end="url(#lin-arrow)" />
+    <path d="M160 106 L130 66" stroke="currentColor" marker-end="url(#lin-arrow)" />
+    <path d="M90 186 L60 146" stroke="currentColor" marker-end="url(#lin-arrow)" />
+    <path d="M130 186 L160 146" stroke="currentColor" marker-end="url(#lin-arrow)" />
+  </g>
+  <g text-anchor="middle" fill="currentColor">
+    <text x="110" y="50">A</text>
+    <text x="50" y="130">B</text>
+    <text x="170" y="130">C</text>
+    <text x="110" y="210">D is B, C</text>
+  </g>
+  <text x="230" y="130" fill="var(--muted-fg)">arrow = "is"</text>
+
+  <text x="440" y="16" text-anchor="middle" fill="currentColor" font-weight="600">Linear order, most derived first</text>
+  <g stroke-width="1.5" fill="none">
+    <rect x="270" y="90" width="70" height="40" rx="8" stroke="currentColor" stroke-width="2" />
+    <rect x="360" y="90" width="70" height="40" rx="8" stroke="var(--border)" />
+    <rect x="450" y="90" width="70" height="40" rx="8" stroke="var(--border)" />
+    <rect x="540" y="90" width="70" height="40" rx="8" stroke="var(--border)" />
+    <path d="M342 110 H356" stroke="currentColor" marker-end="url(#lin-arrow)" />
+    <path d="M432 110 H446" stroke="currentColor" marker-end="url(#lin-arrow)" />
+    <path d="M522 110 H536" stroke="currentColor" marker-end="url(#lin-arrow)" />
+  </g>
+  <g text-anchor="middle" fill="currentColor">
+    <text x="305" y="115">D</text>
+    <text x="395" y="115">C</text>
+    <text x="485" y="115">B</text>
+    <text x="575" y="115">A</text>
+  </g>
+  <text x="440" y="165" text-anchor="middle" fill="currentColor">super.f() in D runs C's f</text>
+  <text x="440" y="185" text-anchor="middle" fill="currentColor">super.f() in C runs B's f</text>
+  <text x="440" y="205" text-anchor="middle" fill="currentColor">super.f() in B runs A's f</text>
+  <text x="440" y="235" text-anchor="middle" fill="var(--muted-fg)">A appears once, last. Each contract runs once.</text>
+</svg>
