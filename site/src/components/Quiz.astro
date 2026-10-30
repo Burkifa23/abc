@@ -2,8 +2,8 @@
 import type { Question } from "../lib/quiz";
 const { questions } = Astro.props as { questions: Question[] };
 ---
-<section class="quiz" data-questions={JSON.stringify(questions)} aria-labelledby="quiz-h">
-  <h2 id="quiz-h">Check your understanding</h2>
+<!-- Each lesson writes its own "Check your understanding" heading above the quiz. -->
+<section class="quiz" data-questions={JSON.stringify(questions)} aria-label="Quiz">
   {questions.map((q, i) => (
     <fieldset class="q">
       <legend>{q.q}</legend>
