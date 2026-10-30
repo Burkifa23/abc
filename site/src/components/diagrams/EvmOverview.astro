@@ -1,0 +1,39 @@
+---
+const eoa = ["balance", "nonce"];
+const contract = ["balance", "nonce", "code", "storage"];
+---
+<svg viewBox="0 0 640 230" role="img" aria-labelledby="evo-t" font-family="var(--mono)" font-size="11">
+  <title id="evo-t">Two kinds of Ethereum account: an externally owned account has a balance and a nonce and is controlled by a private key; a contract account also has code and storage and is controlled by its code. A transaction goes from the first to the second.</title>
+  <defs>
+    <marker id="evo-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="currentColor" />
+    </marker>
+  </defs>
+  <g transform="translate(4 10)">
+    <rect width="230" height="170" rx="8" fill="none" stroke="var(--border)" stroke-width="1.5" />
+    <text x="115" y="24" text-anchor="middle" fill="currentColor" font-weight="600">Externally owned account</text>
+    {eoa.map((f, i) => (
+      <g transform={`translate(20 ${40 + i * 30})`}>
+        <rect width="190" height="22" rx="4" fill="none" stroke="var(--border)" />
+        <text x="95" y="15" text-anchor="middle" fill="currentColor">{f}</text>
+      </g>
+    ))}
+    <text x="115" y="125" text-anchor="middle" fill="var(--muted-fg)">controlled by a private key</text>
+    <text x="115" y="145" text-anchor="middle" fill="var(--muted-fg)">(a person with a wallet)</text>
+  </g>
+  <g transform="translate(406 10)">
+    <rect width="230" height="170" rx="8" fill="none" stroke="var(--border)" stroke-width="1.5" />
+    <text x="115" y="24" text-anchor="middle" fill="currentColor" font-weight="600">Contract account</text>
+    {contract.map((f, i) => (
+      <g transform={`translate(20 ${40 + i * 28})`}>
+        <rect width="190" height="22" rx="4" fill="none" stroke="var(--border)" />
+        <text x="95" y="15" text-anchor="middle" fill="currentColor">{f}</text>
+      </g>
+    ))}
+    <text x="115" y="165" text-anchor="middle" fill="var(--muted-fg)">controlled by its code</text>
+  </g>
+  <path d="M238 95 H400" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#evo-arrow)" />
+  <text x="319" y="84" text-anchor="middle" fill="currentColor">transaction</text>
+  <text x="319" y="112" text-anchor="middle" fill="var(--muted-fg)">value + payload</text>
+  <text x="4" y="212" fill="var(--muted-fg)">Both kinds share one address space, and the EVM treats them alike.</text>
+</svg>

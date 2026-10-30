@@ -1,0 +1,135 @@
+---
+title: "try/catch"
+summary: "Catch a failing external call or contract creation instead of letting it undo your whole transaction, and learn the four catch clauses and what try/catch cannot catch."
+covers: ["Expressions and Control Structures", "Expressions and Control Structures > Error handling: Assert, Require, Revert and Exceptions"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./07-try-catch";
+
+Imagine a department office that collects results from five lecturers' grading systems. If one lecturer's system is down, the office does not want to throw away the other four results. It wants to note "no result from this one" and carry on. By default a Solidity call cannot do that: a revert in the callee bubbles up and kills the caller as well. The `try`/`catch` statement is how you say "attempt this, and if it fails, do this instead".
+
+## The shape of a try statement
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+interface IGrader {
+    function grade(uint256 studentId) external returns (uint256);
+}
+
+contract Office {
+    IGrader public grader;
+    uint256 public failures;
+
+    constructor(IGrader g) {
+        grader = g;
+    }
+
+    function fetch(uint256 studentId) external returns (uint256 score, bool ok) {
+        try grader.grade(studentId) returns (uint256 s) {
+            return (s, true);               // success block
+        } catch Error(string memory) {
+            failures++;                      // a revert("reason") or require(false, "reason")
+        } catch Panic(uint256) {
+            failures++;                      // assert failure, overflow, division by zero, ...
+        } catch (bytes memory) {
+            failures++;                      // anything else
+        }
+        return (0, false);                   // reached after any catch block
+    }
+}
+```
+
+Reading from the top:
+
+- `try` is followed by **an external function call or a contract creation** (`new Child(...)`). Nothing else. An internal call cannot be tried directly.
+- `returns (uint256 s)` is optional and gives names to the returned values. They exist only inside the success block that follows.
+- If the call succeeds, its effects are kept and the success block runs. When that block finishes, execution continues after the whole statement.
+- If the call fails, the callee's changes have already been undone and the matching `catch` block runs.
+
+The same shape works for creating a contract:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Club {
+    constructor(uint256 minAge) {
+        require(minAge >= 16, "Too young");
+    }
+}
+
+contract ClubMaker {
+    function tryMake(uint256 minAge) external returns (Club made) {
+        try new Club(minAge) returns (Club c) {
+            made = c;
+        } catch {
+            // creation failed: `made` stays the zero address
+        }
+    }
+}
+```
+
+## The four kinds of catch
+
+| Clause | Runs when |
+|---|---|
+| `catch Error(string memory reason)` | the callee reverted with a string reason (`revert("...")`, `require(c, "...")`) |
+| `catch Panic(uint256 code)` | the callee panicked: failed `assert`, overflow, division by zero, bad index and so on |
+| `catch (bytes memory data)` | the error did not match any clause above: a custom error, an empty revert, or data that could not be decoded |
+| `catch { ... }` | same as the previous one but you do not want the data |
+
+`Error` and `Panic` are matched by name and are not ordinary identifiers. To cover every case you must end with either `catch (bytes memory data)` or plain `catch`; with only the first two, an empty or custom-error revert would escape the statement and the caller would revert.
+
+There is no clause that matches a specific custom error by name. If you need one, take the raw bytes and compare the first four bytes with the error's selector:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+interface IHostel {
+    error Full();
+    function book(uint256 n) external;
+}
+
+contract Booker {
+    function attempt(IHostel h, uint256 n) external returns (bool full) {
+        try h.book(n) {
+            return false;
+        } catch (bytes memory data) {
+            // Full() has no arguments, so its data is exactly the 4-byte selector.
+            return data.length >= 4 && bytes4(data) == IHostel.Full.selector;
+        }
+    }
+}
+```
+
+A try without `returns` is allowed when the callee returns nothing or when you do not need the values.
+
+## What `try` does not catch
+
+This is the part that surprises people. A `catch` only reacts to a failure **inside the external call itself**.
+
+1. **Things around the call.** The expression you write after `try` may include other work, such as computing an argument with an internal function. A revert in that part is not caught. Likewise, the automatic check that the target address contains code runs before the call, in the caller, and its failure is not caught.
+2. **The success block.** If code inside `{ ... }` after `returns` reverts, the whole function reverts. Only the call is protected, not what you do with its result.
+3. **Decoding the return data.** If the callee succeeds but returns bytes that do not decode as the types you declared, the caller fails with an exception that none of your clauses can catch. A decoding failure of `Error(string)` data is the exception: it falls through to a `bytes` clause if you wrote one.
+4. **Running out of gas in the caller.** A call passes on at most 63/64 of the remaining gas, so the caller always keeps a sliver. If the callee goes out of gas, you can land in a catch block with only that sliver left. If you then do real work there, you might run out of gas yourself. Do not assume a catch block has plenty of gas. And if the *caller itself* runs out of gas, nothing can catch that: not your `try`/`catch`, and not any other code in the same call, so the whole call fails.
+
+<div class="callout"><strong>Watch out.</strong> Do not trust what you read in a catch block. The error may have been thrown by a contract three calls deeper and merely forwarded, it may be an out-of-gas condition, and a hostile callee can return any bytes it likes. Never make a security decision from a reason string, and do not parse the data blindly. Use it for logging or for counting failures, and make sure that your state stays valid whichever branch runs.</div>
+
+## When to use it, and when not
+
+Use `try`/`catch` when a failure of one outside contract should not stop the rest of your work, as in the office example, or when you want to try a primary service and fall back to a secondary one. Do not use it to hide failures you should handle: swallowing an error and continuing as though it succeeded is a common source of bugs. Remember too that in a catch block the effects of the failed call are already gone, while in the success block they are kept. Your own state changes made *before* the `try` are not undone either, since the failure was caught.
+
+## Try it
+
+Finish `safeGrade` so a failing grader never reverts the portal. On success return the score and `true`. In each of the three catch clauses (`Error`, `Panic` and raw bytes) return `0` and `false`.
+
+<CodeExercise id="safe-grade-try-catch" {...exercises["safe-grade-try-catch"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

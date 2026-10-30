@@ -1,0 +1,24 @@
+---
+const rows = [
+  { n: "storage", life: "forever (per contract)", cost: "very high" },
+  { n: "transient", life: "until the tx ends", cost: "low" },
+  { n: "memory", life: "one call", cost: "grows with size" },
+  { n: "stack", life: "while computing", cost: "cheapest" },
+  { n: "calldata", life: "one call, read-only", cost: "cheap to read" },
+];
+---
+<svg viewBox="0 0 640 220" role="img" aria-labelledby="dl-t" font-family="var(--mono)" font-size="11">
+  <title id="dl-t">EVM data areas compared by lifetime and cost: storage lasts forever and is very expensive, transient storage lasts until the transaction ends and is cheap, memory lasts for one call and grows in cost, the stack holds values being computed, and calldata is the read-only input of one call.</title>
+  <text x="14" y="18" fill="var(--muted-fg)">area</text>
+  <text x="170" y="18" fill="var(--muted-fg)">lives</text>
+  <text x="400" y="18" fill="var(--muted-fg)">gas cost</text>
+  {rows.map((r, i) => (
+    <g transform={`translate(4 ${28 + i * 36})`}>
+      <rect width="632" height="30" rx="6" fill="none" stroke="var(--border)" stroke-width="1.5" />
+      <text x="10" y="19" fill="currentColor" font-weight="600">{r.n}</text>
+      <text x="166" y="19" fill="currentColor">{r.life}</text>
+      <text x="396" y="19" fill="currentColor">{r.cost}</text>
+    </g>
+  ))}
+  <text x="4" y="212" fill="var(--muted-fg)">Rule of thumb: keep as little as possible in storage.</text>
+</svg>

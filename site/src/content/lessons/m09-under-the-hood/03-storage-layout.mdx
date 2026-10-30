@@ -1,0 +1,142 @@
+---
+title: "Storage and transient storage layout"
+summary: "Exactly which slot and byte each state variable occupies, how packing and inheritance decide it, where mappings, arrays and strings really live, and how to ask the compiler for the answer."
+covers: ["Layout of State Variables in Storage and Transient Storage", "Layout of State Variables in Storage and Transient Storage > Mappings and Dynamic Arrays", "Layout of State Variables in Storage and Transient Storage > JSON Output"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import Figure from "../../../components/Figure.astro";
+import StorageSlots from "../../../components/diagrams/StorageSlots.astro";
+import { quiz, exercises } from "./03-storage-layout";
+
+A contract's storage is a giant shelf of boxes, numbered from 0, each holding exactly 32 bytes. Reading or writing one box (an `sload` or `sstore`) is among the most expensive things a contract does. So the compiler's choice of *which* box each state variable lands in, and whether several variables share one, has a real cost. Better still, the rules are fixed and public, which means you can compute the location of any variable yourself. Auditors, indexers and upgrade tools do exactly that.
+
+## Placing value types
+
+State variables are placed in the order you declare them, starting from box (slot) 0. The size in bytes comes from the type: `uint8` takes 1, `address` 20, `uint128` 16, `uint256` 32. The compiler packs neighbours together by these rules:
+
+- The first item in a slot sits at the low-order end (the right-hand end, when you write the slot out as hex).
+- A value type uses only the bytes it needs.
+- If the next value does not fit in what remains of the slot, it starts a new slot.
+- A struct or an array begins on a fresh slot, with its own members packed by these same rules.
+- The variable declared right after a struct or array also begins on a fresh slot.
+
+Now a concrete case. A registrar sells seats in a workshop:
+
+```solidity
+contract SeatSale {
+    uint64 public opensAt;     // slot 0, offset 0
+    uint256 public budget;     // slot 1 (does not fit beside the 8 bytes)
+    uint64 public closesAt;    // slot 2, offset 0
+    uint128 public fee;        // slot 2, offset 8
+    uint128 public deposit;    // slot 3 (8 + 16 used, 16 more will not fit)
+}
+```
+
+Four slots. Move `budget` to the end and the three small values `opensAt`, `closesAt` and `fee` (8 + 8 + 16 = 32 bytes) fill slot 0 exactly, `deposit` takes half of slot 1 and `budget` fills slot 2: three slots. You will do this in the exercise below.
+
+**Inheritance.** For derived contracts, the order is set by the linearized inheritance order (covered in the inheritance lessons), most base contract first. State variables from different contracts in the chain can share a slot if the rules allow.
+
+**What takes no space.** `constant` and `immutable` variables live in the code, not in storage. **Transient** variables (declared with `transient`, available since 0.8.28 for value types) live in a different area altogether, described next.
+
+**Moving the whole layout.** Since 0.8.29 the most derived contract may say `layout at <number>`. Every static variable in the hierarchy then shifts up by that base:
+
+```solidity
+contract Base {
+    uint a;
+    uint8 b;
+}
+
+contract Kid is Base layout at 100 {
+    uint16 c;
+}
+```
+
+Here `a` sits at slot 100, `b` in slot 101 offset 0, and `c` beside it in slot 101 at offset 1. Dynamic arrays and mappings are affected indirectly, because their data location is computed from the slot they start at. The base contracts only shift as part of `Kid`; deployed alone, `Base` still starts at 0.
+
+### Transient storage has its own numbering
+
+Transient storage is a second shelf that is wiped when each transaction ends. The same layout rules apply, but the two shelves are independent: both start at slot 0 and neither disturbs the other. Only value types are allowed in transient storage. So in
+
+```solidity
+pragma solidity ^0.8.28;
+
+contract Pot {
+    uint8 a;
+    uint8 b;
+    uint256 transient hold;
+    uint16 c;
+    bool transient flag;
+}
+```
+
+storage holds `a`, `b` and `c` packed into slot 0 (offsets 0, 1 and 2), while `hold` is at transient slot 0 and `flag` at transient slot 1. To reach one with inline assembly you use `tload`/`tstore` with the transient number, never `sload`.
+
+### Packing is a trade-off
+
+The EVM works on whole 32-byte words. Reading a 1-byte value means loading the word and masking, and writing one means loading the word, merging the new byte in and writing back, or you would destroy its neighbours. Packing therefore saves gas when you usually read or write the packed variables *together*, and can cost extra when you touch them separately. Function arguments and memory values are never packed, so shrinking those types buys nothing. Order your declarations so that small types sit together, and put the awkward 256-bit ones where they do not split a run.
+
+<div class="callout"><strong>Watch out.</strong> The layout is effectively part of a contract's external interface, because storage pointers can be handed to libraries and because upgradeable proxies reuse the same slots across versions. Insert a variable in the middle of a list, or reorder them, and every later variable shifts. Never edit the declaration list of a deployed upgradeable contract, only append.</div>
+
+## Mappings and dynamic arrays
+
+Mappings and dynamic arrays have unpredictable size, so they cannot sit "in between" their neighbours. Each is treated as taking one slot, call its number `p`, and its contents are kept somewhere else, found by hashing.
+
+<Figure caption="A mapping keeps its own slot empty. Each value lives at the hash of its key joined with that slot number.">
+  <StorageSlots />
+</Figure>
+
+- **Dynamic array.** Slot `p` stores the length. The elements start at `keccak256(p)` and follow one after another, packed if they are smaller than 32 bytes. So element `i` of a `uint256[]` is at `keccak256(p) + i`.
+- **Mapping.** Slot `p` stays empty; it exists only to make two neighbouring mappings land in different places. To find the value for key `k`, hash the key and the slot together: `keccak256(h(k) . p)`. Here `.` joins the two byte strings, and `h` turns the key into bytes: a value-type key is padded out to 32 bytes, while a `string` or `bytes` key contributes its raw bytes unpadded.
+- **Non-value results.** If the stored value is a struct or array, the computed slot marks where it begins, and you add the member's offset to reach inside it.
+- **Arrays of arrays** apply the rule again. For a `uint16[][] grid` at slot `p`, element `grid[i][j]` is in slot `keccak256(keccak256(p) + i) + floor(j / 16)` (16 values of 2 bytes fit in a slot) at bit position `(j % 16) * 16`.
+
+Here is a ledger worth following by hand:
+
+```solidity
+contract CampusLedger {
+    struct Entry { uint16 credits; uint16 grade; uint256 fees; }
+
+    uint256 term;                                        // slot 0
+    mapping(uint256 => mapping(address => Entry)) entries;  // slot 1
+    uint256[] ids;                                       // slot 2
+    string motto;                                        // slot 3
+    string longNote;                                     // slot 4
+}
+```
+
+To find `entries[2026][student].fees`: first the inner mapping's slot, `s1 = keccak256(uint256(2026) . uint256(1))`; then the entry's slot, `s2 = keccak256(bytes32(student) . s1)`. The struct starts there: `credits` and `grade` are packed into `s2` itself (2 + 2 bytes), and because `fees` is 256 bits it starts a new slot, `s2 + 1`. For `ids[5]`, the slot is `keccak256(uint256(2)) + 5`. I wrote this contract, filled it, and read the raw slots with `sload` at exactly these computed positions: `ids[5]` came back as the value I had pushed there, `s2` held `credits` in its lowest two bytes and `grade` in the next two, and `s2 + 1` held the fee.
+
+### `bytes` and `string`
+
+These two share an encoding. Short values (up to 31 bytes) fit in the slot `p` itself: the characters are stored left-aligned in the high-order bytes and the *lowest byte holds length × 2*. For `motto = "ashesi"` that low byte is `0x0c` (6 × 2). Long values (32 bytes or more) store `length × 2 + 1` in slot `p` and put the data from `keccak256(p)` onward. So the lowest bit tells you which kind you have: clear for short, set for long. My 61-byte `longNote` left `0x7b` (123 = 61 × 2 + 1) in its slot. Reading a slot whose contents break this encoding is unsupported; under IR it ends in a `Panic(0x22)`.
+
+## Asking the compiler: JSON output
+
+You rarely need to compute these by hand. Request `storageLayout` (and `transientStorageLayout`) in the output selection and the compiler returns an object with two keys: `storage`, an array with one entry per variable, and `types`, a table the entries refer to. For `Pot` above the transient answer looks like this (abridged):
+
+```json
+{
+  "storage": [
+    { "label": "hold", "slot": "0", "offset": 0, "type": "t_uint256", "contract": "Pot.sol:Pot", "astId": 7 },
+    { "label": "flag", "slot": "1", "offset": 0, "type": "t_bool", "contract": "Pot.sol:Pot", "astId": 11 }
+  ],
+  "types": {
+    "t_bool": { "encoding": "inplace", "label": "bool", "numberOfBytes": "1" },
+    "t_uint256": { "encoding": "inplace", "label": "uint256", "numberOfBytes": "32" }
+  }
+}
+```
+
+Each entry gives the `label` (variable name), the `slot` (a string, since the number can be huge), the byte `offset` inside it, the `contract` that declared it, the `astId` of its declaration and a `type` key. Each type has an `encoding`: `inplace` (laid out contiguously), `mapping`, `dynamic_array` or `bytes` (the short/long string scheme), plus a `label` and `numberOfBytes`. Mappings add their `key` and `value` types, arrays add a `base` type, and structs list their `members` in the same format as the top level. The docs call this output format experimental, so it can change in non-breaking releases.
+
+## Try it
+
+The `SeatSale` below uses four slots. Reorder the declarations so that it needs only three. Keep every variable and its type.
+
+<CodeExercise id="pack" {...exercises["pack"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

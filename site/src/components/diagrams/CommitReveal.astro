@@ -1,0 +1,35 @@
+---
+---
+<svg viewBox="0 0 640 250" role="img" aria-labelledby="cr-t" font-family="var(--mono)" font-size="12">
+  <title id="cr-t">Commit then reveal. In the commit phase a bidder sends a hash of the value, a fake flag and a secret together with a deposit. In the reveal phase the bidder sends the three inputs, the contract recomputes the hash, and accepts the bid only if it matches and the deposit covers the value.</title>
+  <defs>
+    <marker id="cr-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="currentColor" />
+    </marker>
+  </defs>
+  <g stroke-width="1.5" fill="none">
+    <rect x="10" y="30" width="290" height="110" rx="8" stroke="var(--border)" />
+    <rect x="340" y="30" width="290" height="110" rx="8" stroke="var(--border)" />
+    <path d="M302 85 H338" stroke="currentColor" marker-end="url(#cr-arrow)" />
+    <rect x="10" y="170" width="620" height="60" rx="8" stroke="currentColor" stroke-width="2" />
+    <path d="M155 142 V168" stroke="currentColor" marker-end="url(#cr-arrow)" />
+    <path d="M485 142 V168" stroke="currentColor" marker-end="url(#cr-arrow)" />
+  </g>
+  <g fill="currentColor" font-weight="600">
+    <text x="22" y="52">1. Commit (bidding open)</text>
+    <text x="352" y="52">2. Reveal (bidding closed)</text>
+  </g>
+  <g fill="var(--muted-fg)">
+    <text x="22" y="76">send keccak256(value, fake, secret)</text>
+    <text x="22" y="96">send a deposit (ether)</text>
+    <text x="22" y="116">chain sees only a hash and a deposit</text>
+    <text x="352" y="76">send value, fake, secret</text>
+    <text x="352" y="96">contract recomputes the hash</text>
+    <text x="352" y="116">needs: hash matches, deposit &gt;= value</text>
+  </g>
+  <g fill="currentColor">
+    <text x="22" y="189">Fake or under-funded openings: no bid, deposit goes back.</text>
+    <text x="22" y="206">Wrong openings are skipped.</text>
+    <text x="22" y="223">Valid bids compete; losers are refunded when outbid.</text>
+  </g>
+</svg>

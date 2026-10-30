@@ -1,0 +1,123 @@
+---
+title: "Abstract contracts and interfaces"
+summary: "Contracts that promise functions without writing them: abstract contracts for partial code, interfaces for pure contracts-by-description, and the rules that separate them."
+covers: ["Contracts", "Contracts > Abstract Contracts", "Contracts > Interfaces"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./13-abstract-and-interfaces";
+
+A university can say "every course must publish a grading scheme" without saying what any particular scheme is. The rule is a promise that each course fills in later. Solidity has two tools for that kind of promise: **abstract contracts** and **interfaces**. Both let one piece of code say "something with these functions exists" while somebody else supplies the working parts.
+
+## Abstract contracts
+
+A contract that has at least one function without a body, or that does not provide arguments for all its parents' constructors, must carry the keyword `abstract`. You may also use it on a complete contract when you simply never want anyone to deploy it directly.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+abstract contract Course {
+    string public code;
+    uint256 public credits;
+
+    constructor(string memory code_, uint256 credits_) {
+        code = code_;
+        credits = credits_;
+    }
+
+    // No body: every concrete course must say how it grades.
+    function grade(uint256 mark) public pure virtual returns (string memory);
+
+    function describe(uint256 mark) external pure returns (string memory) {
+        return grade(mark);   // runs the child's version
+    }
+}
+
+contract Pass is Course("PASS101", 2) {
+    function grade(uint256 mark) public pure override returns (string memory) {
+        return mark >= 50 ? "pass" : "fail";
+    }
+}
+```
+
+An abstract contract can hold state, constructors, modifiers and finished functions, so it works as a half-built base. A function without a body has to be marked `virtual`, since its whole purpose is to be filled in. The child supplies the body using `override`. The abstract parent can even call that function, as `describe` does above, and the call lands on the child's version.
+
+Two rules complete the picture. First, an abstract contract cannot be created with `new` or deployed, even if all its functions happen to be implemented. Second, a child that leaves any function unimplemented must be `abstract` itself. And you cannot take an implemented `virtual` function and override it with an empty one.
+
+Do not confuse "a function with no body" with a **function type variable**. `function grade(uint256) external;` declares a function, while `function(uint256) external fn;` declares a variable that holds one.
+
+## Interfaces
+
+An **interface** is a stricter form: pure description, no body anywhere. It is written with its own keyword:
+
+```solidity
+interface IRegistrar {
+    event Enrolled(address indexed student, string code);
+    error NotOpen();
+
+    function enrol(string calldata code) external payable;
+    function isEnrolled(address student, string calldata code) external view returns (bool);
+}
+```
+
+An interface may not have:
+
+- any function with an implementation;
+- a constructor;
+- state variables;
+- modifiers;
+- a parent that is a contract (it may only extend other interfaces).
+
+Every function must be declared `external`, even though the contract that implements it may make it `public`. This matches what an interface really is: the shape of a contract as seen from the **outside**. In fact, an interface can express only what the contract ABI can express, which is why you can convert between them without losing information. Interfaces can however declare events, errors, structs and enums, and you can reach those types as `IRegistrar.Enrolled` and so on.
+
+All functions in an interface are implicitly `virtual`. A function that implements one does not need `override` (since Solidity 0.8.8), but it does not become overridable again unless it is marked `virtual`.
+
+```solidity
+contract Registrar is IRegistrar {
+    mapping(address => mapping(bytes32 => bool)) private seats;
+    bool public open = true;
+
+    function enrol(string calldata code) external payable {
+        if (!open) revert NotOpen();
+        seats[msg.sender][keccak256(bytes(code))] = true;
+        emit Enrolled(msg.sender, code);
+    }
+
+    function isEnrolled(address student, string calldata code) external view returns (bool) {
+        return seats[student][keccak256(bytes(code))];
+    }
+}
+```
+
+## Interfaces that extend interfaces
+
+An interface can inherit from one or more others, with the same rules as for contracts. If two parent interfaces both declare the same function, the child must redeclare it with `override(A, B)`, to assert that the two meanings agree:
+
+```solidity
+interface ISeats  { function free() external view returns (uint256); }
+interface IRooms  { function free() external view returns (uint256); }
+
+interface ICampus is ISeats, IRooms {
+    function free() external view override(ISeats, IRooms) returns (uint256);
+}
+```
+
+This is useful for layering: a small core interface, and a bigger "extended" one that includes it.
+
+## Why bother?
+
+An interface lets your contract talk to another one without having its source code. If you only need to ask a registrar whether someone is enrolled, you declare `IRegistrar`, write `IRegistrar(addr).isEnrolled(student, code)`, and the compiler generates the correct call. It also lets a token, vault or wallet standard be shared by many unrelated contracts: they all implement the same interface, so anything that understands the interface works with all of them.
+
+<div class="callout"><strong>Watch out.</strong> An interface only describes the shape of the calls. Casting an address to <code>IRegistrar</code> does not check that the contract there really behaves as the interface suggests. A look-alike contract can return whatever it likes from <code>isEnrolled</code>. Check that the address is one you trust before you rely on the answer.</div>
+
+## Try it
+
+`IVault` is given. Write a concrete `Vault` that implements all three functions: `deposit` records `msg.value` for the sender and emits `Deposited`; `withdraw` reverts with `Insufficient` when the sender asks for more than they hold, and otherwise pays them; `balanceOf` reads the balance.
+
+<CodeExercise id="vault" {...exercises["vault"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

@@ -1,0 +1,111 @@
+---
+title: "Mappings and iterable mappings"
+summary: "Key-value lookup tables: what can be a key, why you cannot loop over them, nested mappings, getters, and the keys-array trick."
+covers: ["Types", "Types > Mapping Types"]
+---
+
+import Figure from "../../../components/Figure.astro";
+import StorageSlots from "../../../components/diagrams/StorageSlots.astro";
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./09-mappings";
+
+When you check your exam result online, you type your student ID and the system jumps straight to your row. It does not read through every student in the school. A **mapping** is that kind of lookup: give it a key, get back the value filed under it. It is the most-used data structure in Solidity, behind balances, memberships, votes and permissions.
+
+## Declaring one
+
+```solidity
+mapping(address => uint256) balance;           // who owns how much
+mapping(uint256 studentId => string name) names; // optional labels, since 0.8.18
+```
+
+The key type goes on the left of `=>` and the value type on the right. The optional names do nothing at run time; they just document what the key and value mean.
+
+**Key types.** A key can be any built-in value type (`uint`, `int`, `bool`, `address`, `bytesN`), `bytes`, `string`, a contract type, an enum, or a user-defined value type. It cannot be a struct, an array or another mapping.
+
+**Value types.** The value can be anything at all, including another mapping, an array or a struct.
+
+## What a mapping is not
+
+A mapping is not like a spreadsheet you can scan. Look at where the data really goes, in the figure.
+
+<Figure caption="The mapping's own slot stays empty. Each value is stored at a position worked out by hashing the key together with that slot number.">
+  <StorageSlots />
+</Figure>
+
+The contract never stores a list of the keys, only the values at hashed positions. That has a few consequences:
+
+- **No `length`, no list of keys, no looping.** There is no way to ask "which keys have been set?".
+- **Every key exists.** Reading an unwritten key returns the zero value of the value type (`0`, `false`, the zero address, an empty string). You cannot tell "never set" from "set to zero" by looking at the value alone.
+- **Storage only.** A mapping can be a state variable, a field inside a struct, or the target of a `storage` pointer, including a parameter of an `internal` function. It cannot be a `memory` or `calldata` variable, nor a parameter or result of an external call.
+- **Not copied.** Assigning a mapping to another variable never duplicates its content, because there is no way to enumerate it.
+
+Because the key is hashed, the key's own bytes are never stored. Deleting a whole mapping is likewise not possible; only a single entry can be reset with `delete m[key]`.
+
+## Nested mappings
+
+When the value type is itself a mapping, you get two keys. A classic use is "how much has this owner allowed that spender to take", which is the allowance table in every token:
+
+```solidity
+mapping(address => mapping(address => uint256)) allowed;
+
+function approve(address spender, uint256 amount) external {
+    allowed[msg.sender][spender] = amount;
+}
+```
+
+Read it left to right: `allowed[owner]` is itself a mapping, and indexing that with `spender` gives the number.
+
+## Public getters
+
+If you mark a mapping `public`, the compiler writes a getter function for you, and the keys become its parameters.
+
+```solidity
+mapping(address => uint256) public balance;                        // balance(address) returns (uint256)
+mapping(address => mapping(address => uint256)) public allowance;  // allowance(address,address) returns (uint256)
+```
+
+You cannot get "the whole mapping" out of a getter, only one value per call. The getter reads zero for a key that was never written, with no error.
+
+## Iterable mappings
+
+Often you need to loop: pay every member, count active voters, show a list on a web page. The standard fix is to keep a second structure that remembers the keys, next to the mapping:
+
+```solidity
+address[] members;                      // the keys, in order
+mapping(address => uint256) position;   // address => index + 1  (0 means "not a member")
+mapping(address => uint256) dues;
+
+function join(address who) external {
+    require(position[who] == 0, "already in");
+    members.push(who);
+    position[who] = members.length;      // store index + 1
+}
+
+function leave(address who) external {
+    uint256 pos = position[who];
+    require(pos != 0, "not a member");
+    address last = members[members.length - 1];
+    members[pos - 1] = last;             // move the last key into the gap
+    position[last] = pos;
+    members.pop();
+    delete position[who];
+    delete dues[who];
+}
+```
+
+Storing index plus one is a trick: the default `0` then means "absent", so `position[who] == 0` is a safe membership test. Removing by moving the last key into the hole keeps the array tight without shifting everything. The cost is that every insert and delete now writes in more than one place.
+
+Keep an eye on loop size: iterating a long array in one transaction can run out of gas. Where the list can grow without limit, let callers process it in pages, or avoid needing the loop at all.
+
+<div class="callout"><strong>Watch out.</strong> A mapping never throws for a missing key, it returns the zero value. If <code>0</code> is a meaningful value in your design (for example, a balance), keep a separate "exists" flag or the index-plus-one trick, otherwise a typo'd address looks exactly like a real account that has nothing.</div>
+
+## Try it
+
+Write an `Allowances` contract. It needs a public nested mapping named `allowance` (owner, then spender, then amount) and an `approve` function that lets the caller set an allowance for a spender.
+
+<CodeExercise id="allowance-mapping" {...exercises["allowance-mapping"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

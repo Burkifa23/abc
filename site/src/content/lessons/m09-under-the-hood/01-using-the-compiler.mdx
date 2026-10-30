@@ -1,0 +1,106 @@
+---
+title: "Using the compiler"
+summary: "What happens when Remix, Foundry or Hardhat call solc for you: the command line, the standard JSON interface, the EVM target and experimental mode."
+covers: ["Using the Compiler", "Using the Compiler > Using the Commandline Compiler", "Using the Compiler > Setting the EVM Version to Target", "Using the Compiler > Compiler Input and Output JSON Description", "Using the Compiler > Experimental Mode"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import { quiz, exercises } from "./01-using-the-compiler";
+
+Every tool you have used so far, whether Remix, Foundry or Hardhat, hides the same program: **solc**, the Solidity compiler. This module lifts the lid. Nothing here is needed to write a working contract, but when a deployment fails on a chain you did not expect, or an auditor asks which settings produced a given bytecode, this is the knowledge that answers.
+
+Suppose the department keeps a tiny contract in `Gradebook.sol` that returns the pass mark. We will compile it by hand.
+
+## The command-line compiler
+
+`solc` is the compiler's own executable. Running `solc --help` lists every option. The most direct use asks for one output:
+
+```text
+solc --bin Gradebook.sol
+```
+
+That prints the creation bytecode as hex, which is hard to read. To get several outputs written to files, name a folder:
+
+```text
+solc -o build --bin --abi --asm Gradebook.sol
+```
+
+Everything in this section applies to the native `solc` program, not to `solcjs`, the JavaScript build, even when you call that from a terminal.
+
+### Turning the optimizer on
+
+Add `--optimize` to switch on the optimizer. It assumes each opcode will run about 200 times over the contract's life. `--optimize-runs=1` says "this code will hardly ever run, make deployment cheap", while a very large number says "this will be hammered, accept a larger deployment". The setting influences how big the function-dispatch binary search is and how large constants and strings are stored. Lesson 9 of this module returns to it.
+
+### Finding imported files
+
+The compiler reads imports from disk. You can redirect a path prefix with `prefix=target`:
+
+```text
+solc @campus/=/home/frank/libs/campus/ Gradebook.sol
+```
+
+Anything starting `@campus/` is now searched under that folder. Import paths that do not begin with `./` or `../` are resolved against `--base-path` (or the working directory), plus any `--include-path` entries; the base-path part is left out of the contract metadata. For safety, the compiler refuses to read outside the folders of your input files, your remapping targets and the base path unless you permit more with `--allow-paths`.
+
+### Libraries and the linker
+
+A contract that calls an external library function cannot be finished until it knows the library's address. Until then the bytecode contains a placeholder shaped like `__$` + 34 hex characters + `$__`, forty characters in total, exactly the width of an address in hex. The 34 characters come from the hash of the library's fully qualified name (source file path, a colon, the library name). You fill them in with `--libraries "Gradebook.sol:Maths=0x..."`, or run `solc --link` on a finished binary.
+
+Linking by hand after compilation is discouraged. The metadata lists the libraries that were present when you compiled, and the metadata hash lives inside the bytecode, so a hand-patched binary no longer matches its own fingerprint. Pass the addresses at compile time instead.
+
+## The standard JSON interface
+
+For anything automated, use `solc --standard-json`. You send one JSON object on standard input and get one JSON object back on standard output. Build tools talk to the compiler this way, and `solcjs` offers the same interface. One quirk to remember: the process always finishes "successfully", even when your code has errors. Failure is reported inside the JSON, in the `errors` array, so a script must look there rather than at the exit status.
+
+A complete small input looks like this:
+
+```json
+{
+  "language": "Solidity",
+  "sources": {
+    "Gradebook.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.24;\ncontract Gradebook { function passMark() external pure returns (uint8) { return 40; } }"
+    }
+  },
+  "settings": {
+    "evmVersion": "cancun",
+    "optimizer": { "enabled": true, "runs": 1000 },
+    "metadata": { "bytecodeHash": "none" },
+    "outputSelection": { "*": { "*": ["abi", "evm.bytecode.object", "evm.methodIdentifiers"] } }
+  }
+}
+```
+
+The pieces to know:
+
+- **`sources`**: each source has a name you choose and either literal `content` or a list of `urls` (with the command-line tool, only file paths work).
+- **`settings.remappings`, `optimizer`, `evmVersion`, `viaIR`, `libraries`**: the same ideas as the command-line flags. `viaIR` selects the intermediate-representation pipeline described in the next lesson. `debug.revertStrings` can strip or enrich revert reasons (`"strip"` removes strings from `require`, but not custom errors).
+- **`settings.metadata`**: for example `bytecodeHash` and `appendCBOR`, which control the fingerprint appended to the code.
+- **`outputSelection`**: which outputs you want, per file name and per contract name, with `*` as a wildcard. If you leave it out, the compiler parses and type-checks but produces nothing except errors.
+
+The reply has three main parts. `errors` lists problems, each with a `severity` (`error`, `warning` or `info`), a `type` such as `ParserError`, `TypeError` or `DeclarationError`, a message and optionally a source location. `sources` gives each file an integer `id`, which the source maps will use. `contracts` is organised by file name and then contract name, and holds whatever you selected: `abi`, `metadata`, `storageLayout`, `evm.bytecode.object`, `evm.bytecode.sourceMap`, `evm.methodIdentifiers` (the selector table), `evm.gasEstimates` and so on. Two error types mean *you have found a compiler bug and should report it*: `InternalCompilerError` and plain `Exception`.
+
+## Choosing the EVM version
+
+The compiler can aim its output at a particular fork of the EVM, so that it only uses opcodes that fork has. On the command line it is `--evm-version <name>`; in JSON it is `settings.evmVersion`. The default for the 0.8.38 compiler is **osaka**; you can confirm it by compiling with no setting and reading the `evmVersion` recorded in the metadata.
+
+The list of fork names runs from `homestead` through to `osaka`, with `amsterdam` marked experimental, and targets up to `berlin` are deprecated. The changes that matter in practice are:
+
+| Target | What the compiler gains |
+|---|---|
+| `byzantium` | `revert`, `staticcall` for view and pure calls, returndata access |
+| `constantinople` | `create2`, shift opcodes (cheaper shifts) |
+| `london` | `block.basefee` |
+| `paris` | `block.prevrandao` replaces `difficulty` |
+| `shanghai` | `push0`, giving smaller and cheaper code |
+| `cancun` | `tstore`/`tload`, `mcopy`, `blobhash`, `block.blobbasefee` |
+| `osaka` | the `clz` builtin in inline assembly |
+
+<div class="callout"><strong>Watch out.</strong> A wrong target gives bytecode that misbehaves in strange ways or does not run at all. A chain or rollup that has not adopted Shanghai will treat the <code>push0</code> instruction as invalid, and the compiler may use it in any contract. If you deploy anywhere other than mainnet, read which fork the chain supports and set <code>evmVersion</code> to match.</div>
+
+## Experimental mode
+
+Some features in a release are not stable: thinly documented, lightly tested, free to change in a bug-fix release. The compiler hides them behind **experimental mode**, enabled with `--experimental` or `settings.experimental: true`. The mode does not switch any feature on by itself; it only permits you to use them. Its use is recorded in the metadata (and in the CBOR tail of the bytecode, covered in lesson 6), so anyone verifying your contract can see you relied on unfinished machinery. Before version 0.8.35 the gating was inconsistent; the mode exists to make it systematic. Features behind it include AST import, EVM assembly import, the IR AST output, non-mainnet EVM targets, Ethdebug output and the SSA control-flow-graph code generator. Treat all of these as unsuitable for contracts holding real money.
+
+## Check your understanding
+
+<Quiz questions={quiz} />

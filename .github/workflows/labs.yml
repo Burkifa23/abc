@@ -1,0 +1,59 @@
+name: Labs
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ['labs/**', '.devcontainer/**', 'scripts/**', '.github/workflows/labs.yml', 'site/src/labs.json']
+  pull_request:
+    paths: ['labs/**', '.devcontainer/**', 'scripts/**', '.github/workflows/labs.yml', 'site/src/labs.json']
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test scripts/*.test.mjs
+      - run: node scripts/sync-labs.mjs --check
+
+  list:
+    runs-on: ubuntu-latest
+    outputs:
+      labs: ${{ steps.ls.outputs.labs }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: ls
+        run: echo "labs=$(ls -d labs/[0-9]*/ | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+  verify:
+    needs: list
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        lab: ${{ fromJson(needs.list.outputs.labs) }}
+        include:
+          - lab: scripts/fixtures/lab-good
+          - lab: scripts/fixtures/lab-bad
+            expect-fail: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install pinned forge-std
+        run: |
+          FORGE_STD_VERSION=$(grep -oP 'ARG FORGE_STD_VERSION=\K\S+' .devcontainer/Dockerfile)
+          sudo git clone --depth 1 --branch "$FORGE_STD_VERSION" https://github.com/foundry-rs/forge-std /opt/forge-std
+      - name: Verify lab
+        env:
+          LAB: ${{ matrix.lab }}
+        run: |
+          if [ "${{ matrix.expect-fail }}" = "true" ]; then
+            ! bash scripts/verify-lab.sh "$LAB"
+          else
+            bash scripts/verify-lab.sh "$LAB"
+          fi

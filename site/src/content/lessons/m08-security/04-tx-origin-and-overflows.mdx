@@ -1,0 +1,156 @@
+---
+title: "tx.origin, proxies, overflows, clearing mappings"
+summary: "Four classic traps: authorising with tx.origin, contracts that forward arbitrary calls, integer limits even in checked mode, and mappings that survive a delete."
+covers: ["Security Considerations", "Security Considerations > Pitfalls"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./04-tx-origin-and-overflows";
+
+This lesson covers four smaller pitfalls that are easy to understand and surprisingly easy to commit. They share a theme: each one is a place where a value or a variable does not mean what a quick reading suggests.
+
+## tx.origin is not "the caller"
+
+Solidity gives you two ways to ask who started something. `msg.sender` is the account (or contract) that made the *current* call. `tx.origin` is the externally owned account that signed the *whole transaction*, however many contracts it passed through on the way. If a wallet calls contract A, and A calls contract B, then inside B `msg.sender` is A, but `tx.origin` is still the wallet's owner.
+
+That makes `tx.origin` tempting for permission checks: "only the head of department may spend from this wallet". Here is a department wallet written that way:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+// THIS CONTRACT CONTAINS A BUG - DO NOT USE
+contract DepartmentWallet {
+    address public immutable head;
+
+    error NotHead();
+    error SendFailed();
+
+    constructor() {
+        head = msg.sender;
+    }
+
+    receive() external payable {}
+
+    function payOut(address payable to, uint256 amount) external {
+        if (tx.origin != head) revert NotHead();   // the bug
+        (bool ok, ) = to.call{value: amount}("");
+        if (!ok) revert SendFailed();
+    }
+}
+```
+
+An attacker publishes a contract and persuades the head to send it a small amount of ether, perhaps promising a free gift or a token airdrop:
+
+```solidity
+interface IDepartmentWallet {
+    function payOut(address payable to, uint256 amount) external;
+}
+
+contract FreeGift {
+    IDepartmentWallet public immutable victim;
+    address payable public immutable thief;
+
+    constructor(IDepartmentWallet target) {
+        victim = target;
+        thief = payable(msg.sender);
+    }
+
+    receive() external payable {
+        victim.payOut(thief, address(victim).balance);
+    }
+}
+```
+
+When the head's transaction reaches `FreeGift.receive()`, the contract calls `payOut` on the wallet. Inside the wallet `msg.sender` is `FreeGift`, which is not the head. But `tx.origin` is the head, because the head signed this transaction. The check passes, and the wallet empties itself into the thief's address. The head did nothing except send a bit of ether to the wrong place.
+
+The repair is a one-word change. Compare the *immediate* caller:
+
+```solidity
+if (msg.sender != head) revert NotHead();
+```
+
+Now a call relayed through `FreeGift` has `msg.sender == address(FreeGift)`, and the check refuses it. As a rule, **never use `tx.origin` for authorisation.** It also fails on its own terms in the modern account landscape: with account abstraction (ERC-4337), the `tx.origin` of a user's operation is a bundler, not the user, so a legitimate user cannot pass the check.
+
+### A related myth: `tx.origin == msg.sender` as a "no contracts" test
+
+A common trick was `require(tx.origin == msg.sender)` to mean "the caller is a plain wallet, not a contract", used to block bots and flash loans. EIP-7702 (live since the Pectra upgrade) breaks this. An ordinary externally owned account can now sign an authorisation that attaches *code* to itself, so an account with code can be both `tx.origin` and `msg.sender` at once. The comparison tells you only that the call came directly from the account that signed the transaction, nothing about whether code is running. Likewise `code.length == 0` was never proof of a human, since a contract that is still running its constructor has no code yet, and under EIP-7702 a delegated account does have code, so the check wrongly rejects it. Design for callers that may be contracts instead of trying to exclude them.
+
+## Authorised proxies
+
+A contract that lets callers choose a target and the data to send, then forwards it, is a **proxy** in the loose sense. Think of a "batch executor" or a generic multicall helper:
+
+```solidity
+contract CallRelay {
+    function forward(address target, bytes calldata data)
+        external returns (bool ok, bytes memory result)
+    {
+        (ok, result) = target.call(data);
+    }
+}
+```
+
+When `CallRelay` calls another contract, the other contract sees `CallRelay` as `msg.sender`. Anyone who can call `forward` therefore speaks with the relay's identity. If the relay owns tokens, holds an allowance, or has any role in another system, every user can use it. Even if you add your own checks, the safest design is to give the forwarding contract **no permissions at all**: not even over itself. If you need a contract that both forwards and has authority, split it in two. The authorised one decides what is allowed, and a second, powerless forwarder does the arbitrary calling, so nothing valuable depends on the forwarder's identity.
+
+## Integers have edges
+
+Solidity integers resemble the numbers from maths class only when they are small. A `uint8` holds 0 to 255. Adding one to 255 does not give 256.
+
+Since Solidity 0.8, arithmetic is **checked** by default: if the true result does not fit, the transaction reverts with a panic error. Inside an `unchecked { ... }` block the check is switched off and the result **wraps around** (a `uint8` result of 260 becomes 4). So:
+
+```solidity
+uint8 seats = 250;
+uint8 extra = 10;
+// seats + extra reverts in normal code
+// unchecked { seats + extra } evaluates to 4
+```
+
+Checked mode removes the silent wrap-around bugs of older Solidity, but it does not make overflow harmless. A revert is still a failure. Imagine a lecture-hall booking contract with a `uint8 bookings` counter that grows with each reservation. At 255 bookings, every further `book()` call reverts, and unless something resets the counter the hall is closed forever. A contract can get stuck in a state it can only reach by running out of range. Choose widths with headroom, bound inputs with an explicit check that gives a clear error, and think about what should happen at the limit instead of leaving it to a panic.
+
+Two more edges to remember. Explicit conversions truncate silently: `uint8(big)` with `big = 300` yields 44, because only the low 8 bits survive. And `unchecked` should be used only where you can *prove* the arithmetic cannot overflow, typically to save gas in a loop counter bounded by an array length. The SMTChecker, which you meet at the end of this module, can search for overflow paths for you.
+
+## Mappings cannot be cleared
+
+A `mapping` has no list of keys: it only answers "what is at this key?" for any key you ask about, and unwritten keys read as zero. Consequently you cannot loop over a mapping and you cannot wipe one. Where does this bite? When a mapping hides inside something you delete:
+
+```solidity
+contract GradeBook {
+    mapping(address => uint256)[] private terms;
+
+    function openTerm() external {
+        terms.push();
+    }
+
+    function setMark(uint256 term, address student, uint256 mark) external {
+        terms[term][student] = mark;
+    }
+
+    function markOf(uint256 term, address student) external view returns (uint256) {
+        return terms[term][student];
+    }
+
+    function reset() external {
+        delete terms;
+    }
+}
+```
+
+Run `openTerm()` ten times and `setMark(4, alice, 80)`. Then call `reset()`: the array length drops to zero, but the mapping contents are not zeroed, because the contract has no way to know which keys were used. After `openTerm()` is called five times again, `markOf(4, alice)` returns 80 without anyone writing it. Stale data comes back to life. The same applies to a struct containing a mapping that is stored in a dynamic array, and a mapping inside a struct is skipped when you assign the struct. If you need real clearing, keep a separate list of the keys you wrote (an iterable mapping) and zero them one by one, or give each "generation" a new identifier so that old entries are never looked up again.
+
+## Smaller traps worth a mention
+
+- **Internal function pointers in upgradeable contracts.** A variable of internal function type holds a code location. If the contract's code is replaced by an upgrade, the stored location may point at something else. Treat such values as temporary. Do not keep them in state variables that outlive an upgrade or are shared with another contract through `delegatecall`.
+- **Types narrower than 32 bytes.** Values such as `uint8` arrive in calldata padded to 32 bytes, and padding bits can be dirty if a caller crafts the input. Hashing raw `msg.data` to make an identifier can therefore give different results for inputs that look identical to your code. Hash the decoded, typed arguments with `abi.encode` instead.
+
+<div class="callout"><strong>Watch out.</strong> Checked arithmetic turns silent wrap-around into a revert. That is safer, but a counter that can no longer move because every update reverts is a frozen contract. Plan for the limit, do not just rely on the panic.</div>
+
+## Try it
+
+The department wallet below authorises with `tx.origin`. Change it to use `msg.sender` so that a relayed call is refused.
+
+<CodeExercise id="origin-fix" {...exercises["origin-fix"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

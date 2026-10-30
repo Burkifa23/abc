@@ -1,0 +1,70 @@
+---
+title: "The EVM: accounts, transactions, gas"
+summary: "Describe the two kinds of Ethereum account, what a transaction can do, and how gas limits and pays for computation."
+covers: ["Introduction to Smart Contracts > The Ethereum Virtual Machine"]
+---
+
+import Figure from "../../../components/Figure.astro";
+import EvmOverview from "../../../components/diagrams/EvmOverview.astro";
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./04-the-evm";
+
+Your friend Esi runs a small stall near the Ashesi gate. She wants to buy airtime for forty customers, and she has written a contract that does it for a small fee. Customers will run her code on a machine they do not control, owned by strangers, and they will pay for the computing time they use. Two questions follow. What exactly runs her code? And what stops someone from sending her contract a task that never finishes? The answers are the Ethereum Virtual Machine and gas.
+
+## The machine that runs contracts
+
+The **Ethereum Virtual Machine**, or **EVM**, is the runtime where smart contracts execute. Every node on the network runs the same EVM and must reach the same result. To make that possible, the EVM is not just sandboxed; it is cut off entirely. Code inside it cannot open a network connection, read a file, or talk to another process. Even other contracts are reachable only in limited ways, through the *calls* we describe in lesson 6. This isolation is a feature: if your contract could read the local clock or a web page, different nodes would see different answers and could not agree.
+
+## Two kinds of account
+
+An **account** is an entry in Ethereum's state, and it has an address. There are two kinds, living in one shared address space.
+
+- An **externally owned account** (EOA) is controlled by a key pair. A human with a wallet is the usual example. Its address comes from the public key.
+- A **contract account** is controlled by the code stored with it. Its address is fixed at creation and derived from the creator's address and the creator's nonce (the count of transactions the creator has sent).
+
+The EVM does not treat the two differently in the places that matter. You can send ether to either kind, and either kind can be the target of a call.
+
+Every account has a balance and a nonce. Contract accounts also carry code and storage, which are empty for an EOA:
+
+- a **balance**, kept in **wei**, the smallest unit of ether. One ether is 10^18 wei (written `10**18` in Solidity);
+- a **nonce**, a counter used to tell transactions apart and to derive contract addresses;
+- **storage**, a persistent key-value store that maps 256-bit words to 256-bit words (lesson 5);
+- **code**, the bytecode that runs when the account is called. One modern exception: since EIP-7702, an EOA may point at a contract through a special "delegation designator" stored in its code field, so that its transactions can borrow that contract's logic. The key pair still controls the account.
+
+<Figure caption="An externally owned account holds a balance and a nonce. A contract account adds code and storage. A transaction carries value and a payload from one to the other.">
+  <EvmOverview />
+</Figure>
+
+## Transactions
+
+A **transaction** is a message sent from one account to another, which may be the sender itself. It can carry ether (its *value*) and a block of binary data called the **payload**.
+
+- If the target is a contract, the contract's code runs, and the payload is given to it as input. For a normal call, the payload says which function to run and with which arguments.
+- If the target is not set at all (the recipient field is empty), the transaction creates a new contract. The address of that contract is not the zero address. It comes from the sender's address and nonce, as above.
+
+Creation has a subtle point that trips people up. The payload of a creation transaction is not the contract's final code. It is *initialisation code*: a short program that is executed once, and whatever it returns becomes the permanent code of the new contract. In Solidity this is the job of the constructor (the compiler adds the machinery that returns the real code). So you never send the finished contract directly; you send a program that produces it.
+
+<div class="callout"><strong>Watch out.</strong> While a contract is being created, its code area is still empty, because the initialisation code has not returned yet. Do not call back into a contract whose constructor is still running: it cannot answer like a finished contract can.</div>
+
+## Gas: paying for computation
+
+Suppose anyone could submit an endless loop for free. Every node would burn power forever. Ethereum prevents this with **gas**, a unit that measures computation.
+
+When a transaction starts, its sender (the account recorded as `tx.origin`) pays up front for a chosen amount of gas. Each step the EVM takes uses up some gas according to a fixed price list. If the gas runs out, an **out-of-gas** exception ends execution and undoes the state changes made in the current call. An out-of-gas failure (or a call to an invalid instruction) consumes all the gas given to that call. When execution ends normally, or ends in an ordinary `revert`, the gas that is left over is refunded to the sender.
+
+This does two jobs. It pushes developers to write economical code, and it pays the validators who run the transaction. Each block also has a maximum total gas, so there is a ceiling on how much work any one block can demand from the network.
+
+Two ideas set the bill:
+
+- the **gas limit** is how much gas the sender is willing to spend at most;
+- the **gas price** is what the sender pays per unit. The sender chooses it, and validators decide whether to include the transaction. Offering too low a price does not trick the system; it just means validators ignore the transaction. (On Ethereum today the price is split into a base fee that is burned and an optional tip, but the idea of price times gas is the same.)
+
+A transaction that reverts is still included in a block, and the gas used up to the revert is still paid. It is the *effects* that are undone, not the cost of the work already done; the unused remainder comes back.
+
+## Where does a call fit in?
+
+A single transaction starts at one top-level call. That call may call other contracts, which may call others, and so on. Lesson 6 describes how those inner calls work and how much gas they get. What matters now is the picture: one signed transaction in, a tree of calls inside, and either every change applied or the failing branch undone.
+
+## Check your understanding
+
+<Quiz questions={quiz} />

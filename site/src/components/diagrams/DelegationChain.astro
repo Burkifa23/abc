@@ -1,0 +1,38 @@
+---
+---
+<svg viewBox="0 0 640 230" role="img" aria-labelledby="dc-t" font-family="var(--mono)" font-size="12">
+  <title id="dc-t">A delegation chain. Ama delegates to Kofi, Kofi delegates to Esi, and Esi votes for option 2. Ama's weight of 1 and Kofi's weight of 1 flow along the chain, so option 2 receives a total of 3 votes.</title>
+  <defs>
+    <marker id="dc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="currentColor" />
+    </marker>
+  </defs>
+  <g stroke-width="1.5" fill="none">
+    <rect x="10" y="40" width="130" height="60" rx="8" stroke="var(--border)" />
+    <rect x="190" y="40" width="130" height="60" rx="8" stroke="var(--border)" />
+    <rect x="370" y="40" width="130" height="60" rx="8" stroke="currentColor" stroke-width="2" />
+    <rect x="540" y="40" width="90" height="60" rx="8" stroke="var(--border)" />
+    <path d="M142 70 H186" stroke="currentColor" marker-end="url(#dc-arrow)" />
+    <path d="M322 70 H366" stroke="currentColor" marker-end="url(#dc-arrow)" />
+    <path d="M502 70 H536" stroke="currentColor" marker-end="url(#dc-arrow)" />
+  </g>
+  <g fill="currentColor">
+    <text x="75" y="64" text-anchor="middle" font-weight="600">Ama</text>
+    <text x="255" y="64" text-anchor="middle" font-weight="600">Kofi</text>
+    <text x="435" y="64" text-anchor="middle" font-weight="600">Esi</text>
+    <text x="585" y="64" text-anchor="middle" font-weight="600">Option 2</text>
+  </g>
+  <g fill="var(--muted-fg)" text-anchor="middle">
+    <text x="75" y="84">weight 1</text>
+    <text x="255" y="84">weight 1 + 1</text>
+    <text x="435" y="84">weight 1 + 2</text>
+    <text x="585" y="84">tally 3</text>
+  </g>
+  <text x="164" y="30" text-anchor="middle" fill="var(--muted-fg)">delegates</text>
+  <text x="344" y="30" text-anchor="middle" fill="var(--muted-fg)">delegates</text>
+  <text x="519" y="30" text-anchor="middle" fill="var(--muted-fg)">votes</text>
+  <text x="10" y="140" fill="currentColor">Only the last person in the chain votes.</text>
+  <text x="10" y="162" fill="var(--muted-fg)">Everyone before them hands their weight forward.</text>
+  <text x="10" y="190" fill="var(--muted-fg)">A loop (Esi delegating back to Ama) would never reach a voter,</text>
+  <text x="10" y="210" fill="var(--muted-fg)">so the contract refuses it.</text>
+</svg>

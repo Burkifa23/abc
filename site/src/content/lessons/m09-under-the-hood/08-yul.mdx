@@ -1,0 +1,176 @@
+---
+title: "Yul"
+summary: "The small intermediate language behind inline assembly and the IR pipeline: its design goals, every statement form, scoping and the EVM dialect, objects with constructor and runtime code, and a tiny contract written entirely in Yul."
+covers: ["Yul", "Yul > Motivation and High-level Description", "Yul > Simple Example", "Yul > Stand-Alone Usage", "Yul > Informal Description of Yul", "Yul > Specification of Yul", "Yul > Specification of Yul Object", "Yul > Yul Optimizer", "Yul > Complete ERC20 Example"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./08-yul";
+
+Every time you write `assembly { ... }`, and every time you compile with `--via-ir`, the code is Yul. It is a deliberately tiny language that sits between Solidity and the EVM, and it can also be compiled on its own. You can think of it as "assembly with structure": no jumps to labels and no manual stack juggling, but a close, predictable mapping onto opcodes.
+
+## Why Yul exists
+
+Its designers set four goals:
+
+1. Programs should be readable even when a compiler generated them.
+2. Control flow should be easy to follow, for manual inspection, formal verification and optimisation.
+3. Translating it to bytecode should be as direct as possible.
+4. It should suit whole-program optimisation.
+
+To get there, Yul offers `for`, `if`, `switch` and functions, and **leaves out** the opcodes that would hide the flow: no `dup` or `swap` (they obscure data flow), no `jump`, `jumpi`, `jumpdest` or `push` (they obscure control flow). Expressions are written functionally, `mul(add(x, y), 7)`, because you can see which argument feeds which opcode, where the raw form `7 y x add mul` hides it. The stack never shows up in your code. The compiler turns the high-level pieces into opcodes in a regular way; the only non-local work the assembler does is resolving names and clearing locals off the stack at block ends.
+
+Yul is statically typed, but in its pure form it has no built-in types or functions at all. These come with a **dialect**. The one dialect currently specified is the EVM dialect: EVM opcodes are the builtin functions and the single type is the 256-bit word `u256`, which is the default and so is always omitted. That is why you will never see a type annotation in practice.
+
+## A first taste
+
+Three small functions, each showing one construct. First, greatest common divisor with a loop:
+
+```
+{
+    function gcd(a, b) -> g {
+        for { } b { } {
+            let t := mod(a, b)
+            a := b
+            b := t
+        }
+        g := a
+    }
+    sstore(0, gcd(48, 18))   // stores 6
+}
+```
+
+A `for` loop has an init block, a condition (any expression, non-zero means true), a post block and a body; leaving the init and post blocks empty makes it a `while`. Next, a `switch` choosing between literal cases, which never falls through from one case to the next:
+
+```
+function bucket(x) -> b {
+    switch x
+    case 0 { b := 10 }
+    case 1 { b := 20 }
+    default { b := 30 }
+}
+```
+
+And a saturating subtraction using `leave`, which exits the current Yul function (unlike the `return` opcode, which ends the whole call):
+
+```
+function clampSub(a, b) -> r {
+    if lt(a, b) { leave }   // r is still 0
+    r := sub(a, b)
+}
+```
+
+Return values are variables: you assign them, and whatever they hold at the end (or at `leave`) is returned. A function may return several values: `function divmod(a, b) -> q, r` is called as `let q, r := divmod(17, 5)`.
+
+## Compiling Yul on its own
+
+Yul works without Solidity around it. On the command line, `solc --strict-assembly file.yul` compiles it, and `--optimize` turns on the optimizer. Through Standard JSON you set `"language": "Yul"`, give the source in `sources`, and use the usual `settings` such as `optimizer.enabled` and `optimizer.details.yul`. Stand-alone Yul uses the *object notation* described below so that code can be treated as data to deploy other contracts. Only the EVM dialect, aimed at the original EVM 1.0 target, has complete code generation today, so treat stand-alone mode as unfinished.
+
+## The language, piece by piece
+
+**Syntax.** Comments, literals and identifiers follow Solidity, except that Yul identifiers may contain dots. Statements are separated by whitespace only; there are no semicolons.
+
+**Literals** are decimal or hex integers (below 2^256), ASCII strings with escapes such as `\xNN` and `\uNNNN`, and `hex"..."` strings. A string of at most 32 bytes is padded on the *right* with zeros, so `"hi"` becomes `0x6869000...00`, a left-aligned word; anything longer is an error. (Strings passed to builtins that need literal arguments, like `setimmutable`, are exempt, since they never reach the bytecode.)
+
+**Variables.** `let x := expr` declares a variable, visible to the end of its block, and `let x` alone starts it at zero. On the EVM this reserves a stack slot that is freed at the block's end. The stack holds only values, not memory: a Yul variable can *hold* a pointer into memory or storage, but that is a convention you maintain. Reading a variable copies its value. Assignment is `x := expr`; you can assign several variables at once only from a function call returning that many values, and the same variable may not appear twice on the left.
+
+**`if`** has no `else`; the braces are mandatory. If you need alternatives, use `switch`.
+
+**`switch`** compares against literal cases, with an optional `default`. A switch must have at least one case, case values must be distinct, and if the cases already cover every possible value of the type, a `default` is not allowed. A switch with *only* a default is accepted but earns a warning.
+
+**`for`** also supports `break` and `continue`, which must be in the loop body itself and not in its init or update blocks (the check applies to the innermost loop). Functions cannot be defined inside a for-loop's init block.
+
+**Functions** may be declared anywhere and are visible in the whole enclosing block, even above their declaration. They cannot see variables declared outside them. They live in a separate namespace from Solidity's functions and never form part of a contract's external interface. User-defined and builtin functions are called the same way, arguments are evaluated right to left, and the EVM returns results with the leftmost on the stack bottom.
+
+## What the specification adds
+
+The reference spells all of this out as a grammar and a set of rules.
+
+**Grammar.** A block is braces around statements. A statement is a nested block, function definition, variable declaration, assignment, `if`, a bare expression, `switch`, `for`, `break`/`continue` or `leave`. An expression is a function call, an identifier or a literal. Identifiers start with a letter, `_` or `$` and may continue with digits and dots.
+
+**Restrictions beyond the grammar.** Each expression yields some number of values: a name or a literal yields one, and a call yields as many as the called function has return variables (possibly none). Only a declaration or assignment may use a multi-value expression on the right. An expression used as a statement must give zero values (for example `pop(x)` for a value you want to discard). `leave` is legal only inside a function. A loop condition must give exactly one value. Types must match exactly, with no implicit conversion; any conversion would have to be a builtin of the dialect.
+
+**Scoping.** Scopes follow blocks, with one exception: the init block of a `for` loop is visible across the rest of that loop, so `for { I } C { P } { B }` behaves like `{ I for {} C { P } { B } }`. Variables are visible only *after* their declaration, so `let a := add(a, 1)` is an error: a variable cannot be used in its own initialiser. Parameters and return variables are visible in the function body and must have distinct names. **Shadowing is not allowed**: you may not declare a name at a point where another declaration of that name is visible, even if it would be unreachable from inside the function.
+
+**Formal semantics.** The meaning is given by an evaluation function that takes the global state (for the EVM: memory, storage and chain state) and the local state (the variables, a slice of the stack) plus a syntax node, and returns the new states and the node's values, or a "mode" (regular, break, continue or leave) for statements. Loops are defined by unrolling, and a call evaluates its arguments right to left before running the body with fresh locals. You rarely need the details, but it is what makes the language well-defined for tools like optimizers and verifiers.
+
+**The EVM dialect.** The builtins are the opcodes that do not interfere with Yul's own variable and flow handling: arithmetic (`add`, `mul`, `div`...), comparison (`lt`, `eq`, `iszero`), bitwise ops and shifts, `keccak256`, memory (`mload`, `mstore`), storage and transient storage (`sload`, `sstore`, `tload`, `tstore`), environment (`caller`, `callvalue`, `balance`, `gas`), calls, logs and the halting ops. Which ones exist depends on the target EVM version. Opcodes that return nothing, such as `mstore`, cannot be used as an expression value.
+
+There is also a family of escape hatches, `verbatim_<n>i_<m>o("<bytes>", args...)`, which inserts raw bytecode with `n` input values and `m` output values, e.g. `verbatim_1i_1o(hex"600202", x)`. The optimizer treats it as an opaque block, assumes it changes any state, and the compiler does not check your claims. Violating its rules (jumping in or out, reading deeper stack, wrong stack height) is undefined behaviour, and it gets less compatibility care than the compiler's own use of opcodes. Any identifier starting with `verbatim` is reserved.
+
+## Objects: constructor and runtime together
+
+Stand-alone Yul organises a deployable contract as an **object**: a named container with one `code` block and optionally data sections and nested objects. A contract usually has an outer object whose code is the *constructor* (runs at deployment) and an inner object that is the *runtime* (what ends up on chain). Three builtins connect them: `datasize("name")` and `dataoffset("name")` give the size and position of a sub-object or data item inside the bytecode, and `datacopy` moves bytes (on the EVM it becomes a `codecopy`).
+
+Here is a complete contract that counts up from 100 each time it is called:
+
+```
+object "Ticker" {
+    code {
+        sstore(0, 100)   // starting value, written at deployment
+        datacopy(0, dataoffset("Ticker_deployed"), datasize("Ticker_deployed"))
+        return(0, datasize("Ticker_deployed"))
+    }
+    object "Ticker_deployed" {
+        code {
+            let n := add(sload(0), 1)
+            sstore(0, n)
+            mstore(0, n)
+            return(0, 32)
+        }
+    }
+}
+```
+
+The constructor copies the runtime object into memory and `return`s it, which tells the EVM what code to store. Details worth knowing: the data section strings are plain text and `hex"..."` literals are bytes; an object whose name ends in `_deployed` is treated by the optimizer as deployed code, which only changes its gas-cost heuristic; names containing a dot can be defined but not accessed through the data builtins, since the dot separates nested names; and a data item called `.metadata` is special: it cannot be read from code and is always appended at the very end of the bytecode.
+
+## The Yul optimizer
+
+The Yul optimizer works on Yul and emits Yul, which makes it easy to inspect and verify. It is switched on with `--optimize`, and for stand-alone Yul you can set the expected number of executions with `--optimize-runs`. In Solidity mode it is enabled together with the regular optimizer. The next lesson covers its steps and the sequence string in detail.
+
+## A whole token in Yul
+
+The reference closes with an ERC-20 token implemented purely in Yul. Rather than copy it, here is the structure, which is how any hand-written Yul contract is organised:
+
+- A constructor object that records the deployer in a storage slot and returns the runtime object.
+- A runtime that first rejects any call carrying Ether, then runs a **dispatcher**: a `switch` over the four-byte selector taken from `calldataload(0)`, each case calling a function, with a `default` that reverts.
+- Small helper functions grouped by job: decoding calldata arguments (with checks that the data is long enough, and that addresses fit in 160 bits), encoding return values, emitting events with `log3`, computing storage positions, reading and writing balances, and a checked addition that reverts on overflow.
+- Its own storage scheme (fixed slots for owner and supply, computed positions for balances and allowances), which is *not* Solidity's layout, so tooling that assumes Solidity's slot rules would not understand it.
+
+The point of the exercise is the contrast: everything Solidity does for you, from selector dispatch and ABI decoding to overflow checks and event encoding, has to be written out by hand. A miniature of the same pattern:
+
+```
+object "Tally" {
+    code {
+        datacopy(0, dataoffset("Tally_deployed"), datasize("Tally_deployed"))
+        return(0, datasize("Tally_deployed"))
+    }
+    object "Tally_deployed" {
+        code {
+            if callvalue() { revert(0, 0) }
+            switch shr(224, calldataload(0))
+            case 0x1003e2d2 {                       // add(uint256)
+                if lt(calldatasize(), 36) { revert(0, 0) }
+                let old := sload(0)
+                let next := add(old, calldataload(4))
+                if lt(next, old) { revert(0, 0) }   // overflow check by hand
+                sstore(0, next)
+                stop()
+            }
+            case 0x2ddbd13a {                       // total()
+                mstore(0, sload(0))
+                return(0, 32)
+            }
+            default { revert(0, 0) }
+        }
+    }
+}
+```
+
+`shr(224, ...)` keeps the top four bytes of the first calldata word, which is the selector. Nothing here validates that `calldataload(4)` is a sensible amount; that is the sort of detail you take over once you leave Solidity.
+
+<div class="callout"><strong>Watch out.</strong> Yul does not remove the dangers of assembly, it only organises them. There is no overflow check unless you write one, a bad calldata length reads zeros instead of failing, and the EVM dialect is under active development, so what the optimizer does with your code can change between compiler versions.</div>
+
+## Check your understanding
+
+<Quiz questions={quiz} />

@@ -1,0 +1,86 @@
+---
+title: "A subcurrency"
+summary: "Build a tiny token with balances, a permission check, an event and a custom error, and explain what each part is for."
+covers: ["Introduction to Smart Contracts > A Simple Smart Contract"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./03-subcurrency";
+
+The campus canteen wants to give out meal credits. The treasurer prints credits for students, students pass credits to each other, and nobody may spend credits they do not have. On paper that is a notebook with a column of names and a column of numbers. In a contract it is almost the same, except that the rules are code, so no one has to trust the person holding the pen. Let us build the simplest version of this: a *subcurrency*, a currency that lives inside one contract.
+
+## The contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract CanteenCredit {
+    address public treasurer;
+    mapping(address => uint256) public balanceOf;
+
+    event Sent(address from, address to, uint256 amount);
+    error NotTreasurer();
+    error InsufficientBalance(uint256 requested, uint256 available);
+
+    constructor() {
+        treasurer = msg.sender;
+    }
+
+    function mint(address to, uint256 amount) public {
+        if (msg.sender != treasurer) revert NotTreasurer();
+        balanceOf[to] += amount;
+    }
+
+    function send(address to, uint256 amount) public {
+        uint256 mine = balanceOf[msg.sender];
+        if (mine < amount) revert InsufficientBalance(amount, mine);
+        balanceOf[to] += amount;
+        balanceOf[msg.sender] -= amount;
+        emit Sent(msg.sender, to, amount);
+    }
+}
+```
+
+## Addresses and mappings
+
+`address` is a type for a 160-bit value that identifies an account. You cannot do arithmetic on it (adding two addresses makes no sense), but you can store it, compare it, and pass it around. `treasurer` is public, so a getter `treasurer()` exists.
+
+`mapping(address => uint256)` is a lookup table from an address to a number. You can picture a hash table in which every possible key already exists and every value starts at zero. That is why `balanceOf[someone]` works for a student who has never been seen before: the answer is simply 0. Two things you cannot do with a mapping: ask for a list of its keys, and ask for a list of its values. If you need to list members, keep a separate array or choose a different structure. (We cover mappings in depth in the Types module.)
+
+A `public` mapping also gets a getter, but it is a function that takes the key: `balanceOf(address)` returns that one entry. A front end uses it to show one student's balance.
+
+## The constructor and `msg.sender`
+
+A **constructor** runs exactly once, while the contract is being created, and can never be called again. Here it records who created the contract. It can do this because of the special global variable `msg`, which carries facts about the current call. `msg.sender` is the address that the current external call came from, so in the constructor it is the deployer.
+
+## Permission checks, reverts and custom errors
+
+`mint` creates new credits out of nothing, so only the treasurer may do it. The `if` line compares the caller against the stored address, and `revert NotTreasurer()` stops the call and **undoes every change made in the current call and its sub-calls**, unless a caller catches the failure. A **custom error** is a named kind of failure, declared with `error`, which can carry data. `InsufficientBalance(requested, available)` tells the caller both what they asked for and what they have, so a wallet or block explorer can show a clear message instead of a mysterious failure.
+
+There is a shorter way to write the same check: `require(amount <= mine, InsufficientBalance(amount, mine));`. It reads nicely but needs a recent compiler: Solidity 0.8.26 with the via-IR pipeline, or 0.8.27 on the legacy pipeline. Older compilers reject it, so this course writes `if (...) revert ...` when the pragma is `^0.8.24`.
+
+## Checked arithmetic
+
+Since Solidity 0.8, arithmetic is checked. If `balanceOf[to] += amount` would go above the biggest 256-bit number, the transaction reverts instead of wrapping around. The same protection would stop `balanceOf[msg.sender] -= amount` from going below zero, but we test for that case first so the caller gets our clearer error.
+
+## Events
+
+`event Sent(...)` declares a kind of notification, and `emit Sent(...)` fires it. Events are written into the chain's log (lesson 6). A web page can subscribe to them cheaply and react as soon as they appear, which is how a wallet shows "You received 5 credits". The contract itself cannot read its own old events; they are for the outside world.
+
+## Reading it from outside
+
+You would normally watch `Sent` events with a JavaScript library such as ethers or viem; exact calls change between library versions, so check their documentation. The idea is always the same: subscribe to the event, then call `balanceOf` for the sender and receiver to display fresh numbers.
+
+<div class="callout"><strong>Watch out.</strong> A credit is not a coin in anyone's pocket; it is a row in this contract's table. Open your friend's account in an explorer and it will show no sign of the transfer. The evidence lives under the contract's own address: its <code>Sent</code> events and what <code>balanceOf</code> returns.</div>
+
+## Try it
+
+Complete the subcurrency. The starter has the state and a constructor; add `mint(address,uint256)`, `send(address,uint256)`, the event `Sent(address,address,uint256)` and the error `InsufficientBalance(uint256,uint256)`.
+
+<CodeExercise id="coin" {...exercises["coin"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Test stub for forge: build fails if any file has COMPILE_ERROR; test passes iff every src/*.sol has "// PASS".
+case "$1" in
+  build) ! grep -rq COMPILE_ERROR src test || { echo "stub: build failed"; exit 1; } ;;
+  test) for f in src/*.sol; do grep -q '// PASS' "$f" || { echo "stub: test failed"; exit 1; }; done ;;
+  *) exit 2 ;;
+esac

@@ -1,0 +1,107 @@
+---
+title: "receive, fallback and overloading"
+summary: "The two nameless functions that catch plain ether transfers and unknown calls, and how several functions can share a name."
+covers: ["Contracts", "Contracts > Functions"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./08-receive-fallback-overloading";
+
+When a parcel arrives at the Ashesi front desk, the receptionist checks the label. A parcel for a named person goes to that person. A parcel with no label at all, or one for somebody who does not exist, still has to be handled: refused, or put in a general box. A contract has the same two situations, and Solidity gives it two nameless **special functions** to deal with them.
+
+## `receive()`: plain ether with no data
+
+Someone can send ether to a contract address with no function call at all, for instance a wallet user pressing "send" to a contract address, or another contract using `.send` or `.transfer`. The call has **empty calldata**. If the contract has a `receive` function, that is what runs.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Donations {
+    event Donated(address indexed from, uint256 amount);
+
+    receive() external payable {
+        emit Donated(msg.sender, msg.value);
+    }
+}
+```
+
+The rules:
+
+- It is written `receive() external payable { ... }`, with no `function` keyword.
+- At most one per contract. No parameters, no return values, and it must be `external` and `payable`.
+- It can be `virtual`, can `override` and can have modifiers.
+
+If there is no `receive`, but there *is* a `payable` fallback, the fallback takes plain transfers. If neither exists, the transfer is rejected and reverts, so the ether goes back to the sender.
+
+**The 2300-gas trap.** `.send` and `.transfer` pass along only 2300 gas, enough for little more than a log. A `receive` that writes to storage, creates a contract, sends ether or makes a call that does real work will run out of gas under those two methods. They are deprecated for exactly this reason; the usual replacement is a `.call{value: ...}("")`, which forwards the sender's chosen gas. A contract that wants to receive ether safely from any sender should keep `receive` small. The same limit applies to a payable `fallback` that serves as the entry point for plain transfers when there is no `receive`: through `.send` and `.transfer` it too gets only 2300 gas.
+
+## `fallback()`: everything else
+
+The fallback runs when a call does not match any function: the 4-byte selector at the start of the calldata names nothing the contract has, or there is no data and no `receive`. It comes in two shapes:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Gateway {
+    uint256 public strays;
+    bytes public lastData;
+
+    // Shape 1: no arguments. Cannot see the data except via msg.data.
+    // Shape 2 (use one, not both):
+    //   fallback(bytes calldata input) external returns (bytes memory output)
+
+    fallback() external {
+        strays += 1;
+        lastData = msg.data;
+    }
+}
+```
+
+- **No `payable`:** ether attached to the call is refused and the call reverts. Add `payable` to accept it.
+- **With `(bytes calldata input) ... returns (bytes memory output)`:** the entire calldata arrives in `input`, and whatever bytes you return come back to the caller *exactly as they are*, without ABI encoding or padding. This is what proxies use to forward any call blindly.
+- Like `receive`, it must be `external`, may be `virtual`, may `override` and may have modifiers. There can be only one.
+- A payable fallback is also an ether receiver when `receive` is missing, but then a mistyped function name, which also hits the fallback, can silently deposit ether. If you write a payable fallback, write a `receive` too, so the two cases can be told apart.
+
+If you must parse the data yourself, check the first four bytes for the selector and decode the rest with `abi.decode(input[4:], (uint256, uint256))`. That is a last resort: normal functions are clearer and safer.
+
+<div class="callout"><strong>Watch out.</strong> A missing <code>receive</code> does not make a contract impossible to send ether to. A miner or validator can name it as the recipient of a block reward, and a self-destructing contract can force its balance into it. Neither triggers any code. So <code>address(this).balance</code> can be bigger than the total you recorded in <code>receive</code>; never use the balance as a strict accounting number.</div>
+
+## Overloading: one name, several signatures
+
+A contract may declare several functions with the same name as long as their **parameter types** differ. Inherited functions take part too.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Printer {
+    function label(uint256 id) external pure returns (string memory) {
+        return id == 0 ? "unknown" : "student";
+    }
+
+    function label(string calldata name) external pure returns (string memory) {
+        return name;
+    }
+}
+```
+
+Both show up in the ABI as separate entries, `label(uint256)` and `label(string)`, with different selectors.
+
+**Resolution.** At a call site, the compiler looks at the overloads in scope and keeps those where every argument can be *implicitly converted* to the parameter type. Exactly one candidate left means it is chosen; none or several means a compile error. The **return types are not considered**.
+
+This is where literals bite. Suppose a contract has `rank(uint8 seat)` and `rank(uint256 seat)`. The call `rank(7)` is ambiguous: `7` converts implicitly to both. `rank(1000)` is fine, because 1000 does not fit `uint8`, so only the `uint256` version is a candidate. To pick on purpose, give the argument a type: `rank(uint8(7))`.
+
+**External types must differ too.** Two functions can have different Solidity types but the same type in the ABI. For example, one function taking a contract type `Club` and another taking a plain `address` both look like `address` from outside. That is rejected: the externally visible signatures would collide.
+
+## Try it
+
+`Treasury` should accept plain ether, answer unknown calls by reverting, and offer two `label` functions. Fill in what is missing.
+
+<CodeExercise id="receive-fallback-overload" {...exercises["receive-fallback-overload"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

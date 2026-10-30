@@ -1,0 +1,29 @@
+{
+  "name": "Lab 14: Concert Tickets (ERC-721)",
+  "build": {
+    "dockerfile": "../Dockerfile"
+  },
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}/labs/14-concert-tickets",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "README.md",
+        "src/ConcertTickets.sol"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "NomicFoundation.hardhat-solidity"
+      ],
+      "settings": {
+        "files.exclude": {
+          ".solution": true,
+          "out": true,
+          "cache": true,
+          "lab.json": true
+        }
+      }
+    }
+  },
+  "postAttachCommand": "forge build --silent && echo 'Run: forge test'"
+}

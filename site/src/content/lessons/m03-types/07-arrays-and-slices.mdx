@@ -1,0 +1,109 @@
+---
+title: "Arrays and array slices"
+summary: "Fixed and dynamic arrays, bytes and string, array literals, push and pop, dangling references, and calldata slices."
+covers: ["Types", "Types > Reference Types"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./07-arrays-and-slices";
+
+A lecturer's attendance sheet is a list: one line per student, in order, and you point at a line by its number. Most contracts need something like that too: a list of voters, a queue of bookings, a history of grades. Solidity gives you the **array** for it, a numbered list of items that all have the same type.
+
+## Fixed and dynamic arrays
+
+`T[3]` is a **fixed-size** array: exactly three items of type `T`, decided at compile time. `T[]` is a **dynamic** array whose length can change while the contract runs. The sizes of nested arrays are written in a slightly backwards order: `uint256[][5]` is five dynamic arrays of numbers, not a dynamic list of five-item arrays. Counting starts at `0`, so the last item of a five-item array is `[4]`. Reading past the end does not return garbage; the call fails with a panic and all its changes are undone.
+
+An array of any element type is allowed, including structs and other arrays. What changes from one array to another is where it lives.
+
+## Storage arrays versus memory arrays
+
+A state variable such as `uint256[] scores;` lives in storage and can grow and shrink. A **memory** array is a temporary workspace created inside a function, and its length is fixed at creation:
+
+```solidity
+function squares(uint256 n) public pure returns (uint256[] memory out) {
+    out = new uint256[](n);          // n zeroed slots, length can never change
+    for (uint256 i = 0; i < n; i++) {
+        out[i] = i * i;
+    }
+}
+```
+
+`new uint256[](n)` is the way to get a dynamic-typed array in memory, and every item starts at the type's zero value. A memory array has a `length` but no `push` or `pop`. If you do not know the final size up front, count first, then allocate.
+
+## Bytes and string
+
+`bytes` is a dynamic array of single bytes, and `string` is the same thing but meant for UTF-8 text. Both are packed tightly instead of using a whole 32-byte slot per item, so in memory and calldata they are cheaper than a `bytes1[]`, where every item would get its own 32-byte word. Two differences matter:
+
+- `bytes` has `length` and index access like any array, and (in storage) `push`/`pop`.
+- `string` has **neither** `length` nor `s[i]`. A UTF-8 character can take more than one byte, so "the third item" would be ambiguous. To count bytes, convert first: `bytes(s).length`.
+
+To glue pieces together, use `string.concat(a, b, c)` or `bytes.concat(a, b)`. They take any number of arguments and return a fresh memory value. Fixed `bytesN` values work as arguments to `bytes.concat`, and string literals work in both.
+
+```solidity
+function tag(string memory course, string memory section) public pure returns (string memory) {
+    return string.concat(course, "-", section);   // "CS314-B"
+}
+```
+
+## Array literals
+
+An inline list such as `[10, 20, 30]` is an **array literal**. It is always a *fixed-size memory array*, and its element type is the smallest type that every item fits in: here `uint8`, so this one is `uint8[3] memory`. A fixed array never converts to one with a different element type, so even this small literal cannot be assigned to a `uint256[3]` variable:
+
+```solidity
+uint256[3] memory ok = [uint256(10), 20, 300]; // convert the first item; the rest follow
+// uint256[3] memory bad = [10, 20, 300];       // error: the literal is uint16[3], not uint256[3]
+```
+
+You also cannot assign a literal to a dynamic memory array (`uint256[] memory x = [1, 2, 3]` is rejected), because fixed and dynamic arrays are different types. Create the dynamic array with `new` and fill it.
+
+## Members: length, push and pop
+
+Every array has `length`. Dynamic **storage** arrays and storage `bytes` also have three more members:
+
+- `push()` adds a zero-valued item at the end and returns a reference to it, so you can write `list.push().year = 1;`.
+- `push(x)` adds the item `x` at the end and returns nothing.
+- `pop()` removes the last item and clears it. Popping an empty array fails.
+
+Each `push` costs a storage write. Setting `length` by hand is not allowed since 0.6, so use `pop()` to shrink (or `delete`, in the operators lesson).
+
+## Dangling references
+
+A reference into a storage array is a pointer to an *item*, not a copy. If that item stops existing, the pointer is left aiming at a slot that the array no longer owns. This is a **dangling reference**:
+
+```solidity
+uint256[][] lecturesByDay;
+
+function oops() public {
+    lecturesByDay.push();                           // day 0 exists
+    uint256[] storage monday = lecturesByDay[0];    // pointer to that inner array
+    lecturesByDay.pop();                            // the inner array is cleared and gone
+    monday.push(9);                                 // writes through a stale pointer
+}
+```
+
+The last line still compiles. It writes into storage that belongs to nothing, and that stray data can surface again in a later `lecturesByDay.push()`. Do not hold a pointer across a `pop` or a reassignment of the thing it points into, and avoid statements whose left side points into an array that the right side changes.
+
+## Array slices
+
+A **slice** is a view of part of an array, written `x[start:end]`. It includes `start` and stops before `end`. Leave `start` out and it begins at 0; leave `end` out and it runs to the length. Slices exist only for `calldata` arrays, because there the data is already sitting in the call and the slice is just a window onto it, with nothing copied.
+
+```solidity
+function stripSelector(bytes calldata data) external pure returns (bytes calldata) {
+    return data[4:];     // skip the 4-byte function identifier
+}
+```
+
+The slice converts implicitly to `bytes memory`, which is why `stripSelector` in the exercise can return it. A slice has the array type (`bytes calldata` here) but no `push` or other members, and an `end` below `start` or beyond the length fails. Slices are mostly used with `abi.decode(data[4:], (address, uint256))` to read the arguments of a call that arrived as raw bytes.
+
+<div class="callout"><strong>Watch out.</strong> A memory array cannot grow. Writing <code>.push</code> on one is a compile error, and writing past its length fails at runtime. Only dynamic arrays in storage can <code>push</code> and <code>pop</code>. Also never loop over a storage array that anyone can make arbitrarily long: the gas will eventually exceed the block limit.</div>
+
+## Try it
+
+`Scoreboard` should keep a dynamic array of scores: `add` appends, `removeLast` drops the newest, `count` reports the length, and `stripSelector` returns the calldata from byte 4 onwards.
+
+<CodeExercise id="scoreboard-arrays" {...exercises["scoreboard-arrays"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

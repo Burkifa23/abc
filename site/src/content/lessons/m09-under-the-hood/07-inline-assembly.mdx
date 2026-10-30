@@ -1,0 +1,158 @@
+---
+title: "Inline assembly"
+summary: "How to drop a block of Yul into Solidity, how it sees your variables, the memory conventions it must respect, the memory-safe annotation, and why it is usually the wrong tool."
+covers: ["Inline Assembly", "Inline Assembly > Example", "Inline Assembly > Access to External Variables, Functions and Libraries", "Inline Assembly > Things to Avoid", "Inline Assembly > Conventions in Solidity", "Inline Assembly > Advanced Safe Use of Memory"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./07-inline-assembly";
+
+Solidity protects you in many small ways: overflow checks, bounds checks, type checks, a tidy memory model. Inline assembly is the door you open when you want those protections gone, to reach an opcode the language does not expose or to squeeze out a few units of gas. The block is written in **Yul**, the intermediate language of the next lesson, and wrapped as `assembly { ... }`. The compiler still checks the Yul for syntax, but it no longer checks what your code *means*.
+
+Two basics first. Every block is its own world: a Yul function or variable declared in one block cannot be called or read from another block. And Yul identifiers you declare may not clash with anything visible outside the block (since 0.6.0), nor contain a dot (since 0.7.0); the dot is reserved for the suffixes you will meet below.
+
+## A small example
+
+Here is a helper that packs two 128-bit halves into a single word, then a reader that extracts the first four bytes of a calldata argument:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract WordTools {
+    function packPair(uint128 hi, uint128 lo) external pure returns (uint256 w) {
+        assembly {
+            w := or(shl(128, hi), and(lo, 0xffffffffffffffffffffffffffffffff))
+        }
+    }
+
+    function selectorOf(bytes calldata data) external pure returns (bytes4 s) {
+        require(data.length >= 4);
+        assembly {
+            s := and(calldataload(data.offset), shl(224, 0xffffffff))
+        }
+    }
+}
+```
+
+Read `packPair` inside-out, the way Yul expressions work: mask `lo`, shift `hi` left by 128 bits, combine with `or`. Notice the `and` in `selectorOf`: `calldataload` always fetches a full 32-byte word, and we only want the leading four bytes, so we clear the other 28. Each of these is a few opcodes; the Solidity equivalent would carry more bounds and cleanup code. That is the honest argument for assembly: a reusable library can add a capability to the language without a compiler change.
+
+## Seeing outside variables, functions and libraries
+
+Inside a block you refer to Solidity identifiers by name, but what you get depends on where the variable lives.
+
+- **Local value types** are read and written like Yul variables.
+- **Memory references** (arrays, structs, `bytes`) evaluate to the *address* in memory, not the contents. Assigning to one changes only the pointer. Respecting Solidity's memory management is then your job.
+- **Calldata**: a dynamic calldata array or `bytes` exposes `x.offset` (byte position in calldata) and `x.length` (element count), both assignable, and nothing checks that the new region stays inside `calldatasize()`. A statically sized calldata array or struct is just its offset: using the bare name gives the position, and it can be reassigned too. The `.offset` and `.length` suffixes on a static array are a compile error.
+- **Storage**: a state variable or storage pointer has no single word to give you, because it may sit part-way through a slot. So you ask for `x.slot` and `x.offset`; using `x` alone is an error. A state variable cannot be assigned through these suffixes (use `sstore` or `tstore`), but the `.slot` of a *local* storage pointer can be reassigned, in which case its offset is always zero, and assigning `.offset` is rejected. The same suffixes work for transient variables, which need `tload` and `tstore`.
+- **Function values**: Solidity functions cannot be named from assembly at all. The one exception is a variable of *external* function type, whose `.address` and `.selector` parts can be read and assigned. Internal function pointers do not offer even that.
+- **Libraries and constants**: a library name evaluates to its address (filled in at linking time), and a literal `constant` is usable. Immutables are not accessible from assembly.
+
+A quick check of the storage rules:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Flags {
+    uint8 a;
+    uint8 b;
+
+    function whereIsB() external pure returns (uint256 s, uint256 o) {
+        assembly {
+            s := b.slot   // 0
+            o := b.offset // 1
+        }
+    }
+}
+```
+
+Both `a` and `b` share slot 0, and `b` starts one byte in.
+
+## Conventions you must honour
+
+### Typed values may be dirty
+
+A `uint64` is 64 bits wide, but Solidity keeps it in a 256-bit stack word. To save gas the compiler does not scrub the top 192 bits after each operation; it cleans them just before a value is stored, hashed, compared or sent. If you read such a variable in assembly, those bits can hold garbage, so never assume they are zero. Mask unsigned values with `and`, and sign-extend signed ones with `signextend(bytes_minus_one, x)`, whenever the high bits matter.
+
+### The memory map
+
+Solidity expects a fixed arrangement in memory:
+
+- Offsets `0x00` to `0x3f` are **scratch space** for short-lived work such as hashing.
+- The **free memory pointer** lives at `0x40`; to allocate you read it and write back the larger value. There is no freeing. Memory you receive may have been used before, so it is not guaranteed to be zero.
+- The word at `0x60` is the **zero slot**, kept zero forever. Empty dynamic memory arrays point at it.
+- Allocation starts at `0x80`, the initial value of the free memory pointer.
+- Every memory array element takes a 32-byte multiple (even `bytes1[]`, unlike `bytes` and `string`), and a dynamic array stores its length in its first word. Static arrays have no length word; do not rely on that staying so.
+
+A bump allocator in Yul reserves a region by moving the pointer past it:
+
+```
+function bump(size) -> start {
+    start := mload(0x40)
+    let end := add(start, size)
+    mstore(0x40, end)
+}
+```
+
+### The `memory-safe` annotation
+
+With plain Solidity the compiler knows exactly what memory looks like. The IR pipeline uses that: it can move stack variables into memory to avoid "stack too deep", and it can optimise memory use further. Once you write an assembly block that touches memory, or assigns to a Solidity memory variable, the compiler cannot tell whether you broke its assumptions, so it switches those tricks off for the whole contract.
+
+If your block follows the rules, say so: `assembly ("memory-safe") { ... }`. A block is memory-safe if it only touches:
+
+1. memory you allocated yourself properly,
+2. memory Solidity allocated, within the bounds of the object you reference,
+3. the scratch space at `0x00` to `0x3f`,
+4. temporary memory *after* the current free pointer, without moving the pointer.
+
+The rules hold even if the block ends by reverting. A block that neither touches memory nor assigns memory variables is treated as safe automatically. Suppose you want to bubble up only the four-byte error selector of a failed call. This version is **not** safe, because it writes at `0x80`, exactly where Solidity may already keep live objects:
+
+```solidity
+assembly {
+    returndatacopy(0x80, 0, 4)
+    revert(0x80, 4)
+}
+```
+
+and this one is, since it only uses memory past the free pointer (so annotate it):
+
+```solidity
+assembly ("memory-safe") {
+    let p := mload(0x40)
+    returndatacopy(p, 0, 4)
+    revert(p, 4)
+}
+```
+
+A zero-length operation at any offset is fine as well, for instance `revert(0, 0)`. Assigning a bogus pointer to a memory variable also breaks safety, even if no opcode touches memory.
+
+Older libraries marked blocks with a special comment, `/// @solidity memory-safe-assembly`. That form is deprecated and will be removed; use the annotation.
+
+<div class="callout"><strong>Watch out.</strong> If you mark a block memory-safe and it is not, nothing warns you. The result is undefined behaviour that tests rarely catch, because it depends on what the optimizer decides to do with the surrounding code.</div>
+
+### Using more scratch space
+
+You may go beyond the 64 scratch bytes, up to but not including `0x80`, and still say memory-safe, in either of two cases. Either the block finishes by restoring the free pointer to a sane value and the word at `0x60` back to zero, or it never returns to Solidity (it unconditionally ends in `revert` or similar). While you have overwritten `0x60`, reading a dynamic memory array's length can give wrong answers, so do not touch high-level objects until you have put the zero back.
+
+## Things to avoid
+
+Assembly reads like a high-level language, with `if`, `switch` and `for`, but underneath it is thin. The `if`, `switch` and `for` forms are mechanically rewritten into jumps, and the assembler's only real help is ordering the nested opcode calls, tracking stack depth so that variable access works, and popping block-local variables when the block closes. In practice:
+
+- no overflow checks: `add`, `mul` and `sub` wrap silently, and `div` by zero returns zero rather than reverting;
+- no type or bounds checks, so a wrong offset corrupts storage or memory without any error;
+- dirty high bits, unchecked calldata offsets and the memory rules above are all on you;
+- the code is harder to review and audit, and the safety nets you drop are the ones that catch mistakes.
+
+Use it for something Solidity truly cannot do, or where you measured a worthwhile saving. Keep the block short and test it harder than normal code.
+
+## Try it
+
+`addWords` should return the sum of its inputs using inline assembly and the `add` opcode, writing straight into the return variable `r`. Note how this differs from `a + b`: the Solidity operator reverts on overflow, `add` wraps around.
+
+<CodeExercise id="add-words" {...exercises["add-words"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

@@ -1,0 +1,30 @@
+---
+const steps = [
+  { t: "Import path", a: 'import "forge-std/', b: 'Test.sol";' },
+  { t: "Remapping", a: "forge-std/=", b: "/opt/forge-std/src/" },
+  { t: "Source unit name", a: "/opt/forge-std/", b: "src/Test.sol" },
+  { t: "Loader lookup", a: "base path, then", b: "each include path" },
+  { t: "File on disk", a: "contents join", b: "the VFS" },
+];
+---
+<svg viewBox="0 0 640 170" role="img" aria-labelledby="vfs-t" font-family="var(--mono)" font-size="9.5">
+  <title id="vfs-t">How an import becomes a file: the import path is rewritten by remappings into a source unit name, the host filesystem loader tries the base path and then each include path, and the file found is stored in the virtual filesystem under that name</title>
+  <defs>
+    <marker id="vfs-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="currentColor" />
+    </marker>
+  </defs>
+  {steps.map((s, i) => (
+    <g transform={`translate(${i * 128 + 4} 24)`}>
+      <rect width="116" height="82" rx="8" fill="none" stroke="var(--border)" stroke-width="1.5" />
+      <text x="58" y="22" text-anchor="middle" fill="currentColor" font-weight="600">{s.t}</text>
+      <text x="58" y="48" text-anchor="middle" fill="var(--muted-fg)">{s.a}</text>
+      <text x="58" y="64" text-anchor="middle" fill="var(--muted-fg)">{s.b}</text>
+    </g>
+  ))}
+  {[0, 1, 2, 3].map((i) => (
+    <path d={`M${i * 128 + 120} 65 H${i * 128 + 130}`} fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#vfs-arrow)" />
+  ))}
+  <text x="4" y="136" fill="var(--muted-fg)">Relative imports (./ and ../) are first turned into a source unit name</text>
+  <text x="4" y="152" fill="var(--muted-fg)">using the importing file's own name, then remapped like any other.</text>
+</svg>

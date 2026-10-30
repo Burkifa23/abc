@@ -1,0 +1,121 @@
+---
+title: "Modular contracts"
+summary: "Moving shared bookkeeping into a library so several contracts can reuse it: storage structs, internal library functions, and using-for."
+covers: ["Solidity by Example", "Solidity by Example > Modular Contracts"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./06-modular-contracts";
+
+The campus canteen sells prepaid meal credit. The bookshop, a few doors down, also wants prepaid credit. Both need the same bookkeeping: a balance for each student, a running total, and the rule that nobody can spend more than they hold. Copy-pasting that logic into two contracts is the beginning of a bug that gets fixed in one place and forgotten in the other. Programmers handle this by **modularising**: put the shared logic in one place and let several contracts use it.
+
+In Solidity the main tool for that is the **library**, which you met earlier in this course. This lesson follows the documentation's "modular contracts" example in spirit: a data structure plus a set of functions that operate on it, kept apart from the contracts that own the data.
+
+## A library that works on a struct
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+library CreditBook {
+    struct Ledger {
+        mapping(address => uint256) funds;
+        uint256 total;
+    }
+
+    error Insufficient(uint256 available, uint256 needed);
+
+    function credit(Ledger storage book, address who, uint256 amount) internal {
+        book.funds[who] += amount;
+        book.total += amount;
+    }
+
+    function debit(Ledger storage book, address who, uint256 amount) internal {
+        uint256 have = book.funds[who];
+        if (have < amount) revert Insufficient(have, amount);
+        book.funds[who] = have - amount;
+        book.total -= amount;
+    }
+
+    function balanceOf(Ledger storage book, address who) internal view returns (uint256) {
+        return book.funds[who];
+    }
+}
+```
+
+Three ideas are packed in here.
+
+**The struct holds the data, the library holds the behaviour.** `Ledger` contains a `mapping`. A mapping can only live in storage (it cannot be copied into memory or returned from a function), so a struct that contains one is also storage-only. That is why every function takes `Ledger storage book`: a **storage pointer**, a reference to the real data in some contract's storage. The library never stores anything itself. It operates on whichever ledger it is handed.
+
+**Errors can live in the library.** `Insufficient` is declared next to the code that raises it, so any contract using the library gets a reverted-call reason with the figures already attached.
+
+**`internal` functions are copied in.** An `internal` library function is compiled straight into the contract that uses it, as if you had pasted it there. No separate deployment is needed, there is no extra call at run time, and the code runs in the contract's own context. That is the right choice for small helpers like these.
+
+## Using the library from a contract
+
+```solidity
+contract Canteen {
+    using CreditBook for CreditBook.Ledger;
+
+    CreditBook.Ledger private book;
+
+    event Spent(address indexed student, uint256 amount);
+
+    function topUp() external payable {
+        book.credit(msg.sender, msg.value);
+    }
+
+    function spend(uint256 amount) external {
+        book.debit(msg.sender, amount);
+        emit Spent(msg.sender, amount);
+    }
+
+    function balanceOf(address student) external view returns (uint256) {
+        return book.balanceOf(student);
+    }
+
+    function totalCredit() external view returns (uint256) {
+        return book.total;
+    }
+}
+```
+
+The line `using CreditBook for CreditBook.Ledger;` attaches the library's functions to the `Ledger` type, so `book.debit(who, amount)` means `CreditBook.debit(book, who, amount)`. The first argument is passed automatically; that is why the library functions all take the storage struct first. (This directive, `using for`, has its own lesson earlier in the module on contracts.)
+
+`Canteen` owns the ledger as a private state variable. Nobody outside can touch it directly. The only door is through the contract's own functions, which call the library. The bookshop could now write a second contract with a `CreditBook.Ledger` of its own and get identical, already-tested bookkeeping. They would share **code**, not **data**: each contract's ledger lives in that contract's own storage.
+
+Notice `topUp` credits `msg.value`, so the ledger tracks ether that really arrived. One simplification: this canteen never pays ether back out, so the sum of balances can only go down by spending, and `totalCredit()` is bookkeeping rather than a transferable amount. A real version would add a way for the canteen to withdraw its spent income.
+
+## Library functions that are not internal
+
+If a library function is marked `public` or `external`, the library is compiled and deployed as its **own contract**, and your contract calls it with `delegatecall`. A `delegatecall` runs the library's code against the calling contract's storage, which is exactly how a storage pointer argument can work across two deployed contracts. The consequences:
+
+- The library has an address. Your contract's bytecode contains a placeholder for it, and a **linking** step fills it in at deployment. Tools such as Foundry and Hardhat do this for you, but it is one more thing that can go wrong.
+- Many contracts can share a single deployed copy, which saves bytecode size. That helps when you are close to the 24 KiB limit.
+- Each use costs an extra call.
+
+For a library of a few small functions, `internal` is simpler and often cheaper. Choose `public` only when contract size is a real constraint.
+
+A library can never hold state of its own, cannot inherit or be inherited, and rejects plain ether transfers. That strictness is deliberate: since a library only ever acts on borrowed storage, there is nothing about it to get wrong except its own logic.
+
+## Why modular design pays off
+
+- **One place to fix.** A bug in `debit` is repaired once.
+- **Separate testing.** You can test the ledger rules on their own before wiring in any ether handling.
+- **Smaller, readable contracts.** `Canteen` reads like a description of the canteen, not like arithmetic.
+- **A boundary to review.** Auditors can check the library once and reason about every contract that uses it.
+
+The trade-off is indirection: a reader has to jump between files, and a library function that quietly changes storage can surprise someone who only read the calling contract. Name the functions clearly, and keep libraries small and boring.
+
+<div class="callout"><strong>Watch out.</strong> A library that writes through a <code>storage</code> pointer changes the caller's real state. If you pass the wrong ledger, or forget that a <code>memory</code> copy would not be saved, the effects are very different from what the code seems to say. Keep the parameter type exactly <code>Ledger storage</code>, and do not use <code>memory</code> for data you intend to modify.</div>
+
+## Try it
+
+Fill in `debit` of the `CreditBook` library. It must revert with `Insufficient(have, amount)` when the student does not hold enough, and otherwise reduce both the student's balance and the running total.
+
+<CodeExercise id="library-balances" {...exercises["library-balances"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

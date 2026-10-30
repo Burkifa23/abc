@@ -1,0 +1,140 @@
+---
+title: "Control structures"
+summary: "Branch and repeat with if, while, do-while and for, and leave early with break, continue and return, in a language where every condition must be a real bool."
+covers: ["Expressions and Control Structures", "Expressions and Control Structures > Control Structures"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./01-control-structures";
+
+A lecturer walks along the rows of an exam hall with a seating list. If a desk is empty she moves on. If she finds a student with no ID card she stops everything and calls the invigilator. Otherwise she ticks the name and continues to the next row. Those three habits (decide, repeat, bail out early) are the whole of **control flow**: the order in which a program's statements run. If you have written C, Java or JavaScript you already know almost all of Solidity's version. This lesson lists what is the same, and spends its time on the few places where Solidity is stricter.
+
+## The keywords you already know
+
+Solidity has `if`, `else`, `while`, `do`, `for`, `break`, `continue` and `return`, and they behave the way they do in C or JavaScript. A contract can also handle failures with `try`/`catch`, but only around calls to other contracts and around contract creation; we cover that in lesson 07. Stopping with an error (the `revert` statement) is lesson 06.
+
+Two things are *absent*. There is no `switch` statement (the word is even reserved, so you cannot use it as a variable name), and there is no `goto`. A chain of `else if` takes the place of `switch`. Yul, the low-level language you can embed inside a contract, has its own `switch`, but that is a different language with its own rules.
+
+## Conditions must be bool
+
+Here is the first strict rule. In JavaScript, `if (count)` quietly treats `0` as false and everything else as true. Solidity does not convert numbers, addresses or strings into `bool`, so the same line is a compile error:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+// This file does not compile on purpose: `n` is not a bool.
+contract Broken {
+    function isOpen(uint256 n) external pure returns (uint256) {
+        if (n) {
+            return 1;
+        }
+        return 0;
+    }
+}
+```
+
+The fix is to say what you mean: `if (n != 0)`. Writing the comparison out costs a few characters, and it removes a whole family of bugs where a number was accidentally used as a flag.
+
+The syntax rule is smaller: the parentheses around a condition are required, but the curly braces around a one-statement body may be left out. Many teams still always write the braces, because a second line added later under an unbraced `if` does not become part of it.
+
+## Branching with if and else
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Grading {
+    function band(uint256 mark) external pure returns (string memory) {
+        if (mark > 100) {
+            return "invalid";
+        } else if (mark >= 70) {
+            return "distinction";
+        } else if (mark >= 50) {
+            return "pass";
+        }
+        return "fail";
+    }
+}
+```
+
+The conditions are tested from the top and the first true one wins, so the order matters: moving the `mark > 100` test to the bottom would hand out distinctions for a mark of 140. Since `return` ends the function at once, the last `return` needs no `else`.
+
+## Repeating with while, do-while and for
+
+A **loop** runs a block of code again and again while some condition stays true. Solidity has three.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Loops {
+    // for: set-up; test; step
+    function sumTo(uint256 n) external pure returns (uint256 total) {
+        for (uint256 i = 1; i <= n; i++) {
+            total += i;
+        }
+    }
+
+    // while: test first, so the body may run zero times
+    function halvings(uint256 n) external pure returns (uint256 steps) {
+        while (n > 1) {
+            n /= 2;
+            steps++;
+        }
+    }
+
+    // do-while: body first, so it always runs at least once
+    function digits(uint256 n) external pure returns (uint256 count) {
+        do {
+            count++;
+            n /= 10;
+        } while (n > 0);
+    }
+}
+```
+
+The `for` header has three slots separated by semicolons: a set-up statement that runs once, a test checked before every pass, and a step that runs after every pass. Any of the three may be empty, and `for (;;)` loops until something inside stops it. A variable declared in the set-up slot, such as `i` above, exists only until the end of the loop (lesson 04 returns to scoping).
+
+`do`/`while` is the one to reach for when the first pass must happen whatever the input. In `digits`, the number 0 still has one digit, which a plain `while (n > 0)` would count as zero.
+
+## Leaving early: break, continue and return
+
+`break` ends the nearest enclosing loop immediately. `continue` abandons only the current pass and jumps to the next one (in a `for` loop that includes running the step). `return` leaves the whole function.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract SeatingPlan {
+    // 0 = free, 1 = taken, 2 = blocked off by the invigilator
+    function freeBeforeBlock(uint8[] calldata seats) external pure returns (uint256 free) {
+        for (uint256 i = 0; i < seats.length; i++) {
+            if (seats[i] == 2) break;     // stop scanning at the barrier
+            if (seats[i] == 1) continue;  // taken, look at the next seat
+            free++;
+        }
+    }
+}
+```
+
+On `[0, 1, 0, 2, 0]` the function counts seats 0 and 2 and stops at index 3, so the answer is 2. The free seat at index 4 is never looked at.
+
+About `return`: a function that declares `returns (uint256 free)` has a named result variable that starts at zero. You may assign to it and let the function run off the end, as above, or finish with an explicit `return value;`. A function with no return values may use a bare `return;` to leave early.
+
+## Loops cost gas
+
+On a blockchain, every pass through a loop spends gas, and a block can only hold so much. A loop over an array that users are allowed to grow can eventually need more gas than any transaction may carry, and from then on the function can never succeed. Treat "loop until the list ends" with care when the list is public input. Prefer a bound you control, or design the contract so each caller does a small piece of work.
+
+<div class="callout"><strong>Watch out.</strong> <code>continue</code> in a <code>while</code> loop skips the rest of the body, including any line that changes the loop variable. If your step lives at the bottom of the body, a <code>continue</code> above it can spin forever until the transaction runs out of gas. Put the step in the <code>for</code> header, or increment before you <code>continue</code>.</div>
+
+## Try it
+
+An invigilator's sheet lists marks, entered in order. Some entries are not real marks (anything above 100 is a typing error to be skipped) and a `0` entry marks the end of the list. Write `tally` so it adds up the valid marks, skips the bad ones with `continue`, and stops at the first zero with `break`.
+
+<CodeExercise id="loop-tally" {...exercises["loop-tally"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

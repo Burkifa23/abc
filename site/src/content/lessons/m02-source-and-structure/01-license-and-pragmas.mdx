@@ -1,0 +1,71 @@
+---
+title: "SPDX licenses and pragmas"
+summary: "Open every Solidity file correctly: a licence comment, a version pragma, and the other pragmas you may meet."
+covers: ["Layout of a Solidity Source File", "Layout of a Solidity Source File > SPDX License Identifier", "Layout of a Solidity Source File > Pragmas"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./01-license-and-pragmas";
+
+Imagine the Ashesi Blockchain Community publishes a voting contract on GitHub, and a student at another university copies it into her own project. Can she? May she sell it? Which compiler did the authors test it with? A good Solidity file answers the first two questions in its first line and the third in its second line. This lesson is about those two lines and what else a source file may contain.
+
+## What lives in a source file
+
+A `.sol` file is called a *source file*. It may hold any number of contract definitions, plus `import` and `pragma` directives, `using for` directives, and top-level `struct`, `enum`, `function`, `error` and `constant` definitions. Contracts are the usual guests, but the other things are allowed to stand on their own at file level. The next lessons cover each of them.
+
+## The licence line
+
+Code on a blockchain is public, and publishing code always raises a question about who may reuse it. Solidity asks you to answer with a machine-readable comment. Here is the shape:
+
+```solidity
+// SPDX-License-Identifier: MIT
+```
+
+SPDX is a standard catalogue of short licence names. The compiler does not check your choice against that catalogue. It copies the string into the metadata that travels with the compiled bytecode, so tools and block explorers can show it later. A few details:
+
+- If your code is private, write `UNLICENSED`. It means "no one may use this". Be careful, because `UNLICENSE` (without the D) is a real, very permissive licence that hands everything to everyone. Solidity follows the convention that npm uses.
+- A licence line does not remove your other obligations. If you reuse someone else's MIT code, you still carry their copyright notice.
+- The compiler recognises the comment anywhere at file level, but putting it first is the convention, and readers expect it there.
+- If you leave it out, you get a warning rather than an error. The file still compiles, which is exactly why people forget it.
+
+## Pragmas
+
+A *pragma* is a directive that tells the compiler how to treat the file it sits in. The scope is the key point: a pragma applies **only to its own file**. If `Voting.sol` imports `Util.sol`, the pragmas of `Util.sol` do not reach `Voting.sol`, and the reverse is also true. Put what you need in every file.
+
+### The version pragma
+
+```solidity
+pragma solidity ^0.8.24;
+```
+
+New compiler releases sometimes change the meaning of code. The Solidity team keeps such changes few and tries to make them force a syntax change too, but it cannot always do so. Releases that may break your code are the ones numbered `0.x.0` or `x.0.0`, so reading their changelog is good habit. The version pragma is your safety fence. With `^0.8.24` the file refuses to build with anything older than 0.8.24 and anything from 0.9.0 upward, but it accepts bugfix releases in between, which is what you want.
+
+Beyond the caret, the pragma accepts ranges with the same operators that npm uses, for example `>=0.8.20 <0.9.0`. The course uses `^0.8.24` in its exercises because they compile with solc 0.8.38.
+
+One misunderstanding is worth killing early. **The pragma never changes which compiler runs.** It does not switch features on or off either. It only asks the compiler "is your version inside this range?", and the compiler stops with an error if it is not. Choosing the compiler is a job for your tooling (Foundry's `solc` setting, for example).
+
+### The ABI coder pragma
+
+Solidity functions that are public or external talk to the outside world using the ABI, a byte format for arguments and results. There are two implementations of its encoder and decoder, picked with `pragma abicoder v1;` or `pragma abicoder v2;`.
+
+Version 2 can handle nested arrays and structs, performs more validation, and costs a little more gas for the extra safety. It stopped being experimental in 0.6.0 and is the default from 0.8.0, so you rarely write it. Version 1 is deprecated and set for removal. Two things to remember: the pragma applies to all code *written in that file*, even if that code later ends up inside a contract in another file through inheritance; and a v1 contract can talk to a v2 contract as long as it never needs a type that only v2 can decode. The compiler detects the problem and gives an error, and turning on v2 in that file fixes it.
+
+### The experimental pragma
+
+`pragma experimental` switches on features that are not yet standard. Today's list is short and mostly historical:
+
+- `ABIEncoderV2` was the old way to get coder v2. Since 0.7.4 you write `pragma abicoder v2;` instead.
+- `SMTChecker` asked the compiler to run an SMT solver (a program that proves or disproves logical statements) over your `require` and `assert` calls. This pragma is deprecated and will go away. You now turn the checker on by picking an engine when you invoke the compiler.
+
+<div class="callout"><strong>Watch out.</strong> A missing pragma or licence line is only a warning, so the file builds and nothing looks wrong. Production teams usually treat warnings as errors. Compile with all warnings visible, and fix them before you deploy, because a deployed contract cannot be edited.</div>
+
+## Try it
+
+The file below has no licence line and no version pragma. It still compiles, but the compiler complains twice. Add both lines at the top so the compile is silent, and keep `set` as it is.
+
+<CodeExercise id="license-and-pragma" {...exercises["license-and-pragma"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

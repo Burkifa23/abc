@@ -1,0 +1,73 @@
+---
+title: "Keys, addresses and signatures"
+summary: "Explain how a private key, public key and address work together so that only the owner can authorise a transaction."
+covers: []
+---
+
+import Figure from "../../../components/Figure.astro";
+import SignatureFlow from "../../../components/diagrams/SignatureFlow.astro";
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./04-keys-and-signatures";
+
+On a blockchain nobody checks your student ID. If a message says "Ama pays Kofi 5", how does the network know Ama really sent it, and not Kofi typing it himself? There is no login page and no office to phone. The proof has to be inside the message.
+
+The tool for that is a **digital signature**.
+
+## Key pairs
+
+A blockchain account starts with a **key pair**: two numbers that are mathematically linked.
+
+- The **private key** is a huge random number that only you know. It is your power to spend.
+- The **public key** is calculated from the private key. You can share it with anyone.
+
+The link works in one direction only: it is easy to compute the public key from the private key, and impractical to go backwards. (This uses a branch of maths called elliptic-curve cryptography; you do not need the details to use it.)
+
+An **address** is a shorter public identifier derived from the public key. On Ethereum, it is the last 20 bytes of the keccak-256 hash of the public key, written as 40 hex characters after `0x`. Think of it as your account number: safe to share, printed on the "pay me here" page.
+
+| Item | Secret? | Used for |
+|---|---|---|
+| Private key | Yes, never share | Signing |
+| Public key | No | Verifying signatures |
+| Address | No | Receiving funds, identifying you |
+
+## Signing and verifying
+
+A **signature** is a piece of data produced from two inputs: a message and your private key. Anyone holding the message, the signature and your public key (or address) can run a check called **verification**, and learn one of two things: "valid" or "not valid".
+
+<Figure caption="Ama signs with her private key. Kofi, or anyone, verifies with her public key or address. The private key never leaves Ama.">
+  <SignatureFlow />
+</Figure>
+
+In pseudo-code:
+
+```js
+const message = "Ama pays Kofi 5";
+const signature = sign(message, amaPrivateKey);
+
+verify(message, signature, amaAddress);             // true
+verify("Ama pays Kofi 500", signature, amaAddress); // false
+verify(message, signature, kofiAddress);            // false
+```
+
+A valid signature tells you two things at once:
+
+1. **Authenticity.** It was produced by the holder of the matching private key.
+2. **Integrity.** The message was not changed after signing. Alter one letter and verification fails (just like the avalanche effect in lesson 2).
+
+A signature is also tied to its message. Ama cannot reuse the signature from "pay Kofi 5" to authorise "pay Kofi 500".
+
+## Where this fits on a blockchain
+
+Every transaction is signed by the sender's private key before it is sent to the network. Every node verifies the signature against the sender's address before accepting it. So the ledger can hold "Ama pays Kofi 5" and nobody has to take anyone's word that Ama really authorised it.
+
+Wallets (apps like MetaMask) exist mainly to keep your private key safe and to sign for you. The key never needs to be sent anywhere: only the signature is.
+
+<div class="callout"><strong>Watch out.</strong> Whoever holds the private key <em>is</em> the account. There is no password reset, no helpdesk and no way to reverse a stolen transfer. Never paste a private key or seed phrase (the list of 12 or 24 words that can regenerate all your keys, so it is as powerful as the key itself) into a website, a chat or a form, and never accept one from someone who asks "to help you". Signing is safe only when you understand and trust what you are signing: a blindly signed message or an approval request can authorise someone to move your funds. Read what the wallet shows before you confirm.</div>
+
+## One more detail: replays
+
+If Ama's signed "pay Kofi 5" is valid forever, anyone could submit it again and again. Real transactions therefore include a counter (on Ethereum, also called a **nonce**: a number that increases with every transaction from that account) so each signed transaction can only be used once. You will see it again in lesson 6.
+
+## Check your understanding
+
+<Quiz questions={quiz} />

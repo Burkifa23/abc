@@ -1,0 +1,154 @@
+---
+title: "Function modifiers"
+summary: "Wrap a function in reusable checks with modifiers: where the underscore goes, how arguments and ordering work, and what return does inside one."
+covers: ["Contracts", "Contracts > Function Modifiers"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./03-function-modifiers";
+
+Every door in the Ashesi admin block has a guard who checks your ID before you go in. The rooms behind the doors are all different, but the check is the same. You would not want each office to hire its own guard and write its own rules, because one office would eventually forget. A **modifier** is the guard: a named piece of code you attach to a function so that the same check (or set-up and clean-up) runs around it, written once.
+
+## The shape of a modifier
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Notices {
+    address public registrar;
+    string public latest;
+
+    error NotRegistrar();
+
+    constructor() {
+        registrar = msg.sender;
+    }
+
+    modifier onlyRegistrar() {
+        if (msg.sender != registrar) revert NotRegistrar();
+        _;
+    }
+
+    function post(string calldata text) external onlyRegistrar {
+        latest = text;
+    }
+}
+```
+
+The single underscore `_;` is the **placeholder statement**. When the function runs, the compiler pastes the function's body in at that spot. Code before `_;` runs first, then the body, then any code after it. In `onlyRegistrar` the check comes first, so the body never runs for an outsider. Do not confuse `_;` with underscores in names such as `name_`; those are only style.
+
+If a modifier has no parameters you may leave the brackets off in the definition (`modifier onlyRegistrar { ... }`), but the version with `()` reads more clearly.
+
+## Code after the placeholder
+
+Because the body is inserted rather than called, a modifier can do work on the way out too. The classic case is a lock that is set before the body and released after it:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Gate {
+    bool private busy;
+    uint256 public entries;
+
+    modifier oneAtATime() {
+        require(!busy, "Busy");
+        busy = true;
+        _;
+        busy = false;
+    }
+
+    function enter() external oneAtATime {
+        entries += 1;
+    }
+}
+```
+
+## Arguments
+
+A modifier can take arguments, and the expression you give at the point of use can use anything the function can see, including its own parameters:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Cafeteria {
+    uint256 public served;
+
+    modifier minimumAge(uint8 age, uint8 required) {
+        if (age >= required) {
+            _;
+        }
+    }
+
+    function buyDrink(uint8 age) external minimumAge(age, 18) returns (uint256 ticket) {
+        served += 1;
+        ticket = served;
+    }
+}
+```
+
+There is a one-way street here. A modifier cannot reach the function's parameters or return variables by itself; the function has to pass them explicitly, as `age` is passed above. In the other direction, names declared inside the modifier are invisible to the function body.
+
+Notice the modifier above can choose *not* to run `_;`. In that case the function body is skipped and the function returns the default value of its return type (zero for `uint256`), exactly as if its body were empty and no revert had happened. If skipping would be a mistake, revert instead.
+
+## Several modifiers, and several underscores
+
+List modifiers one after another, separated by spaces, and they apply in the order written. Each wraps everything to its right:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Order {
+    string[] public trail;
+
+    modifier first() {
+        trail.push("first in");
+        _;
+        trail.push("first out");
+    }
+
+    modifier second() {
+        trail.push("second in");
+        _;
+        trail.push("second out");
+    }
+
+    function run() external first second {
+        trail.push("body");
+    }
+}
+```
+
+After `run()`, `trail` reads: first in, second in, body, second out, first out. Like nested boxes: the first modifier is the outer box.
+
+`_;` may even appear more than once in one modifier. Each occurrence is replaced with a copy of the body, so the body can run twice. If the function returns a value, you get the value from the last occurrence. This is rarely a good idea; mention it mainly so that it does not surprise you in someone else's code.
+
+## return inside modifiers and bodies
+
+An explicit `return` leaves only the piece of code it is written in. In a function body, `return` ends the body and control moves on to the code after `_;` in the surrounding modifier, so cleanup such as `busy = false;` still runs. A bare `return;` inside a modifier leaves that modifier but does not change what the function returns. This is a change from very old compiler versions, so be careful when reading old code.
+
+## Inheritance and `virtual`
+
+Modifiers are inherited like functions. A derived contract may replace one only if the original is marked `virtual`:
+
+```solidity
+modifier audited() virtual { _; }
+```
+
+Overriding comes with inheritance in lesson 11. You may refer to a specific base version with `Base.audited`, which skips the virtual lookup. A modifier can only be used in the contract that defines it, a contract that inherits it, or (for library modifiers) the same library.
+
+<div class="callout"><strong>Watch out.</strong> A modifier is code that is copied into every function that uses it. A long modifier used on twenty functions makes the deployed contract bigger, and a check hidden inside a modifier is easy to overlook in review. Keep modifiers short. If the logic is long, put it in an internal function and call that from the modifier.</div>
+
+## Try it
+
+`Notice` already stores an `owner`. Add a modifier called `onlyOwner` that rejects everyone else, and apply it to `post`.
+
+<CodeExercise id="only-owner" {...exercises["only-owner"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

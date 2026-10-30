@@ -1,0 +1,92 @@
+---
+title: "Restricting access"
+summary: "What access control can and cannot hide, and how reusable modifiers decide who may call a function and when."
+covers: ["Common Patterns", "Common Patterns > Restricting Access"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./07-restricting-access";
+
+The registrar's office wants to publish exam results on-chain. Two rules are obvious. Only the registrar may publish, and nothing may be published before the embargo date, otherwise a student could learn their grade (and everyone else's) days early. Both rules are about *who* may call a function and *when*, and Solidity has a tool made for exactly this: the function modifier. This lesson shows how to build access rules from small, reusable modifiers.
+
+## First, what restriction cannot do
+
+Restricting access in a contract means controlling who can **change** state or **call** functions. It does not, and cannot, control who can **read**. Everything you store in a contract, and every transaction that calls it, is visible to anyone who looks, as the first lesson of this module showed. You can stop another *contract* from reading a variable by name (that is what not declaring it `public` does), but a person can always read the raw storage. Encryption can make data unreadable to others, but a contract that has to use the data itself has no way to keep it from everyone else.
+
+So an access rule protects *actions*. If a result must stay secret until a date, do not store the plain result and hope the "not yet" check hides it. Keep a hash, or keep the data off-chain until the date arrives.
+
+## Modifiers as reusable gates
+
+A **modifier** is a piece of code wrapped around a function. The special statement `_;` marks where the function body runs. Code before `_;` runs first and can revert, so a modifier is a clean place to put a precondition that many functions share.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract ExamResults {
+    address public registrar;
+    uint256 public immutable embargoEnds;
+    bool public published;
+    bytes32 public resultsHash;
+
+    error NotAuthorised(address caller);
+    error TooEarly(uint256 currentTime, uint256 allowedFrom);
+
+    constructor(uint256 embargoSeconds) {
+        registrar = msg.sender;
+        embargoEnds = block.timestamp + embargoSeconds;
+    }
+
+    modifier onlyBy(address account) {
+        if (msg.sender != account) revert NotAuthorised(msg.sender);
+        _;
+    }
+
+    modifier onlyAfter(uint256 time) {
+        if (block.timestamp < time) revert TooEarly(block.timestamp, time);
+        _;
+    }
+
+    function publish(bytes32 hashOfResults)
+        external
+        onlyBy(registrar)
+        onlyAfter(embargoEnds)
+    {
+        published = true;
+        resultsHash = hashOfResults;
+    }
+
+    function handOver(address newRegistrar) external onlyBy(registrar) {
+        registrar = newRegistrar;
+    }
+}
+```
+
+Three things deserve attention.
+
+**Modifiers take arguments.** `onlyBy(registrar)` passes the *current value* of the `registrar` variable, so the rule follows the variable when it changes. One modifier serves every function and any account you choose to pass in, which is more flexible than hard-coding `msg.sender == owner` everywhere.
+
+**Modifiers combine, and they run left to right.** `publish` lists `onlyBy` first and `onlyAfter` second. Each runs its pre-`_;` code in order, and the function body runs only if all of them reach their `_;`. If any check reverts, the transaction undoes everything. Order matters when a modifier changes state or when you want a cheap check to fail before an expensive one. You will see this in the next lesson.
+
+**Revert with information.** A custom error such as `NotAuthorised(msg.sender)` costs less gas than a message string and gives off-chain tools structured data to show in a wallet or test report.
+
+## The usual traps
+
+Giving one account all power is simple and also dangerous. If the registrar's key is lost, nothing can ever be published, and if it leaks, anything can be. The `handOver` function above lets the role move, but notice that a typo in `newRegistrar` hands control to nobody, permanently. Real systems often use a two-step transfer in which the new person must accept, or a multi-signature wallet instead of a single key, so that no single person is a single point of failure.
+
+Also remember what you learned about `tx.origin`: the check must look at `msg.sender`, the account that is calling *this* function right now.
+
+Time-based rules rest on `block.timestamp`, which the block's proposer may nudge by a few seconds. That is fine for an embargo measured in days. It is not fine for anything that decides who wins a race to the second.
+
+<div class="callout"><strong>Watch out.</strong> A modifier does not run if you forget to apply it. Every function that changes sensitive state needs its gate written on it, so review each external function and ask "who may call this?" Every time one has no answer, that is a bug.</div>
+
+## Try it
+
+The starter defines the two modifiers as empty shells, so anyone can publish at any time. Fill them in: <code>onlyBy</code> must revert with <code>NotAuthorised</code> unless <code>msg.sender</code> equals the given account, and <code>onlyAfter</code> must revert with <code>TooEarly</code> while <code>block.timestamp</code> is below the given time.
+
+<CodeExercise id="gates" {...exercises["gates"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

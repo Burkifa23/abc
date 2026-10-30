@@ -1,0 +1,97 @@
+---
+title: "Multiple inheritance and linearization"
+summary: "What happens when a contract has several parents: the diamond problem, C3 linearization, how super walks the order, and when you must write override(B, C)."
+covers: ["Contracts", "Contracts > Inheritance"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import Figure from "../../../components/Figure.astro";
+import Linearization from "../../../components/diagrams/Linearization.astro";
+import { quiz, exercises } from "./12-multiple-inheritance";
+
+A student can belong to the Computing Society and the Debate Society at the same time, and both societies might follow the same Student Union charter. If the Union says "all members register once a term", which rule applies when someone is in both societies: does the student register twice? Solidity lets a contract have more than one parent, so it has to answer exactly this sort of question. This lesson shows the answer, and the single most useful picture to keep in mind is a straight line.
+
+## The diamond
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Union {
+    string[] public steps;
+
+    function register() public virtual {
+        steps.push("Union");
+    }
+}
+
+contract Computing is Union {
+    function register() public virtual override {
+        steps.push("Computing");
+        super.register();
+    }
+}
+
+contract Debate is Union {
+    function register() public virtual override {
+        steps.push("Debate");
+        super.register();
+    }
+}
+
+contract Student is Computing, Debate {
+    function register() public override(Computing, Debate) {
+        steps.push("Student");
+        super.register();
+    }
+}
+```
+
+Draw the inheritance as arrows and you get a diamond: `Student` at the bottom, `Computing` and `Debate` on the sides, `Union` at the top. The worry is that `Union`'s code could run twice, once via each side. It does not. The compiler flattens the diamond into one straight line, using an algorithm called **C3 linearization** (the same one Python uses). Each contract appears in the line exactly once.
+
+<Figure caption="D is B, C. The compiler turns the diamond into the line D, C, B, A, and super moves one step right.">
+  <Linearization />
+</Figure>
+
+## Reading the order
+
+The line is built from the order in your `is` list, and here the direction matters. You must list parents from **most base-like to most derived**. So `Student is Computing, Debate` means "Debate is the more specialised one", and it comes later in the list, so it is searched first. The resulting line is: `Student`, `Debate`, `Computing`, `Union`. Python's rule is the reverse (leftmost wins), which trips up people who know both languages.
+
+A quick way to compute it by hand: start with the contract itself, then walk the parents from right to left, going depth-first, and write down every contract you meet, repeats included. Then keep only the last occurrence of each. For `Student` the walk gives `Student`, `Debate`, `Union`, `Computing`, `Union`, which reduces to `Student`, `Debate`, `Computing`, `Union`.
+
+Not every shape of graph can be flattened. This one fails with "Linearization of inheritance graph impossible":
+
+```solidity
+contract Base {}
+contract Mid is Base {}
+contract Broken is Mid, Base {}   // does not compile
+```
+
+Listing `Mid` before `Base` says "`Base` is more derived than `Mid`", yet `Mid` itself inherits from `Base`. The two statements contradict each other. Flip the order to `Broken is Base, Mid` and it compiles.
+
+## What super really means
+
+Inside `Student.register`, `super.register()` does **not** mean "my parent's function". It means "the next function in the line". Calling `register()` on a `Student` therefore runs `Student`, then `Debate`, then `Computing`, then `Union`, so `steps` ends up as `Student, Debate, Computing, Union`. Every function ran once, even though `Union` is below two different parents.
+
+That is also why `super` is the right tool. If `Debate` called `Union.register()` by name instead, it would jump straight to `Union` and `Computing` would be skipped. When a contract is placed in a different line, `super` in the same source code can reach a different neighbour. The compiler knows which function `super` refers to only when the final contract is known.
+
+The order matters for constructors too. They run in the linear order starting from the most base-like contract, whatever order you wrote their arguments in.
+
+## When `override(...)` is required
+
+If two parents each define the same function and neither one overrides the other, the child must override it and name both: `override(Computing, Debate)`. In the diamond above, `Computing` and `Debate` both override `Union.register`, so `Student` has to name them both. You list the most derived contracts that define the function, not `Union`.
+
+There is one exception. If the function is defined only in the common ancestor and nobody in between redefines it, the child needs to say nothing. But if one side overrides it and the other merely inherits it, the child still has to override and name both: `override(Union, Computing)` when only `Computing` redefines it.
+
+<div class="callout"><strong>Watch out.</strong> Because <code>super</code> follows the final line, a base contract's behaviour depends on who inherits it. A contract written as a standalone class may be called through a neighbour it has never heard of. Keep functions that take part in a <code>super</code> chain independent: each one should do its own step and then call <code>super</code>, instead of assuming that a particular contract comes next.</div>
+
+## Try it
+
+This diamond does not compile yet, because `Both` inherits `enroll` from two parents without choosing between them. Fix `Both` so that `enroll` runs `Both`'s own step, then the rest of the line via `super`.
+
+<CodeExercise id="diamond" {...exercises["diamond"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

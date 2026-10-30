@@ -1,0 +1,128 @@
+---
+title: "Known bugs and non-bugs"
+summary: "How to look up the published compiler bugs that affect your version, how to tell whether one applies to your settings, and four behaviours that look like bugs but are documented."
+covers: ["List of Known Bugs", "Frequently Reported Non-Bugs", "Frequently Reported Non-Bugs > Non-canonical ABI-encoded calldata is accepted", "Frequently Reported Non-Bugs > Different results between the evmasm and the IR pipeline", "Frequently Reported Non-Bugs > Order of evaluation", "Frequently Reported Non-Bugs > Stale references into storage"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import { quiz, exercises } from "./09-known-bugs";
+
+Every lesson so far has been about bugs in *your* code. This one is about bugs in the tool that turns your code into bytecode. Compilers are programs, programs have bugs, and a bug in the Solidity compiler can make correct source code behave wrongly once deployed. The good news is that the Solidity project publishes the security-relevant ones in a machine-readable list. This lesson is not a catalogue of those bugs, which would be out of date by the time you read it. Instead it teaches you the skill of reading the list for a given compiler version, then looks at four behaviours that regularly get reported as bugs but are not.
+
+## Where the list lives
+
+The compiler repository ships two JSON files in its `docs` folder, both also reachable from the documentation site:
+
+- **`bugs.json`** is an array with one object per bug (or per affected version range).
+- **`bugs_by_version.json`** is a lookup table from a compiler version to an object of the form `{ "bugs": [...], "released": "..." }`, where `bugs` lists the names of the bugs that version contains, so you can answer "what is wrong with 0.8.x?" in one step.
+
+Both are meant for tools. Source verification sites, auditors' scripts and IDE plugins read them. You can read them too, with nothing fancier than `jq`:
+
+```bash
+# which listed bugs affect compiler 0.8.20?
+jq '."0.8.20".bugs' bugs_by_version.json
+```
+
+## Reading one record
+
+Each object in `bugs.json` has the same keys. Here is an invented record in the same shape, so you can practise without anyone's real bug being misquoted:
+
+```json
+{
+  "uid": "SOL-2099-1",
+  "name": "ExampleClippedLoopBound",
+  "summary": "A loop bound could be truncated when the optimizer was enabled.",
+  "description": "A longer explanation of what goes wrong and when.",
+  "introduced": "0.8.10",
+  "fixed": "0.8.15",
+  "publish": "2099-01-01",
+  "severity": "low",
+  "conditions": { "optimizer": true, "viaIR": false }
+}
+```
+
+Go through the keys one by one.
+
+- **`uid` and `name`.** The uid has the form `SOL-<year>-<number>`. The same uid can appear in several objects, because a bug that was fixed in two release lines has two version ranges and so two records. The `name` is unique.
+- **`summary` and `description`.** The short and long explanations. Read the description before deciding anything, because the summary rarely mentions the circumstances.
+- **`introduced` and `fixed`.** The affected range runs from `introduced` (the first release that has the bug) up to but **not including** `fixed` (the first release without it). In the example, 0.8.10 to 0.8.14 are affected and 0.8.15 is not. If `introduced` is missing, the bug goes back as far as the list does.
+- **`publish`.** The date the bug became public. Useful for judging whether a contract's author could have known.
+- **`severity`.** One of a scale from `very low` up to `high`, with intermediate steps such as `low/medium`. It blends how likely the bug is to occur, how easily a normal test would reveal it, and how much damage an exploit could do. A "high" bug usually corrupts values silently in common code. A "very low" one needs an unusual combination.
+- **`conditions`.** The settings that must be on for the bug to exist: whether the old opcode-based optimizer (`optimizer`) or the Yul optimizer (`yulOptimizer`) is enabled, whether ABI coder v2 is used (always, since 0.8), whether the IR pipeline is used (`viaIR`, which can be required to be *false*), and sometimes an `evmVersion` expression such as `">=constantinople"`. If there are no conditions, assume the bug is always present.
+- **`check`.** A way to test your code for the pattern. One kind (the documentation calls it a source regex) is a JavaScript regular expression to run on your source **after stripping comments**: no match means the bug is very likely absent, a match means it might be present. The other kind (`ast-compact-json-path`) is a JSONPath query for the compiler's AST. Neither is a proof. They narrow down what to read by hand.
+
+## A procedure you can follow
+
+1. **Find the exact compiler version.** Not just the pragma range, but the version that actually compiled the deployment, which is usually recorded in the contract's metadata and on block explorers.
+2. **Look the version up** in `bugs_by_version.json` to get the candidate bug names.
+3. **For each name, open its record** in `bugs.json` and read the description.
+4. **Compare `conditions` with your settings.** Optimizer on? Using `--via-ir`? Which EVM version? Many bugs vanish at this step.
+5. **Run the `check` patterns** on your source, then read every hit.
+6. **Decide.** If a bug applies and matters, the usual remedies are to upgrade to a compiler at or after `fixed`, or to change the code or setting that triggers it.
+
+When you inspect a contract someone else deployed, the documentation adds three suspicion rules. It is *mildly* suspicious if it was built with a nightly compiler, since nightlies are not tracked. It is mildly suspicious if the compiler was not the newest at the time of creation. And it is *highly* suspicious if the compiler had a known bug that a newer release had already fixed by then.
+
+Remember what the list is not. It names security-relevant bugs that the project has found, understood and published. A clean result means "none of the known ones apply", not "the compiler has no bugs". The compiler's code generator is also covered by the bug bounty, so new entries do appear.
+
+## Four things that are not bugs
+
+The documentation keeps a second list, of behaviours that people report as compiler bugs again and again. Each is intentional, documented or explicitly unspecified. Knowing them saves you from filing a bad report, and more importantly from writing code that depends on the wrong assumption.
+
+### Non-canonical calldata is accepted
+
+A function call's arguments arrive as a block of bytes called calldata. The ABI describes one *canonical* layout, but the decoder Solidity generates is lenient: offsets that point backwards or overlap other data are not necessarily rejected, there may be gaps, and extra bytes after the last argument are simply ignored. The one guarantee is that decoding never reads beyond the end of the calldata.
+
+The consequence is that **two different byte strings can decode to the same arguments.** Suppose a campus voucher contract tries to stop double redemption by remembering a hash of each call it has served:
+
+```solidity
+function redeem(uint256 voucherId, address to) external {
+    bytes32 callId = keccak256(msg.data);      // identifies "this exact call"
+    // ... mark callId as used, send the benefit ...
+}
+```
+
+Adding one harmless trailing byte changes `keccak256(msg.data)` while leaving `voucherId` and `to` unchanged, so the "used" marker is dodged and the voucher can be redeemed again. Identify a call by the decoded values instead (`abi.encode(voucherId, to)`), or better, by a unique number you track.
+
+### Different results between the evmasm and the IR pipeline
+
+Solidity has two code generators: the older direct-to-assembly one and the newer one that goes through Yul (switched on with `--via-ir`). They are meant to behave the same for well-defined programs, but they differ in places where behaviour is unspecified or where the project documents a deliberate change, such as how narrow values are cleaned of stray upper bits. The practical rule is to test and audit the pipeline you will actually deploy with, and to avoid code whose result depends on unspecified details, such as inline assembly that assumes a particular memory layout or that a narrow value has been cleaned.
+
+### Order of evaluation
+
+The language does not say in which order the parts of an expression are evaluated. That includes the pieces of a tuple assignment or a `return` with several values.
+
+```solidity
+uint256 private counter;
+
+function next() private returns (uint256) {
+    return ++counter;
+}
+
+function pair() external returns (uint256, uint256) {
+    return (next(), next());     // which call is "first" is not specified
+}
+```
+
+You might get `(1, 2)` or `(2, 1)`, and a different compiler version or pipeline may swap them. Only two things are guaranteed: statements run in the order written, and `&&` and `||` short-circuit from left to right. If order matters, put each step in its own statement. A related fact is that assignments involving reference types either copy or alias depending on the data location. That is documented behaviour, not an aliasing bug.
+
+### Stale references into storage
+
+A `storage` variable of reference type is a pointer to a place in storage. If something later shrinks or moves the thing it points into, the pointer is left dangling.
+
+```solidity
+uint256[][] private groups;
+
+function dangling() external {
+    uint256[] storage last = groups[groups.length - 1];
+    groups.pop();         // the slot `last` points to has been cleared
+    last.push(1);         // undefined behaviour: do not do this
+}
+```
+
+Resizing operations such as `pop()`, a `push()` that turns a short `bytes` into the long layout, or an assignment to the array itself in a tuple like `(s[0], s) = (x, y)` can all invalidate references. Writing through one is not rejected, and may write outside the array's area. Code that does this is explicitly treated as having undefined behaviour. Re-read the reference after any operation that can resize the container, or avoid holding it.
+
+<div class="callout"><strong>Watch out.</strong> "The compiler accepted it" is not the same as "the language defines it". When a result depends on evaluation order, trailing calldata or a reference that may have moved, the code is relying on something nobody promised.</div>
+
+## Check your understanding
+
+<Quiz questions={quiz} />

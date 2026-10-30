@@ -1,0 +1,11 @@
+{
+  "n": 17,
+  "slug": "land-registry",
+  "title": "Immutable Land Title Registry",
+  "kind": "build",
+  "summary": "One plot, one title: map land to unique NFTs, freeze disputes and keep the full ownership history.",
+  "concepts": ["inheritance", "virtual/override hooks", "ERC-721", "abi.encode ids", "access control"],
+  "adaptedFrom": "Plan.md Workshop 6",
+  "docs": ["m06-contracts/11-inheritance", "m06-contracts/12-multiple-inheritance", "m09-under-the-hood/05-abi-specification"],
+  "openFiles": ["README.md", "src/LandRegistry.sol", "src/ERC721Minimal.sol"]
+}

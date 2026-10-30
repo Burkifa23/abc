@@ -1,0 +1,122 @@
+---
+title: "Error handling, math and crypto functions"
+summary: "assert, require and revert for stopping bad states, plus addmod, mulmod and the hash and signature functions every contract can call."
+covers: ["Units and Globally Available Variables", "Units and Globally Available Variables > Special Variables and Functions", "Cheatsheet", "Cheatsheet > Validations and Assertions", "Cheatsheet > Mathematical and Cryptographic Functions"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./04-errors-math-crypto";
+
+An exam invigilator has two kinds of problems. A student arrives without an ID card: that is a problem with the *input*, and the invigilator simply turns them away. Then there is the moment the invigilator counts 61 scripts from a room that only holds 60 seats: that is not the student's fault, it means something in the process is broken. Solidity has a different word for each situation, and a third word for "stop now, for a reason I will name myself". After those, this lesson covers the maths and cryptography functions that are built into every contract.
+
+## The three stopping tools
+
+All three abort the current call and undo every state change made during it, including changes made in functions that were called along the way. A revert also returns the gas that has not yet been spent to the caller; what the caller loses is the gas already consumed.
+
+**`require(condition)`** checks something that outside parties are responsible for: arguments, the caller's identity, the balance they claim to have, or the answer from another contract. It comes in three forms:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Gate {
+    error NotMember(address who);
+
+    mapping(address => bool) public members;
+    uint256 public seats = 60;
+
+    function join() external {
+        require(seats > 0);
+        require(!members[msg.sender], "already a member");
+        members[msg.sender] = true;
+        seats -= 1;
+    }
+
+    function resign() external {
+        if (!members[msg.sender]) revert NotMember(msg.sender);
+        members[msg.sender] = false;
+        seats += 1;
+    }
+}
+```
+
+The first `require` has no message. The second carries a **string** reason, which is easy to read but costs extra bytes in the contract and in every failing transaction. The third way, used in `resign`, is to skip `require` and write `if (...) revert NotMember(msg.sender);`, which uses a **custom error**: a named, typed failure declared with `error`, that can carry data such as the offending address. Custom errors are cheaper than strings and let tools decode the reason.
+
+Since compiler 0.8.26 you can also pass a custom error directly: `require(seats > 0, NoSeats());`. On the default (legacy) pipeline this form needs 0.8.27; in 0.8.26 it works only with the IR pipeline (`viaIR`). If you are unsure which your tool uses, the `if ... revert` shape compiles everywhere.
+
+**`revert()`** is the unconditional version. Call it with no arguments, with a string, or with a custom error. It is the right tool inside a deep branch where you have already decided the call cannot succeed.
+
+**`assert(condition)`** is for things that must *never* be false if your code is correct: an invariant such as "seats plus members equals capacity". A failing assert reports a `Panic(uint256)` error with code `0x01`. The same panic mechanism reports overflow (code `0x11`) and division by zero (code `0x12`). If you ever see a Panic in testing, treat it as a bug in the contract, not bad input.
+
+A quick way to choose: if a stranger could make the condition false by sending odd input, use `require` or `revert`. If only a mistake in your own code could make it false, use `assert`.
+
+## Math: addmod and mulmod
+
+Normal arithmetic in 0.8 reverts on overflow. Sometimes you actually want the *remainder* of a huge calculation, as in cryptography. `addmod(x, y, k)` computes `(x + y) % k` and `mulmod(x, y, k)` computes `(x * y) % k`, and in both the intermediate sum or product is kept at full precision rather than wrapping at 2^256. If `k` is zero, they trigger a failed assertion (Panic `0x12`).
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Clock {
+    function addHours(uint256 hourNow, uint256 plus) external pure returns (uint256) {
+        return addmod(hourNow, plus, 24);
+    }
+
+    function bigProduct(uint256 a, uint256 b, uint256 m) external pure returns (uint256) {
+        return mulmod(a, b, m);
+    }
+}
+```
+
+`addHours(22, 5)` returns 3, as on a 24-hour clock. With `bigProduct`, writing `(a * b) % m` instead would revert as soon as `a * b` exceeded 2^256 - 1, while `mulmod` still works.
+
+## Hash functions
+
+A **hash function** turns any input into a fixed-size fingerprint. The same input always gives the same fingerprint, a tiny change gives a completely different one, and nobody can work backwards from the fingerprint to the input.
+
+| Function | Output | Notes |
+|---|---|---|
+| `keccak256(bytes memory)` | `bytes32` | The Ethereum standard. Selectors, mapping slots and event topics use it |
+| `sha256(bytes memory)` | `bytes32` | The classic SHA-2 hash that Bitcoin uses |
+| `ripemd160(bytes memory)` | `bytes20` | A shorter hash, used by Bitcoin addresses |
+
+`keccak256` is the one you will use daily. Be careful with the name "SHA-3": Keccak became the SHA-3 standard after a few small changes, so Ethereum's `keccak256` does not match a library function named `sha3_256` elsewhere. `sha256` and `ripemd160` are implemented as precompiled contracts at fixed low addresses (0x02 and 0x03), so calling them costs a little extra and they only exist on chains that provide those precompiles. The latest docs also list an `erc7201` helper that computes a storage-namespace base slot at compile time; it appears in recent compilers, so check your version before using it.
+
+The input of each must be `bytes memory`. For a string, convert: `keccak256(bytes(name))`.
+
+## Recovering a signer: ecrecover
+
+Digital signatures were introduced in the foundations module. In a contract, `ecrecover(hash, v, r, s)` takes a message hash and the three parts of a signature, and returns the address that made it. If the signature is not valid it returns the **zero address** rather than reverting.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Attendance {
+    error BadSignature();
+
+    address public immutable lecturer = msg.sender;
+
+    function check(bytes32 digest, uint8 v, bytes32 r, bytes32 s) external view returns (bool) {
+        address who = ecrecover(digest, v, r, s);
+        if (who == address(0)) revert BadSignature();
+        return who == lecturer;
+    }
+}
+```
+
+Two cautions apply. First, always reject the zero address. If you compared the result with a variable that was never set (also zero), a garbage signature would pass. Second, signatures are **malleable**: for any valid pair `(r, s)` there is a second valid `s` value that gives the same signer. So you must never treat the signature bytes themselves as a unique identifier, for example as a "used" flag in a mapping. Record the signed message instead, or use a well-reviewed library such as OpenZeppelin's `ECDSA`, which rejects the odd values. Also remember that `v` is 27 or 28 for this function.
+
+<div class="callout"><strong>Watch out.</strong> A contract that stores <code>used[signature] = true</code> to block replays can be fooled: the attacker flips <code>s</code> to its twin value, gets a different signature for the same message, and reuses it. Mark the message (or a nonce) as used, never the signature.</div>
+
+## Try it
+
+Complete the `Toolbox` contract. `fingerprint` must return the Keccak-256 hash of a string, `wrap` must add two numbers modulo a third without overflow, and `signer` must recover the address from a signature.
+
+<CodeExercise id="toolbox" {...exercises["toolbox"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

@@ -1,0 +1,103 @@
+---
+title: "Constant and immutable"
+summary: "Values that never change after deployment: when to fix them at compile time, when to fix them at construction, and what that saves in gas."
+covers: ["Contracts", "Contracts > Constant and Immutable State Variables"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./04-constant-and-immutable";
+
+The number of weeks in an Ashesi semester is printed in the academic calendar. Nobody is going to vote on it halfway through the term. The name of the treasurer, on the other hand, is not known until the club elects one, but once elected it stays for the year. Both are "fixed" values, but they are fixed at different moments. Solidity has a keyword for each moment, and using them instead of ordinary state variables makes reads cheaper and tells the reader (and the compiler) that the value will not move.
+
+## An ordinary state variable is expensive to read
+
+A normal state variable lives in storage. Every read is a storage load, which is one of the costliest operations in the EVM: roughly 2,100 gas the first time a slot is touched in a transaction and about 100 for later reads. A value that never changes does not need a slot. `constant` and `immutable` remove the slot entirely.
+
+## constant: fixed when you compile
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+uint256 constant MAX_CREDITS = 18;
+
+contract Semester {
+    string public constant NAME = "Fall";
+    uint256 public constant LENGTH = 16 weeks;
+    bytes32 public constant REGISTRAR_ROLE = keccak256("REGISTRAR");
+
+    function creditsLeft(uint256 taken) external pure returns (uint256) {
+        return MAX_CREDITS - taken;
+    }
+}
+```
+
+A `constant` must be given its value in the same line where it is declared, and that value has to be known to the compiler. Each place that uses it is replaced by the value itself (the expression is copied in, and may be evaluated again at each use, which lets the compiler optimise it). No storage slot is reserved. You may declare constants at file level, outside any contract, like `MAX_CREDITS` above.
+
+What may the initial value be? Literals, arithmetic on other constants, unit suffixes like `16 weeks`, and a few built-in functions that depend only on their input: `keccak256`, `sha256`, `ripemd160`, `ecrecover`, `addmod` and `mulmod`. What is not allowed is anything that reads the chain at run time: storage, `block.timestamp`, `block.number`, `address(this).balance`, `msg.value`, `gasleft()`, or a call to another contract.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+// does not compile: the timestamp is not known at compile time
+uint256 constant STARTED = block.timestamp;
+```
+
+The types supported today are value types (numbers, booleans, addresses, `bytesN`, enums) and `string`/`bytes` for constants.
+
+## immutable: fixed when you construct
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Election {
+    address public immutable registrar;
+    uint256 public immutable opensAt;
+    uint256 public immutable closesAt;
+
+    constructor(address registrar_, uint256 daysOpen) {
+        registrar = registrar_;
+        opensAt = block.timestamp;
+        closesAt = opensAt + daysOpen * 1 days;
+    }
+
+    function isOpen() external view returns (bool) {
+        return block.timestamp >= opensAt && block.timestamp < closesAt;
+    }
+}
+```
+
+An `immutable` may be assigned while the contract is being built, so it can depend on constructor arguments and on facts about the deployment (`msg.sender`, `block.timestamp`, another contract's balance). After the constructor finishes, no more writing is possible. Notes:
+
+- It may be assigned where it is declared or in the constructor, but not in an ordinary function or a modifier: those can run after deployment. During the constructor itself you may assign more than once, and reading it there is fine (from compiler 0.8.21 onward).
+- Reading is unrestricted. If you never assign it, it stays at the default value.
+- Same types as constants, minus `string` and `bytes`: only value types are supported.
+
+Under the hood, the creation code takes the runtime code and **patches the value into every place it is used** before storing it. So `opensAt` is not in storage at all; it is a 32-byte constant inside the deployed code. Each immutable takes a full 32 bytes in the code, even if the type is smaller.
+
+## Which is cheaper?
+
+Both avoid storage. A constant is copied into the code where used and can be folded by the compiler, so it is sometimes the cheapest of the three. An immutable is loaded from the code, a very cheap operation compared to a storage read. As a rule of thumb: if you can write the value in the source, use `constant`; if it is only known at deployment, use `immutable`; if it must change later, use a normal variable.
+
+| Kind | Known | Changes later | Lives in |
+|---|---|---|---|
+| plain variable | any time | yes | storage |
+| `immutable` | at deployment | no | patched into runtime code |
+| `constant` | at compile time | no | copied into every use |
+
+By convention both are written in `UPPER_SNAKE_CASE`, so that readers see at once that they are not ordinary state.
+
+<div class="callout"><strong>Watch out.</strong> Because immutables are patched into the runtime code, two deployments of the same source with different constructor arguments produce <em>different</em> runtime bytecode. If you compare deployed code with your own compilation to verify it, remember the compiler lists where the immutables sit (the <code>immutableReferences</code> field), and mask them out. Also, immutables cannot be combined with <code>transient</code> (next lesson).</div>
+
+## Try it
+
+`Fees` keeps five values in expensive storage. Two are known now, two only at deployment. Convert them.
+
+<CodeExercise id="config-constants" {...exercises["config-constants"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

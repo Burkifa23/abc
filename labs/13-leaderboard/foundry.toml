@@ -1,0 +1,8 @@
+[profile.default]
+src = "src"
+test = "test"
+out = "out"
+libs = []
+# forge-std is baked into the devcontainer image (see .devcontainer/Dockerfile).
+remappings = ["forge-std/=/opt/forge-std/src/"]
+allow_paths = ["/opt/forge-std"]

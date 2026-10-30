@@ -1,0 +1,59 @@
+---
+import Base from "../../layouts/Base.astro";
+import toc from "../../content/solidity-toc.json";
+import { coverage } from "../../lib/coverage";
+import { modules } from "../../content/modules";
+import { lessonsByModule } from "../../lib/lessons";
+
+const base = import.meta.env.BASE_URL;
+const groups = await lessonsByModule();
+const flat = groups.flatMap((g) => g.lessons);
+const { missing, byId } = coverage(toc.map((e) => e.id), flat.map((l) => ({ id: l.id, covers: l.data.covers })));
+if (process.env.STRICT_COVERAGE === "1" && missing.length > 0) {
+  throw new Error("Uncovered docs sections: " + missing.join(", "));
+}
+---
+<Base title="Docs · Ashesi Blockchain Community" current="docs">
+  <div class="docs">
+    <aside class="sidebar">
+      <nav aria-label="Modules">
+        {groups.map((g) => <a href={`#${g.id}`}>{g.title}</a>)}
+        <a href="#coverage">Reference coverage</a>
+      </nav>
+    </aside>
+
+    <main class="prose">
+      <span class="eyebrow">Docs</span>
+      <h1>Learn Solidity</h1>
+      <p class="lead">Lessons follow the official Solidity documentation, module by module.</p>
+
+      {modules.map((m) => {
+        const lessons = groups.find((g) => g.id === m.id)?.lessons ?? [];
+        return (
+          <>
+            <h2 id={m.id}>{m.title}</h2>
+            {lessons.length ? (
+              <ul>
+                {lessons.map((l) => <li><a href={`${base}docs/${l.id}/`}>{l.data.title}</a>: {l.data.summary}</li>)}
+              </ul>
+            ) : <p style="color:var(--muted-fg)">Coming soon</p>}
+          </>
+        );
+      })}
+
+      <h2 id="coverage">Reference coverage</h2>
+      <table>
+        <thead><tr><th>Section</th><th>PDF page</th><th>Lessons</th></tr></thead>
+        <tbody>
+          {toc.map((e) => (
+            <tr>
+              <td>{e.id}</td>
+              <td>{e.page}</td>
+              <td>{(byId[e.id] ?? []).map((id) => <a href={`${base}docs/${id}/`}>{id}</a>)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </main>
+  </div>
+</Base>

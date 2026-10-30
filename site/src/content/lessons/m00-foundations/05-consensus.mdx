@@ -1,0 +1,66 @@
+---
+title: "Consensus: proof of work vs proof of stake"
+summary: "Explain how a network of strangers agrees on one chain, and compare how proof of work and proof of stake do it."
+covers: []
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./05-consensus";
+
+The Ashesi Entrepreneurship Club has one shared Google Sheet for its petty cash. Two treasurers both open it at the same time and both record a different "last expense". Google resolves the clash because one company runs the sheet. On a blockchain there is no such company. Thousands of nodes can each receive different transactions in a different order, and two miners may even produce a valid next block at the same moment. How does everyone end up with the same ledger?
+
+The answer is **consensus**: the rules by which independent nodes agree on one version of the chain.
+
+## Forks and the fork-choice rule
+
+If two valid blocks arrive for the same position, the chain temporarily splits into two branches. This is a **fork**. Different nodes may see different branches first.
+
+Nodes follow a **fork-choice rule** to pick one. In Bitcoin it is roughly "follow the chain with the most accumulated work" (often called the longest chain). When the next block extends one branch, that branch becomes the winner, and the other branch's blocks are dropped. Transactions in the dropped blocks go back to waiting to be included.
+
+This is why a new block is not immediately final. The more blocks stacked on top (its **confirmations**), the less likely it is to ever be dropped.
+
+## Proof of work (PoW)
+
+You met this in lesson 3. Miners compete to find a nonce so the block hash is below the target. The winner earns the right to add the block and receives a reward.
+
+- **What it risks:** electricity and hardware. Cheating costs real resources.
+- **Who proposes the next block:** whichever miner finds the valid hash first.
+- **Attack:** to rewrite history, you would need more than half of the network's total hashing power (a "51% attack").
+- **Downsides:** it uses a lot of energy, and powerful, specialised hardware tends to concentrate among a few operators.
+
+## Proof of stake (PoS)
+
+Proof of stake replaces computation with **stake**: cryptocurrency that a participant locks up as a deposit. Participants who do this are called **validators**. Ethereum switched from proof of work to proof of stake in 2022.
+
+In a simplified view:
+
+1. The protocol picks a validator to **propose** the next block, chosen pseudo-randomly, with larger stakes being more likely to be picked.
+2. Other validators **attest**: they sign votes saying "I saw this block and it is valid".
+3. When enough stake has attested, the block is accepted. Later, after further rounds of attestation, it becomes **finalised**: reversing it would require destroying a large amount of stake.
+4. Validators who break the rules (for example, signing two conflicting blocks) can be **slashed**: part of their deposit is destroyed.
+
+Notice the signatures from lesson 4 appear again: validators attest with their keys, and everyone verifies.
+
+- **What it risks:** the deposit itself. Cheating costs money that is already locked.
+- **Attack:** you would need control of a very large share of all staked funds, and an attack would get your stake slashed.
+- **Downsides:** the system is newer and more complex, and richer participants have more weight.
+
+## Side by side
+
+| | Proof of work | Proof of stake |
+|---|---|---|
+| Scarce resource | Computing power and energy | Locked cryptocurrency |
+| Picks the next block | First to find a valid nonce | Chosen validator, attested by others |
+| Punishment for cheating | Wasted work | Slashing of the deposit |
+| Energy use | High | Very low |
+| Example | Bitcoin | Ethereum (since 2022) |
+
+<div class="callout"><strong>Watch out.</strong> Consensus is not a vote of people, and it is not "the majority of nodes". In proof of work, influence comes from computing power; in proof of stake, from stake. Having many nodes you control does not by itself change the result. Also, "agreed" is not the same as "final": a recent block can still be dropped until it is buried or finalised.</div>
+
+## What this means for you as a developer
+
+You will mostly write code that runs on top of a chain whose consensus is already working. But it matters in two ways. First, never treat a transaction as permanent the instant you see it; wait for confirmations. Second, the order of transactions is decided by whoever proposes the block, not by the order you sent them. We will revisit both in the next lesson.
+
+## Check your understanding
+
+<Quiz questions={quiz} />

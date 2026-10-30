@@ -1,0 +1,115 @@
+---
+title: "Ether and time units"
+summary: "Suffixes such as gwei, ether, days and weeks: what they multiply by, where they are allowed, and why they only work on literal numbers."
+covers: ["Units and Globally Available Variables", "Units and Globally Available Variables", "Units and Globally Available Variables > Ether Units", "Units and Globally Available Variables > Time Units"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./01-ether-and-time-units";
+
+The Ashesi cafeteria prices a plate in cedis, not in pesewas, and nobody says a semester lasts 10,368,000 seconds. People pick the unit that makes the number readable. Smart contracts have the same problem with two awkward quantities: money, which the EVM counts in the tiniest unit possible, and time, which the EVM counts in plain seconds. Solidity lets you attach a **unit suffix** to a number so that you can write the human version and let the compiler do the multiplication.
+
+This chapter of the language is called "Units and Globally Available Variables". It has two halves. This lesson covers the units. The next four cover the global variables and functions that exist in every contract without being declared.
+
+## Ether units
+
+All value on Ethereum is counted in **wei**, the smallest unit; there is no such thing as half a wei. A bare number such as `5` in an amount means 5 wei. To write larger amounts, put one of three suffixes after a literal:
+
+| Suffix | Worth in wei | Scientific form |
+|---|---|---|
+| `wei` | 1 | `1` |
+| `gwei` | 1,000,000,000 | `1e9` |
+| `ether` | 1,000,000,000,000,000,000 | `1e18` |
+
+So `1 ether == 1e18` is true, and so is `2 gwei == 2e9`. Gas prices are quoted in gwei, which is why you will meet that suffix constantly. A plain number with no suffix is read as wei, so `1 == 1 wei` also holds. Older material may mention `finney` and `szabo`; those suffixes were removed in Solidity 0.7.0, so only the three above exist.
+
+Fractions are fine as long as the final amount is a whole number of wei. `0.01 ether` becomes 10,000,000,000,000,000 wei, and `1.5 gwei` becomes 1,500,000,000 wei. Something like `0.5 wei` would be half a wei, which does not exist, so the compiler rejects it.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract LabFees {
+    uint256 public constant BOOKING = 0.02 ether;
+    uint256 public constant TIP = 50 gwei;
+
+    function totalFor(uint256 slots) external pure returns (uint256) {
+        return slots * BOOKING + TIP;
+    }
+}
+```
+
+The suffix is only a multiplier applied by the compiler. Nothing about the resulting value remembers that it was once written in ether; the variable is an ordinary `uint256` counted in wei.
+
+## Time units
+
+The same trick works for durations. The base unit is the second, and the suffixes are:
+
+| Suffix | Seconds |
+|---|---|
+| `seconds` | 1 |
+| `minutes` | 60 |
+| `hours` | 3,600 |
+| `days` | 86,400 |
+| `weeks` | 604,800 |
+
+A bare number is already a count of seconds, so `1 == 1 seconds`. Only the five suffixes above exist. `months` was never offered, and `years` was dropped in Solidity 0.5.0 because a year is not a fixed number of seconds.
+
+That last point is a real design reason, not laziness. Calendars have leap years, and astronomers occasionally add leap seconds, so `1 days` is not always exactly one day on a wall clock. The suffixes assume every minute has 60 seconds and every day has 86,400 of them. For a voting window of three days that never matters. For a calculation such as "pay interest on the exact anniversary of the loan", you must either accept a fixed convention (say, a year is 365 days) or use a date library written for the purpose.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract ClubElection {
+    uint256 public immutable votingEnds;
+
+    constructor() {
+        votingEnds = block.timestamp + 3 days;
+    }
+
+    function open() external view returns (bool) {
+        return block.timestamp < votingEnds;
+    }
+}
+```
+
+`block.timestamp` is itself a global variable measured in seconds, which lesson 2 explains. Adding `3 days` to it gives a moment three days in the future, and that is the commonest use of time units in real contracts: deadlines, lock-up periods and cool-downs.
+
+## Suffixes belong to literals only
+
+Here is the rule that trips people up. A unit suffix may follow a number you type directly into the code, but it cannot follow a variable. This line is rejected by the compiler (on purpose, to show the error):
+
+`uint256 span = daysLeft days;`
+
+To scale a variable, multiply by a literal that carries the unit: `daysLeft * 1 days`. Here `1 days` is a legal literal equal to 86,400, and ordinary multiplication does the rest. The same idea works for money: `count * 1 ether`.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Rental {
+    function deadline(uint256 nights) external view returns (uint256) {
+        return block.timestamp + nights * 1 days;
+    }
+
+    function priceFor(uint256 nights) external pure returns (uint256) {
+        return nights * 0.003 ether;
+    }
+}
+```
+
+In `priceFor`, `0.003 ether` is a literal, so it is allowed, and it equals 3,000,000,000,000,000 wei. Multiplying by `nights` gives the total in wei. Both functions use checked arithmetic, so a silly `nights` value reverts instead of wrapping around.
+
+<div class="callout"><strong>Watch out.</strong> Never use a unit word as a variable name. <code>days</code>, <code>hours</code>, <code>seconds</code>, <code>wei</code> and the others are reserved suffixes, so <code>uint256 days = 3;</code> will not compile. That is why the examples above call a parameter <code>nights</code> and <code>slots</code>.</div>
+
+## Try it
+
+Write two constants in the `Fees` contract. `FEE` must equal one hundredth of an ether, and `WINDOW` must equal seven days. Use the unit suffixes rather than long numbers, so that a reader can see the intent at once.
+
+<CodeExercise id="unit-constants" {...exercises["unit-constants"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

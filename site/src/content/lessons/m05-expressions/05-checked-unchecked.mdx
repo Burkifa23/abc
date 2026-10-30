@@ -1,0 +1,141 @@
+---
+title: "Checked and unchecked arithmetic"
+summary: "Since 0.8.0 arithmetic reverts on overflow instead of wrapping. See what the check covers, what it does not, and the one place where switching it off with unchecked is routine."
+covers: ["Expressions and Control Structures", "Expressions and Control Structures > Checked or Unchecked Arithmetic"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./05-checked-unchecked";
+
+A car odometer that reads 999999 rolls over to 000000 on the next kilometre. Nobody is hurt, but the number is now wrong. Integers on a computer have the same habit: a `uint8` holds 0 to 255, so asking it to hold 256 needs somewhere to put the extra. Older Solidity let the number wrap around quietly, and several famous token bugs were exactly that. Modern Solidity does the safer thing by default, and gives you a switch for the rare moments you want the old behaviour.
+
+## The default: check and revert
+
+An **overflow** is a result above the top of the type's range. An **underflow** is a result below the bottom. Before version 0.8.0 both wrapped silently, which is why most code of that era imported a "SafeMath" library. From 0.8.0 on, the compiler inserts the check itself: if `+`, `-`, `*`, `**`, `++`, `--` (and their `+=` style cousins) would leave the range, the call reverts with a `Panic` whose code is `0x11`. Lesson 06 explains what a panic is. For now, read it as "the transaction is undone and the caller is told".
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Credits {
+    // Reverts with Panic(0x11) when the student has fewer than `n` credits.
+    function deduct(uint256 have, uint256 n) external pure returns (uint256) {
+        return have - n;
+    }
+}
+```
+
+`deduct(2, 3)` does not return a huge number any more. It reverts. For a balance, a vote count or a fee, that is nearly always what you want.
+
+## unchecked: opting out
+
+Sometimes you know the arithmetic cannot overflow, or you want modular wrapping on purpose (hash mixing, some fixed-point maths). Wrap the statements in an `unchecked { ... }` block and the checks inside disappear:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Tickets {
+    // A uint8 ticket counter: 250 + 10 = 260, which does not fit in 8 bits.
+    function wrapsAround(uint8 sold, uint8 extra) external pure returns (uint8) {
+        unchecked {
+            return sold + extra; // wrapsAround(250, 10) == 4
+        }
+    }
+
+    function stopsAtLimit(uint8 sold, uint8 extra) external pure returns (uint8) {
+        return sold + extra; // stopsAtLimit(250, 10) panics with 0x11
+    }
+}
+```
+
+Facts about the block, all easy to trip over:
+
+- It is a statement inside a function body. It cannot replace the body itself, and it cannot be nested inside another `unchecked`.
+- It only changes the statements you can *see* between the braces. A function called from inside the block is compiled with its own rules, and checks stay on there. The setting does not travel.
+- Inside a modifier you cannot write `_;` within an `unchecked` block, because it would be unclear which code the block covers.
+- The operators it affects are `++`, `--`, `+`, binary and unary `-`, `*`, `/`, `%`, `**` and the compound assignments `+=`, `-=`, `*=`, `/=`, `%=`.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract NoInherit {
+    function sub(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a - b; // always checked, even when called from the block below
+    }
+
+    function f(uint256 a, uint256 b) external pure returns (uint256) {
+        unchecked {
+            return sub(a, b); // still reverts when b > a
+        }
+    }
+}
+```
+
+## What is never checked, and what is never unchecked
+
+The check and the switch each have limits, and a few operations ignore the whole system.
+
+**Division and modulo by zero** always panic (code `0x12`), even inside `unchecked`. There is no result to wrap to, so there is nothing to switch off.
+
+**Signed negation has one trap.** An `int8` runs from -128 to 127. Negating -128 would give 128, which does not fit, so `-x` overflows for the most negative value. The same holds for `type(int256).min`.
+
+**Explicit conversions truncate and never check.** If a `uint256` variable holds 300, then `uint8(x)` gives 44 with no panic, because the conversion just keeps the low byte. The single exception is converting an out-of-range integer to an `enum`, which does panic (`0x21`).
+
+**Shifts never check.** `x << 2` is, in intent, "multiply by 4", but it silently drops the bits that fall off the top, while `x * 4` would revert:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Doubling {
+    // For x = 40000, the true answer 160000 is too big for a uint16.
+    function viaShift(uint16 x) external pure returns (uint16) {
+        return x << 2; // no revert: the top bits are dropped, giving 28928
+    }
+
+    function viaMultiply(uint16 x) external pure returns (uint16) {
+        return x * 4; // reverts with Panic(0x11)
+    }
+}
+```
+
+So if you are tempted to replace a multiplication with a shift "to save gas", the compiler will not tell you when the answer is wrong.
+
+<div class="callout"><strong>Watch out.</strong> Casting is the usual way overflow sneaks back in. <code>uint8(balance)</code> compiles, never reverts, and keeps only the low 8 bits. If a value might not fit, compare it with <code>type(uint8).max</code> first and revert yourself.</div>
+
+## The one place everyone uses it: loop counters
+
+The usual `for` loop adds 1 to `i` every round, and each of those additions pays for an overflow check. Yet `i` is bounded by something like `list.length`, which is far below 2^256, so the check can never fire. People therefore moved the increment out of the loop header into an `unchecked` block:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Tally {
+    function total(uint256[] calldata marks) external pure returns (uint256 sum) {
+        for (uint256 i = 0; i < marks.length; ) {
+            sum += marks[i];
+            unchecked {
+                ++i;
+            }
+        }
+    }
+}
+```
+
+Two small details: the third slot of the `for` header is left empty, and `++i` is written instead of `i++`. A pre-increment returns the new value, so there is no old value to keep around. Note that only the counter is unchecked: `sum += marks[i]` keeps its check, because a sum of user-supplied numbers can overflow.
+
+Since version 0.8.22 the compiler recognises the simplest form of this pattern for you. When the loop is `for (uint256 i = 0; i < n; i++)` and the body does not change `i`, it drops the check on the increment by itself. So in new code you can write the plain loop and get the same saving. You still meet the manual `unchecked { ++i; }` all over existing contracts, and it is the right tool when the loop is not that simple. Use `unchecked` only where you can explain, in a comment, why the value cannot leave its range.
+
+## Try it
+
+`sumMarks` should add up `marks[0] + marks[1] + ...` with a `for` loop whose counter is incremented inside an `unchecked` block. Keep the addition to `sum` outside it, so it stays checked.
+
+<CodeExercise id="unchecked-loop-counter" {...exercises["unchecked-loop-counter"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

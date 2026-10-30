@@ -1,0 +1,11 @@
+{
+  "n": 3,
+  "slug": "signatures",
+  "title": "Signatures",
+  "kind": "learn",
+  "summary": "Prove who sent a transfer with a signature, then let anyone relay it.",
+  "concepts": ["ecrecover", "keccak256", "abi.encode", "nonces", "replay protection", "signed messages"],
+  "adaptedFrom": "freeCodeCamp web3: digital signatures by building a wallet",
+  "docs": ["m00-foundations/04-keys-and-signatures", "m04-units-and-globals/04-errors-math-crypto", "m07-by-example/05-micropayment-channel"],
+  "openFiles": ["README.md", "src/SignedCoin.sol"]
+}

@@ -1,0 +1,167 @@
+---
+title: "Voting with delegation"
+summary: "A hostel-representative election in Solidity: registering voters, casting a vote, and handing your vote to someone you trust without creating loops."
+covers: ["Solidity by Example", "Solidity by Example", "Solidity by Example > Voting"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import Figure from "../../../components/Figure.astro";
+import DelegationChain from "../../../components/diagrams/DelegationChain.astro";
+import { quiz, exercises } from "./01-voting";
+
+Every semester the hostel elects a block representative. Half the residents are in exams or off campus on the day, so the committee allows one trick: if you cannot attend, you may hand your vote to a neighbour you trust, and that neighbour may hand the whole pile on to someone else. This is **delegation**, and it makes a compact first real contract. The rest of this module walks through classic examples from the Solidity documentation, each rebuilt around a campus scenario. Here we meet the idea behind the documentation's voting example: weights, a one-time vote and a chain of hand-overs.
+
+The matching build is [Lab 08, Campus Elections](/abc/labs/), where you assemble a full civic version with tests.
+
+## The data
+
+Three things need remembering: who may vote and what their vote is worth, what has been counted for each option, and who the organiser is.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract HostelVote {
+    struct Voter {
+        uint256 weight;     // 0 means "not on the register"
+        bool done;          // already voted, or already delegated
+        address handedTo;   // who they delegated to, if anyone
+        uint256 choice;     // option index, valid once they have voted
+    }
+
+    address public immutable returningOfficer;
+    mapping(address => Voter) public voters;
+    uint256[] public tally;   // tally[i] = votes for option i
+
+    error NotOfficer();
+    error AlreadyRegistered();
+    error NotRegistered();
+    error AlreadyDone();
+    error UnknownOption();
+
+    constructor(uint256 optionCount) {
+        returningOfficer = msg.sender;
+        tally = new uint256[](optionCount);
+    }
+
+    function register(address resident) external {
+        if (msg.sender != returningOfficer) revert NotOfficer();
+        if (voters[resident].weight != 0) revert AlreadyRegistered();
+        voters[resident].weight = 1;
+    }
+}
+```
+
+Options are just numbers: option 0 is the first candidate, option 1 the second, and so on. Storing a number instead of a name keeps the contract small; the front end can map numbers to names. A `struct` bundles the four facts about one voter, and the `mapping` gives each address its own copy that defaults to zeros. That default is useful: an address that was never registered has `weight` 0, which is how we recognise "not allowed to vote". The officer sits in an `immutable`, since it never changes, and every failure has a custom error so the revert reason is cheap and clear.
+
+Registration sets the weight to 1. Only the officer may do it, so the officer must be trusted, and the contract makes no attempt to prove a resident is real. That is a social decision, not a Solidity one.
+
+## Casting a vote
+
+```solidity
+function castVote(uint256 option) external {
+    Voter storage v = voters[msg.sender];
+    if (v.weight == 0) revert NotRegistered();
+    if (v.done) revert AlreadyDone();
+    if (option >= tally.length) revert UnknownOption();
+
+    v.done = true;
+    v.choice = option;
+    tally[option] += v.weight;
+}
+```
+
+`Voter storage v` is a reference into the mapping, not a copy, so assigning to `v.done` changes the stored record. Notice the order: checks first, then the state changes. Setting `done = true` early is a habit worth building; it is cheap protection against voting twice. Also note that we add `v.weight`, not 1. A voter who has received delegated votes carries a weight above 1, and one call counts them all.
+
+If `option` were out of range, the plain array access would panic anyway with a less friendly code, so the explicit check is kinder to callers.
+
+## Delegating
+
+Now the interesting function. When Ama delegates to Kofi, two outcomes are possible:
+
+- Kofi **has not voted yet**. Ama's weight is added to Kofi's weight, so when Kofi votes later, his vote counts for more.
+- Kofi **has already voted**. Ama's weight must go straight onto the option Kofi chose, because Kofi cannot vote again.
+
+And Kofi may himself have delegated to Esi. Then Ama's weight needs to go to Esi, not Kofi. So the function first follows the chain to its end.
+
+<Figure caption="Ama delegates to Kofi, Kofi to Esi, and Esi votes. The chain is followed to the end, and the weight accumulates to 3 on the option Esi chose.">
+  <DelegationChain />
+</Figure>
+
+```solidity
+uint256 constant MAX_HOPS = 8;
+error SelfDelegation();
+error ChainTooLong();
+
+function delegate(address to) external {
+    Voter storage me = voters[msg.sender];
+    if (me.weight == 0) revert NotRegistered();
+    if (me.done) revert AlreadyDone();
+
+    // follow the chain of hand-overs to its end
+    for (uint256 hops = 0; voters[to].handedTo != address(0); hops++) {
+        if (hops == MAX_HOPS) revert ChainTooLong();
+        to = voters[to].handedTo;
+    }
+    if (to == msg.sender) revert SelfDelegation();
+
+    Voter storage target = voters[to];
+    if (target.weight == 0) revert NotRegistered();
+
+    me.done = true;
+    me.handedTo = to;
+
+    if (target.done) {
+        tally[target.choice] += me.weight;   // they already voted
+    } else {
+        target.weight += me.weight;          // they will vote later
+    }
+}
+```
+
+Read it slowly. The `for` loop has no body except the cap: as long as `to` has itself delegated (`handedTo` is not the zero address), we step forward. When the loop ends, `to` is the person at the end of the chain, someone who has either voted or is yet to vote.
+
+**Why the loop check matters.** Suppose Ama delegated to Kofi and now Kofi tries to delegate to Ama. Following Ama's chain leads straight back to Kofi, so `to == msg.sender` and the call reverts with `SelfDelegation`. Without that check Kofi's weight would be added to a record that points back at him, and nobody could ever cast it. The same test also catches the plain case of delegating to yourself.
+
+**Why the cap matters.** A loop that walks an unbounded chain costs gas for every step. If a hostile group built a chain thousands of addresses long, the next honest delegator might not be able to afford the walk, and the feature would be stuck. Limiting the walk to `MAX_HOPS` turns an open-ended cost into a bounded one. The price is that very long chains are refused; the person who hits the error can delegate to the end of the chain by name instead.
+
+Finally the function branches on whether the target has already voted, exactly the two cases above. It also writes `done = true` on the delegator so they cannot vote or delegate a second time.
+
+## Reading the winner
+
+```solidity
+function leader() public view returns (uint256 best) {
+    uint256 top = 0;
+    for (uint256 i = 0; i < tally.length; i++) {
+        if (tally[i] > top) {
+            top = tally[i];
+            best = i;
+        }
+    }
+}
+```
+
+`leader()` is a `view`, so calling it from outside costs no gas, but it loops over all options, so keep their number small. On a tie the earlier option wins because we only replace the leader with a strictly higher count. A real election would decide whether that rule is acceptable.
+
+## Possible improvements
+
+The contract is deliberately small. Natural upgrades, each a design decision rather than a quick edit:
+
+- **Registering many voters at once.** One transaction per resident is slow and costly; accept an array and loop, or publish a Merkle root and have residents prove membership.
+- **A time window.** Add a deadline so that votes and delegations are only accepted between two timestamps.
+- **Names on chain.** Store candidate names in a struct array if the contract itself should be the record.
+- **Changing your mind.** Our design does not let a delegator undo a delegation. Supporting it means reversing the weight transfer, which is tricky with chains.
+- **Privacy.** Everything above is public. If votes must be secret you need commitments, which is the subject of the blind auction lesson ahead.
+
+<div class="callout"><strong>Watch out.</strong> Delegation is only safe if you bound the walk. An unlimited <code>while</code> loop that follows <code>handedTo</code> lets anyone build a very long chain on purpose, and the next person who delegates through it pays for every step or cannot delegate at all.</div>
+
+## Try it
+
+Fill in `delegate(address)` of the `Ballot` below. Everything else is written for you. It should reject unregistered callers and double use, follow the chain to its end (with the hop cap), refuse self-delegation, and then either add to the tally or pass on the weight.
+
+<CodeExercise id="delegate" {...exercises["delegate"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

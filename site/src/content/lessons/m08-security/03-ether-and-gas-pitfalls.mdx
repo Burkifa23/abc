@@ -1,0 +1,86 @@
+---
+title: "Sending ether, gas limits, loops, call depth"
+summary: "Why you cannot refuse ether, why transfer and send are no longer a safe default, how unbounded loops freeze contracts, and why call depth is a worry of the past."
+covers: ["Security Considerations", "Security Considerations > Pitfalls"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./03-ether-and-gas-pitfalls";
+
+The financial aid office deploys a contract to pay out scholarships. On the first day of term it loops over 4,000 recipients and sends each their money. Three weeks later, one student's contract wallet starts rejecting payments, and from then on the payout for *everyone* reverts. Nothing was hacked. The design asked too much of the platform. This lesson collects the ways moving ether and burning gas can go wrong without any attacker being clever.
+
+## You cannot refuse ether
+
+It is natural to assume a contract can control what comes in. It cannot. A contract can reject ordinary sends: if it has no `receive` function and no payable `fallback`, a plain transfer to it reverts. But there are paths that put ether into an account without calling any code:
+
+- Another contract can run `selfdestruct(target)`. Since the Cancun upgrade (EIP-6780) `selfdestruct` no longer deletes a contract that was created in an earlier transaction, but it still *sends its whole balance* to `target` and runs none of the target's code.
+- A validator can name the address as the recipient of block rewards and fees, and withdrawals from the beacon chain credit addresses directly.
+- Someone can send ether to an address *before* a contract is deployed there. Contract addresses are predictable.
+
+The lesson for your code: never write logic that depends on `address(this).balance` being exactly what your own accounting says. A check such as `require(address(this).balance == totalDeposits)` can be broken permanently by a donor who sends one wei in this way. Keep your own variable for what you have received and treat the real balance as "at least that much".
+
+If a contract does receive ether through `receive` or `fallback`, remember that a sender using `transfer` or `send` leaves it only 2300 gas, so keep those functions tiny (the next section says why that matters). If you do not want ether at all, simply omit both functions.
+
+## Why transfer and send fell out of favour
+
+Solidity gives an address three ways to push ether: `transfer`, `send` and `call{value: ...}`. The first two forward a fixed **stipend of 2300 gas**. The idea was that 2300 gas is enough to log an event and not enough to do anything dangerous, so a reentrant call would be impossible. For years this looked like a neat protection. Recent compilers mark both as deprecated and warn when you use them.
+
+It stopped being one. The stipend is a constant, but the cost of operations is not. EIP-1884 raised the price of reading storage, and EIP-2929 raised it again for the first access to a slot in a transaction. An honest recipient, such as a multisig wallet or a proxy that reads its implementation address from storage, may now need more than 2300 gas just to receive money, and a `transfer` to it fails. Meanwhile the protection was always partial, because reentrancy needs no ether transfer at all: any call into another contract hands over control. So the stipend breaks good users and stops few bad ones.
+
+The recommended way is `call`:
+
+```solidity
+(bool ok, ) = recipient.call{value: amount}("");
+if (!ok) revert SendFailed();
+```
+
+Three things to know about `call`:
+
+1. It forwards *all remaining gas* (less one 64th, see below), which means the recipient can do real work, including calling back into you. Pair it with checks-effects-interactions or a reentrancy guard.
+2. It **returns `false` on failure** instead of reverting. You must check the result. Ignoring it is a bug that silently loses payments, and the compiler does not force you to check.
+3. `send`, `delegatecall` and `staticcall` behave the same way and return a flag. Only `transfer` reverts by itself, and it is the one the stipend problem hits hardest.
+
+There is a deeper design point. Even when it is written correctly, pushing money to a list of recipients invites trouble. A recipient who *refuses* (a revert in `receive`) or who runs out of gas can block your function if it requires success. This is why the open-auction lesson recorded debts and let people pull them. That withdraw pattern is the standard answer here.
+
+One last unit tip: do your arithmetic in the smallest unit. `wei` is the base; `1 ether` is just the literal `1e18`. Dividing in coarse units truncates, and the dust is lost. Compute `amount * 3 / 100` on wei rather than rounding a fee in whole ether.
+
+## Gas limits and loops
+
+Every block has a gas limit, in the tens of millions of gas. A transaction that needs more than the limit can never be mined, no matter how much the sender is willing to pay. That has a nasty consequence for loops whose length depends on stored data:
+
+```solidity
+address[] public recipients;
+
+function payAll() external {
+    for (uint256 i = 0; i < recipients.length; i++) {
+        // each iteration costs gas; the array only grows
+    }
+}
+```
+
+If anyone can append to `recipients`, the loop can eventually outgrow the block limit. From that day `payAll()` can never succeed again, and if it holds funds, they are locked. The contract is *stalled forever* by growth rather than by an attack. If an adversary controls the growth, they can do it on purpose and cheaply.
+
+The same warning covers `view` functions. A read-only call from outside runs on one node with a generous gas allowance, so a long loop merely feels slow. But another contract may call that view function as part of a state-changing transaction, where the block limit applies. Say clearly in your documentation when a function has unbounded cost.
+
+Mitigations: avoid iterating over user-controlled lists; process in bounded batches with a stored cursor; or invert the design so that each user acts on their own entry (pull payments).
+
+## Call stack depth
+
+The EVM limits nested calls to 1024 levels. In the early days an attacker could build up 1,000 nested calls in a contract of their own and then call yours, so your own external call would fail for lack of depth. If your code assumed it would succeed, you were exposed.
+
+This attack is dead in practice. Since EIP-150 (the Tangerine Whistle fork), a call may forward at most **63/64 of the remaining gas**. Each level of nesting loses a sixty-fourth, so reaching depth 1024 would require a starting gas amount far above any block limit. You will see the 1024 figure in old advice. It is worth knowing but not worth designing around. One related fact that confuses beginners: the call stack depth and the 1024-slot *expression* stack are unrelated limits that happen to share a number.
+
+If a call does fail for lack of depth, `.send()`, `.call()`, `.delegatecall()` and `.staticcall()` return `false`. High-level calls to other contracts revert.
+
+<div class="callout"><strong>Watch out.</strong> An ignored return value is a payment that did not happen but that your records say did. Every low-level call needs its <code>ok</code> checked, or the failure must be a deliberate, documented choice.</div>
+
+## Try it
+
+The scholarship contract below pays with `transfer`. Replace it with a `call` that checks the result and reverts with `SendFailed` when it fails. The contract must compile without any warnings.
+
+<CodeExercise id="checked-call" {...exercises["checked-call"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

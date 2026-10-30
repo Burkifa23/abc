@@ -1,0 +1,11 @@
+{
+  "n": 2,
+  "slug": "mini-blockchain",
+  "title": "Mini Blockchain",
+  "kind": "learn",
+  "summary": "Build blocks, hashes and proof-of-work inside a smart contract.",
+  "concepts": ["struct", "dynamic arrays", "keccak256", "abi.encode", "proof of work", "events"],
+  "adaptedFrom": "freeCodeCamp web3: digital ledgers + proof-of-work",
+  "docs": ["m00-foundations/03-blocks-and-mining", "m03-types/07-arrays-and-slices", "m04-units-and-globals/04-errors-math-crypto"],
+  "openFiles": ["README.md", "src/MiniChain.sol"]
+}

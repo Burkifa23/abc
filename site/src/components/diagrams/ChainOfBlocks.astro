@@ -1,0 +1,28 @@
+---
+const blocks = [
+  { n: 1, hash: "00a3f9…", prev: "0000…" },
+  { n: 2, hash: "00c71e…", prev: "00a3f9…" },
+  { n: 3, hash: "007b2d…", prev: "00c71e…" },
+];
+---
+<svg viewBox="0 0 640 140" role="img" aria-labelledby="coc-t" font-family="var(--mono)" font-size="12">
+  <title id="coc-t">Three blocks in a chain; each block stores the previous block's hash</title>
+  <defs>
+    <marker id="coc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="currentColor" />
+    </marker>
+  </defs>
+  {blocks.map((b, i) => (
+    <g transform={`translate(${i * 220 + 10} 20)`}>
+      <rect width="180" height="100" rx="8" fill="none" stroke="var(--border)" stroke-width="1.5" />
+      <text x="12" y="22" fill="currentColor" font-weight="600">Block {b.n}</text>
+      <text x="12" y="52" fill="var(--muted-fg)">prevHash</text>
+      <text x="80" y="52" fill="currentColor">{b.prev}</text>
+      <text x="12" y="80" fill="var(--muted-fg)">hash</text>
+      <text x="80" y="80" fill="currentColor">{b.hash}</text>
+    </g>
+  ))}
+  {[0, 1].map((i) => (
+    <path d={`M${i * 220 + 190} 108 H${i * 220 + 200} V72 H${i * 220 + 230}`} fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#coc-arrow)" />
+  ))}
+</svg>

@@ -1,0 +1,190 @@
+---
+title: "Breaking changes 0.5 to 0.8, and language influences"
+summary: "What each breaking release (0.5, 0.6, 0.7, 0.8) changed and why, how to read old code you meet in the wild, how to talk to pre-0.5 contracts, and which languages shaped Solidity."
+covers: ["Solidity v0.5.0 Breaking Changes", "Solidity v0.5.0 Breaking Changes > Semantic Only Changes", "Solidity v0.5.0 Breaking Changes > Semantic and Syntactic Changes", "Solidity v0.5.0 Breaking Changes > Explicitness Requirements", "Solidity v0.5.0 Breaking Changes > Deprecated Elements", "Solidity v0.5.0 Breaking Changes > Interoperability With Older Contracts", "Solidity v0.5.0 Breaking Changes > Example", "Solidity v0.6.0 Breaking Changes", "Solidity v0.6.0 Breaking Changes > Changes the Compiler Might not Warn About", "Solidity v0.6.0 Breaking Changes > Explicitness Requirements", "Solidity v0.6.0 Breaking Changes > Semantic and Syntactic Changes", "Solidity v0.6.0 Breaking Changes > New Features", "Solidity v0.6.0 Breaking Changes > Interface Changes", "Solidity v0.6.0 Breaking Changes > How to update your code", "Solidity v0.7.0 Breaking Changes", "Solidity v0.7.0 Breaking Changes > Silent Changes of the Semantics", "Solidity v0.7.0 Breaking Changes > Changes to the Syntax", "Solidity v0.7.0 Breaking Changes > Removal of Unused or Unsafe Features", "Solidity v0.7.0 Breaking Changes > Interface Changes", "Solidity v0.7.0 Breaking Changes > How to update your code", "Solidity v0.8.0 Breaking Changes", "Solidity v0.8.0 Breaking Changes > Silent Changes of the Semantics", "Solidity v0.8.0 Breaking Changes > New Restrictions", "Solidity v0.8.0 Breaking Changes > Interface Changes", "Solidity v0.8.0 Breaking Changes > How to update your code", "Language Influences"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./11-history";
+
+You will meet old Solidity. Tutorials from 2018, audit reports, forks of famous protocols, a deployed contract whose verified source says `pragma solidity ^0.4.24`. Each **breaking release** (0.5, 0.6, 0.7, 0.8) removed footguns by making code stricter, so old code does not compile on a modern compiler. Knowing what changed, and why, lets you read that code correctly and port it. This lesson walks through the most consequential changes of each release in order, then lists the languages that influenced Solidity.
+
+A word on labels. The releases group changes the same way every time: **silent** changes alter behaviour with no compiler error (these are the dangerous ones), **explicitness** changes make you spell out what used to be implied, **removals** delete features, and **interface** changes affect the tools and JSON, not your code.
+
+## Version 0.5.0
+
+Its goal was clarity: say what you mean.
+
+### Semantic Only Changes
+
+These keep the code compiling but change what it does:
+
+- Signed right shift now rounds toward negative infinity (a true arithmetic shift): `-3 >> 1` is `-2`, not `-1`.
+- `continue` in a `do ... while` jumps to the condition check, as in other languages; it used to jump back into the body, which could loop forever.
+- Calls to `view` and `pure` functions use `STATICCALL` (on Byzantium or later), so the EVM itself blocks state changes.
+- Low-level `.call()`, `.delegatecall()` and `.staticcall()` no longer pad a single `bytes` argument, and the ABI decoder now reverts when calldata is too short or points out of bounds.
+- External calls forward all available gas (from Tangerine Whistle on), and the ABI encoder pads byte arrays and strings that come from calldata.
+
+### Semantic and Syntactic Changes
+
+`.call()`, `keccak256()`, `sha256()` and `ripemd160()` accept exactly **one `bytes` argument**, so concatenation is explicit: `keccak256(abi.encodePacked(a, b))`, `.call(abi.encodeWithSignature("f(uint256)", x))`. The low-level calls now return `(bool, bytes memory)`, which gives access to the return data. Variables follow **C99 scoping**: usable only after they are declared and within the same or a nested scope (a `for` initialiser is visible across the loop).
+
+### Explicitness Requirements
+
+- Every function (and constructor) needs a **visibility**; every variable of struct, array or mapping type needs a **data location**, including parameters (`external` parameters use `calldata`).
+- A contract type no longer carries the `address` members. Write `address(c).balance` rather than `c.balance`.
+- `address` was split into `address` and `address payable`; only the latter has `transfer` and `send`. Contract types convert to `address payable` only if they have a payable fallback.
+- Conversions between unrelated contract types and between `bytesX` and `uintY` of different sizes are blocked, because padding sides differ (right for `bytes`, left for `uint`). Resize within the type first.
+- Using `msg.value` in a non-payable function is an error.
+
+### Deprecated Elements
+
+A long list of removals, in groups. *Tooling:* the `--formal` flag went (the SMTChecker replaced it), `--julia` became `--yul`, JSON AST fields were reshaped, and unlinked library placeholders became hashes. *Constructors:* use the `constructor` keyword, and give base-constructor arguments exactly once and with parentheses only when arguments exist. *Functions:* `callcode`, `suicide`, `sha3` and `throw` are gone in favour of `delegatecall`, `selfdestruct`, `keccak256` and `revert`/`require`/`assert`. *Conversions, literals, variables, syntax:* the `years` unit, the `0X` prefix, `var`, empty structs, uninitialised storage variables, zero-length fixed arrays, unary `+`, the "loose assembly" syntax with jumps and labels, and more. New keywords: `calldata` and `constructor`; newly reserved ones include `alias`, `apply`, `auto`, `copyof`, `define`, `immutable`, `implements`, `macro`, `mutable`, `override`, `partial`, `promise`, `reference`, `sealed`, `sizeof`, `supports`, `typedef` and `unchecked`.
+
+### Interoperability With Older Contracts
+
+Deployed contracts cannot be changed, but new code can still call them through an **interface** that declares their functions with explicit visibility and mutability. One catch: an old function marked `constant` was never enforced, so it might write state. Calling it through `staticcall` (which the new compiler uses for `view`) could revert. Mark it `view` in your interface only if you are sure it does not write. Old libraries are used the same way: declare the functions without bodies and supply the address when linking.
+
+### Example
+
+Old style (does not compile on a modern compiler):
+
+```
+contract Pool {
+    mapping(address => uint) stakes;
+    function stake() payable { stakes[msg.sender] += msg.value; }
+    function stakeOf(address who) constant returns (uint) { return stakes[who]; }
+    function drain(address to) { if (msg.sender != to) throw; to.transfer(this.balance); }
+}
+```
+
+Updated:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Pool {
+    mapping(address => uint256) stakes;
+
+    function stake() external payable {
+        stakes[msg.sender] += msg.value;
+    }
+
+    function stakeOf(address who) external view returns (uint256) {
+        return stakes[who];
+    }
+
+    function drain(address payable to) external {
+        require(msg.sender == to);
+        (bool ok, ) = to.call{value: address(this).balance}("");
+        require(ok);
+    }
+}
+```
+
+Visibility, `payable`, `view` in place of `constant`, `require` in place of `throw`, `address(this).balance`, and an `address payable` parameter are all consequences of this release (`transfer` has since been deprecated in favour of `call`).
+
+## Version 0.6.0
+
+### Changes the Compiler Might not Warn About
+
+The type of an exponentiation `a ** b` is now the type of the **base**, where it used to be the smallest type holding both operands; signed bases are allowed.
+
+### Explicitness Requirements
+
+- A function can only be overridden if it is marked `virtual` (or declared in an interface), and the overriding function must say `override`, listing every base when several define the function: `override(Base1, Base2)`.
+- Setting an array's `length` is read-only for every array; use `push()`, `push(value)` and `pop()`.
+- `abstract` marks contracts that do not implement all functions; they cannot be created with `new`.
+- Libraries must implement all their functions. Assembly variable names may not end in `_slot` or `_offset` or shadow outside declarations, argument-less opcodes become calls (`gas()`), and state variable shadowing is forbidden.
+
+### Semantic and Syntactic Changes
+
+- The unnamed fallback function was split in two: **`receive()`** runs when the calldata is empty (it is implicitly payable), and **`fallback()`** runs when nothing else matches, which you mostly need only for proxies.
+- External function types no longer convert to `address`; use their `.address` member.
+- `push(value)` on a storage array no longer returns the new length.
+
+### New Features
+
+`try`/`catch` for failed external calls; `struct` and `enum` at file level; slices of calldata arrays (`msg.data[4:]`); multiple `@return` entries in NatSpec; the `leave` statement in Yul and assembly; and `payable(x)` to turn an `address` into an `address payable`.
+
+### Interface Changes
+
+A new error reporter (the old one stays available behind `--old-reporter`); the **IPFS hash** of the metadata is now appended by default instead of the Swarm hash (configurable with `--metadata-hash`), which is why readers should decode the CBOR block by its length; the Yul optimizer now runs together with the old one under `--optimize` (disable it with `--no-optimize-yul`); and the C API changed memory ownership.
+
+### How to update your code
+
+Change `address(f)` to `f.address`; replace the unnamed function with `receive`, `fallback` or both; stop using `array.length++` (use `push()`), and use `uint length = array.length` after `push(value)`; add `virtual` and `override`; document every named return in NatSpec; rename assembly variables so they do not clash; and write `gas()` and `pc()` as calls.
+
+## Version 0.7.0
+
+### Silent Changes of the Semantics
+
+Exponentiation and shifts of **literals by non-literals** (`1 << x`, `2 ** x`) now always compute in `uint256` (or `int256` for negative literals), instead of in the type of the shift amount or exponent, where results could be surprisingly truncated.
+
+### Changes to the Syntax
+
+- Value and gas for calls go in braces: `x.f{value: 2 ether, gas: 10000}(arg)`. The old `x.f.value(2 ether).gas(10000)(arg)` is an error.
+- `now` is deprecated in favour of `block.timestamp`.
+- NatSpec on variables is allowed only for public state variables.
+- `gwei` became a keyword, string literals must be printable ASCII (with escapes), and `unicode"..."` literals were added.
+- Inheritance may *tighten* mutability: a nonpayable function can be overridden by `view` or `pure`, a `view` by `pure`.
+- Assembly: no dots in user-defined names, and the suffixes `x_slot` and `x_offset` became `x.slot` and `x.offset`.
+
+### Removal of Unused or Unsafe Features
+
+- **Mappings outside storage**: a struct or array containing a mapping can live only in storage, and copying such a struct no longer silently skips the mapping.
+- Constructors no longer need `public` or `internal` (mark the contract `abstract` to prevent creation); library functions cannot be `virtual`; two events with the same signature in one hierarchy are forbidden; and `using A for B` applies only in the contract that writes it (derived contracts repeat it).
+- Shifts by signed types are rejected, the `finney` and `szabo` denominations are gone, and `var` is now a parser error.
+
+### Interface Changes
+
+JSON AST marks hex string literals with `kind: "hexString"` and drops members with `null` values; NatSpec output for constructors and functions became consistent.
+
+### How to update your code
+
+Replace `x.f.value(...)()` with `x.f{value: ...}()`; `now` with `block.timestamp`; cast shift amounts to unsigned (`x >> uint(256 - y)`); repeat `using` statements in derived contracts; drop `public` from constructors; and use `.slot` and `.offset`.
+
+## Version 0.8.0
+
+The biggest change for everyday code is that arithmetic became safe by default.
+
+### Silent Changes of the Semantics
+
+- **Checked arithmetic.** Overflow and underflow revert. Use `unchecked { ... }` for the old wrapping behaviour.
+- **ABI coder v2 is on by default**, with more types and more input validation; `pragma abicoder v1;` restores the old coder.
+- **Exponentiation is right-associative**: `2 ** 3 ** 2` is `2 ** 9`, not `8 ** 2`.
+- **Failing assertions and internal errors use `revert`** with `Panic(uint256)` data instead of the `invalid` opcode, saving gas on failure while still being distinguishable from a failed `require`.
+- A corrupted byte-array length in storage causes a panic; constants in array-length expressions are rounded like runtime values; and the type `byte` is gone (use `bytes1`).
+
+### New Restrictions
+
+- Stricter explicit conversions of literals (no negative literals or values above `type(uint160).max` to `address`; use `type(uint).max` instead of `uint(-1)`).
+- A conversion may change **at most one** of sign, width or type category at a time, so `uint16(int8)` becomes `uint16(uint8(int8))` or `uint16(int16(int8))` (which give different results for negative numbers), and `address(uint)` becomes `address(uint160(uint))`.
+- `address` literals and `msg.sender`/`tx.origin` are plain `address`; use `payable(...)` explicitly. Conversions to `address` never yield `address payable`.
+- Call options may be given only once, `{gas: 10000, value: 1}`; the global `log0` to `log4` are removed (use assembly); an `enum` may have at most 256 members; the names `this`, `super` and `_` cannot be declared (public functions and events are exempt); the `\b`, `\f` and `\v` escapes are removed; and unary minus no longer applies to unsigned integers.
+
+### Interface Changes
+
+`--combined-json` fields such as `abi`, `devdoc` and `userdoc` are now JSON objects rather than strings; the legacy AST and the old error reporter were removed.
+
+### How to update your code
+
+Wrap intentionally wrapping arithmetic in `unchecked`; optionally drop SafeMath for plain operators; use `pragma abicoder v1;` only if you need the old coder; replace `byte` with `bytes1`; add the extra intermediate conversions; merge `{gas: ...}{value: ...}` into one; write `payable(msg.sender).transfer(x)`; parenthesise `x**y**z` as `(x**y)**z` if you relied on the left-to-right reading; and use assembly for `log0`..`log4`.
+
+<div class="callout"><strong>Watch out.</strong> The dangerous rows are the silent ones. Porting code from 0.7 to 0.8 compiles easily and then <em>behaves differently</em>: arithmetic that used to wrap now reverts, and <code>a ** b ** c</code> is grouped differently. Read the silent-change lists, not just the compiler errors.</div>
+
+## Language influences
+
+Solidity is a curly-bracket language, most strongly shaped by **C++**: variable declarations, `for` loops, function overloading, and implicit and explicit conversions all look familiar to a C++ programmer. **JavaScript** influenced the early language (function-level scoping and `var`), but that influence was reduced from 0.4.0; what remains is the `function` keyword and import syntax that resembles JavaScript's. **Python** contributed the model for **modifiers** (inspired by decorators, though far less powerful), multiple inheritance with C3 linearization and the `super` keyword, and the way assignment either copies a value or shares a reference, depending on the type.
+
+## Try it
+
+This contract was written in the 0.4 era. The pragma has been bumped to 0.8, so it no longer compiles. Port it: a constructor keyword, `block.timestamp`, a `receive` function, a low-level call with `{value: ...}` that checks its result, and `require` in place of `throw`. The result must compile with no warnings.
+
+<CodeExercise id="port-piggy" {...exercises["port-piggy"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

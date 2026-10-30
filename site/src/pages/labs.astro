@@ -1,20 +1,37 @@
 ---
 import Base from "../layouts/Base.astro";
 import LabCard from "../components/LabCard.astro";
-import { labs } from "../data";
+import labs from "../labs.json";
 const base = import.meta.env.BASE_URL;
+const learn = labs.filter((l) => l.kind === "learn");
+const build = labs.filter((l) => l.kind === "build");
 ---
 <Base title="Labs · Ashesi Blockchain Community" current="labs">
   <main class="container" style="padding-top:48px;padding-bottom:96px">
     <div class="section-head">
       <span class="eyebrow">Labs</span>
-      <h1>Pick a workshop, open a lab.</h1>
+      <h1>Pick a lab, open a Codespace.</h1>
       <p class="lead">
         Each lab is its own Codespace with Foundry ready to go. Codespaces is free for students
         through the <a href="https://education.github.com/pack">GitHub Student Developer Pack</a>.
-        New here? Read <a href={`${base}docs/#labs`}>how labs work</a> first.
+        New here? Read <a href={`${base}docs/m01-smart-contracts/01-getting-started/`}>how labs work</a> first.
       </p>
     </div>
-    <div class="grid">{labs.map((lab) => <LabCard lab={lab} />)}</div>
+    <nav class="hero-actions" style="justify-content:flex-start;margin-bottom:32px">
+      {learn.length > 0 && <a class="btn btn-outline" href="#learn">Learn</a>}
+      {build.length > 0 && <a class="btn btn-outline" href="#build">Build</a>}
+    </nav>
+    {learn.length > 0 && (
+      <section id="learn" style="margin-bottom:48px">
+        <h2>Learn</h2>
+        <div class="grid">{learn.map((lab) => <LabCard lab={lab} />)}</div>
+      </section>
+    )}
+    {build.length > 0 && (
+      <section id="build">
+        <h2>Build</h2>
+        <div class="grid">{build.map((lab) => <LabCard lab={lab} />)}</div>
+      </section>
+    )}
   </main>
 </Base>

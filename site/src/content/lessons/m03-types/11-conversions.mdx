@@ -1,0 +1,99 @@
+---
+title: "Type conversions"
+summary: "When Solidity converts types for you, when you have to ask, and exactly which bits survive a cast between integers, bytes and addresses."
+covers: ["Types", "Types > Conversions between Elementary Types", "Types > Conversions between Literals and Elementary Types"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./11-conversions";
+
+Pouring a cup of tea into a jug is easy, because there is room to spare. Pouring the jug into the cup spills. Type conversion works the same way. Moving a value into a type with room to spare is safe, and the compiler does it silently. Moving it into something smaller or differently shaped can lose part of it, so Solidity makes you say so out loud.
+
+## Implicit conversions
+
+The compiler converts automatically in assignments, in function arguments and when an operator sees two different types. It does this only for **value types** and only when it makes sense and **nothing is lost**. So `uint8` goes to `uint16` or `uint256`, and `int128` goes to `int256`. But `int8` does not go to `uint256`, since a negative number has no place in an unsigned type.
+
+When an operator gets two types, one operand is converted to the other's type, and the operation happens in that type:
+
+```solidity
+uint16  ects  = 30;
+uint64  budget = 2500;
+uint128 total = ects * budget;  // ects is widened to uint64, multiplied there, then widened to uint128
+```
+
+Notice the multiplication itself is done in `uint64`. If it would overflow `uint64`, it reverts; the later widening to `uint128` cannot rescue it.
+
+## Explicit conversions
+
+When no implicit conversion exists but you are sure, you write the target type like a function: `uint8(x)`. This can silently change the value, so you are taking responsibility. How the bits move depends on the type.
+
+**Integers: the low bits stay.** Converting to a smaller integer drops the high-order bits. Converting to a bigger one pads with zeros on the left (for unsigned values), so the number stays equal.
+
+```solidity
+uint32 a = 0xA1B2C3D4;
+uint16 b = uint16(a);        // 0xC3D4, the top half is cut off
+uint32 c = uint32(b);        // 0x0000C3D4
+```
+
+**Signed and unsigned: same bits, different meaning.** Converting `int256` to `uint256` keeps the 256 bits exactly as they are and reads them as unsigned. So `uint256(int256(-3))` is a huge number close to 2^256, not 3. Since 0.8.0 you cannot change the size and the sign in one cast. Take two steps so each choice is visible: for an `int8 x`, write `uint16(uint8(x))` to say "reinterpret the 8 bits first, then widen".
+
+**Fixed `bytesN`: the high bytes stay.** A `bytesN` is a sequence of bytes, with the first byte at the left. Casting to a smaller `bytesN` keeps the *first* bytes and drops the tail; casting to a larger one pads with zero bytes on the **right**.
+
+```solidity
+bytes4 id   = 0xCAFEF00D;
+bytes2 head = bytes2(id);    // 0xCAFE
+bytes6 wide = bytes6(id);    // 0xCAFEF00D0000
+```
+
+Because integers cut from the left and `bytesN` cut from the right, a cast directly between an integer and a `bytesN` of a different size is refused. With equal sizes it is allowed. If the sizes differ, you pick the rule on purpose with an in-between cast. Starting from `bytes2 h = 0xBEEF`:
+
+```solidity
+uint32 a = uint16(h);          // 0x0000BEEF: read the bytes as a number, then widen
+uint32 b = uint32(bytes4(h));  // 0xBEEF0000: pad the bytes on the right first, then read
+uint8  c = uint8(bytes1(h));   // 0xBE: keep the first byte
+uint8  d = uint8(uint16(h));   // 0xEF: keep the low byte of the number
+```
+
+A `bytes` array (or a calldata slice) can be cast to a `bytesN` as well. If the array is longer it is cut at the end; if shorter it is padded with zeros at the end.
+
+**Addresses.** An `address` is 20 bytes, and the only explicit conversions are with `bytes20` and `uint160`, in both directions. To go from a 256-bit number to an address, narrow it first:
+
+```solidity
+address who = address(uint160(someUint256));
+uint160 raw = uint160(who);
+address payable pay = payable(who);   // address -> address payable needs payable(...)
+```
+
+## Literals and elementary types
+
+A literal is a value written directly in the source. Literals convert more freely than variables, as long as the value fits.
+
+**Integers.** A decimal or hex literal converts to any integer type big enough to hold it, and fails otherwise:
+
+```solidity
+uint8  a = 99;         // fine
+uint16 b = 0xABCDE;    // compile error: needs 20 bits, so it would be truncated
+```
+
+Before 0.8.0 an explicit cast would silently truncate a literal; now it is as strict as the implicit one.
+
+**Fixed-size bytes.** The rules differ for decimal and hex:
+
+- A decimal literal cannot be converted to a `bytesN`, with the one exception of zero (`bytes4 z = 0;`).
+- A hex literal converts only if the number of digits exactly fills the type: with `bytes3`, `0xA1B2C3` and `0x00FF01` are fine, while `0xA1B2` and `0xA1B2C3D` are not. Zero in any form is again accepted.
+- A string or hex-string literal converts if it has the same number of bytes or fewer: `bytes3 t = "go";` and `"cat"` work, `"lion"` does not.
+
+**Addresses.** A hex literal that has the right length and a valid mixed-case checksum is already an `address`. No other literal converts to `address`, so `address a = 0;` fails; write `address(0)`.
+
+<div class="callout"><strong>Watch out.</strong> A narrowing cast never complains. <code>uint8(x)</code> with <code>x = 300</code> gives 44, with no revert. If the value comes from a user, check the range with <code>require</code> before you cast, or use a safe-casting helper.</div>
+
+## Try it
+
+Fill in the five conversion functions in `Casts`. Each must use an explicit cast, and the file must compile without warnings.
+
+<CodeExercise id="casts-explicit" {...exercises["casts-explicit"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

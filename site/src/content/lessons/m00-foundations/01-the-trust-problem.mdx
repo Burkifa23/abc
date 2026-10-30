@@ -1,0 +1,71 @@
+---
+title: "The trust problem and digital ledgers"
+summary: "Explain why shared records need a trusted keeper, and how a blockchain replaces that keeper with a ledger everyone can check."
+covers: []
+---
+
+import Figure from "../../../components/Figure.astro";
+import ChainOfBlocks from "../../../components/diagrams/ChainOfBlocks.astro";
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./01-the-trust-problem";
+
+Imagine the Ashesi Susu Club: forty students each put GH₵ 20 into a pot every week, and one member takes the whole pot in turn. Someone has to keep the notebook that says who paid and who has already collected. Then one Friday the notebook shows that Kofi collected twice, and the treasurer says, "That's what the book says." Everyone can argue, but nobody can *check* anything. All of the trust sits in one notebook and one person.
+
+That is the **trust problem**: when many people share a record, who decides what it says, and why should anyone believe them?
+
+## Ledgers and the usual answer
+
+A **ledger** is a record of who owns what and who paid whom. Susu notebooks, bank statements, land registries and the university's fee records are all ledgers.
+
+Normally we solve the trust problem by picking a **trusted third party**: a bank, a registrar, a treasurer. They keep the only copy and everyone accepts it. This works well most of the time, but it has three weak spots:
+
+- **Single point of failure.** If the keeper loses the book, is hacked, or goes offline, the record is gone or unavailable.
+- **Single point of control.** The keeper can edit history, freeze entries, or favour a friend.
+- **Gatekeeping.** Only people the keeper allows can write to the book, or even read it.
+
+A **digital ledger** is simply a ledger that lives on computers. Digitising it makes copying cheap, but it does not fix the trust problem: whoever runs the database still decides what it says.
+
+## A ledger with many copies
+
+A **blockchain** takes a different route. Instead of one keeper, *many* computers each hold a full copy of the ledger. These computers are called **nodes**, and together they form a **peer-to-peer network**: no node is the boss, and any node can talk to any other.
+
+Back to the susu club: imagine every member keeps their own copy of the notebook. When Ama pays, she announces it to the whole group, and everyone writes it down. If someone later tries to show a copy where Kofi collected twice, forty other copies disagree with it, and the lie loses.
+
+Making that idea work for real needs four ingredients, and the rest of this module teaches them one by one:
+
+1. **Hashes** give every piece of data a tamper-evident fingerprint (lesson 2).
+2. **Blocks and proof of work** let strangers agree on the next page of the ledger (lesson 3).
+3. **Digital signatures** prove who authorised each entry (lesson 4).
+4. **Consensus rules** decide which copy wins when copies disagree (lesson 5).
+
+## Blocks and chains
+
+Writing every entry into the ledger one by one would be slow. A blockchain groups entries into pages called **blocks**. Each block holds:
+
+- a batch of entries (for money, "Ama pays Kofi 5"),
+- a **hash** of the block before it (a fingerprint, explained next lesson),
+- its own hash.
+
+Because each block stores the fingerprint of the previous one, the blocks form a **chain**. That linking is what makes history hard to rewrite.
+
+<Figure caption="Three blocks. Each stores the hash of the block before it, so changing Block 1 would break the link in Block 2.">
+  <ChainOfBlocks />
+</Figure>
+
+Notice that Block 2's `prevHash` is exactly Block 1's `hash`. If someone edited Block 1, its hash would change, Block 2 would no longer point at it, and every honest node would see the break immediately.
+
+<div class="callout"><strong>Watch out.</strong> "Blockchain" does not mean "magic database that is always true". A blockchain only guarantees that what was recorded cannot be quietly changed afterwards and that everyone sees the same record. If Ama types a wrong amount, or lies about something that happened off-chain, the ledger will faithfully remember the wrong thing forever.</div>
+
+## What you get in return
+
+Replacing one keeper with a network gives a ledger that is:
+
+- **Shared.** Anyone can run a node and read the full history.
+- **Append-only.** New blocks are added at the end; old ones are not edited.
+- **Verifiable.** You do not have to trust a person; you can check the rules yourself.
+
+The price is real: copies cost storage, agreeing takes time, and anything written is hard to undo. A blockchain is not better than a normal database for everything. It earns its place when several parties who do not fully trust each other need one shared record, with nobody in charge of it.
+
+## Check your understanding
+
+<Quiz questions={quiz} />

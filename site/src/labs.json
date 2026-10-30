@@ -1,0 +1,563 @@
+[
+  {
+    "n": 1,
+    "slug": "hello-foundry",
+    "title": "Hello Foundry",
+    "kind": "learn",
+    "summary": "Run your first tests and write a contract that greets the campus.",
+    "concepts": [
+      "contract",
+      "state variable",
+      "constructor",
+      "view",
+      "event",
+      "custom error"
+    ],
+    "adaptedFrom": "Solana & NEAR hello-world setup projects",
+    "docs": [
+      "m01-smart-contracts/02-simple-storage",
+      "m02-source-and-structure/04-anatomy-of-a-contract"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/HelloWorld.sol"
+    ],
+    "dir": "01-hello-foundry",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F01-hello-foundry%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/01-hello-foundry"
+  },
+  {
+    "n": 2,
+    "slug": "mini-blockchain",
+    "title": "Mini Blockchain",
+    "kind": "learn",
+    "summary": "Build blocks, hashes and proof-of-work inside a smart contract.",
+    "concepts": [
+      "struct",
+      "dynamic arrays",
+      "keccak256",
+      "abi.encode",
+      "proof of work",
+      "events"
+    ],
+    "adaptedFrom": "freeCodeCamp web3: digital ledgers + proof-of-work",
+    "docs": [
+      "m00-foundations/03-blocks-and-mining",
+      "m03-types/07-arrays-and-slices",
+      "m04-units-and-globals/04-errors-math-crypto"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/MiniChain.sol"
+    ],
+    "dir": "02-mini-blockchain",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F02-mini-blockchain%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/02-mini-blockchain"
+  },
+  {
+    "n": 3,
+    "slug": "signatures",
+    "title": "Signatures",
+    "kind": "learn",
+    "summary": "Prove who sent a transfer with a signature, then let anyone relay it.",
+    "concepts": [
+      "ecrecover",
+      "keccak256",
+      "abi.encode",
+      "nonces",
+      "replay protection",
+      "signed messages"
+    ],
+    "adaptedFrom": "freeCodeCamp web3: digital signatures by building a wallet",
+    "docs": [
+      "m00-foundations/04-keys-and-signatures",
+      "m04-units-and-globals/04-errors-math-crypto",
+      "m07-by-example/05-micropayment-channel"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/SignedCoin.sol"
+    ],
+    "dir": "03-signatures",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F03-signatures%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/03-signatures"
+  },
+  {
+    "n": 4,
+    "slug": "video-game-marketplace",
+    "title": "Video Game Marketplace",
+    "kind": "build",
+    "summary": "Build a game shop where players earn coins, buy items and sell them back.",
+    "concepts": [
+      "mapping",
+      "nested mapping",
+      "string keys",
+      "custom errors",
+      "events"
+    ],
+    "adaptedFrom": "freeCodeCamp web3: build a video game marketplace blockchain",
+    "docs": [
+      "m03-types/09-mappings",
+      "m06-contracts/10-custom-errors"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/GameMarketplace.sol"
+    ],
+    "dir": "04-video-game-marketplace",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F04-video-game-marketplace%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/04-video-game-marketplace"
+  },
+  {
+    "n": 5,
+    "slug": "shared-bank",
+    "title": "Shared Bank",
+    "kind": "learn",
+    "summary": "Hold real ether safely: deposit, transfer, withdraw, and survive a reentrancy attack.",
+    "concepts": [
+      "payable",
+      "msg.value",
+      "receive",
+      "call{value:}",
+      "checks-effects-interactions",
+      "reentrancy"
+    ],
+    "adaptedFrom": "Plan.md Workshop 2 + Solidity docs Subcurrency",
+    "docs": [
+      "m01-smart-contracts/03-subcurrency",
+      "m04-units-and-globals/02-block-and-transaction",
+      "m08-security/02-reentrancy",
+      "m08-security/06-withdrawal-pattern"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/SharedBank.sol"
+    ],
+    "dir": "05-shared-bank",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F05-shared-bank%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/05-shared-bank"
+  },
+  {
+    "n": 6,
+    "slug": "word-guess",
+    "title": "Word Guess",
+    "kind": "learn",
+    "summary": "Build a guessing game and learn why private data on-chain is never secret.",
+    "concepts": [
+      "modifier",
+      "onlyOwner",
+      "keccak256",
+      "private vs secret",
+      "storage slots",
+      "events"
+    ],
+    "adaptedFrom": "NEAR: word guessing game",
+    "docs": [
+      "m06-contracts/03-function-modifiers",
+      "m08-security/01-private-data-and-randomness",
+      "m09-under-the-hood/03-storage-layout"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/WordGuess.sol"
+    ],
+    "dir": "06-word-guess",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F06-word-guess%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/06-word-guess"
+  },
+  {
+    "n": 7,
+    "slug": "sentence-maker",
+    "title": "Sentence Maker",
+    "kind": "build",
+    "summary": "Let the whole class write one sentence, a word at a time, with rules enforced on-chain.",
+    "concepts": [
+      "string and bytes",
+      "struct arrays",
+      "string.concat",
+      "custom errors",
+      "access control"
+    ],
+    "adaptedFrom": "NEAR: build a sentence-making smart contract",
+    "docs": [
+      "m03-types/03-bytes-and-literals",
+      "m03-types/08-structs",
+      "m04-units-and-globals/03-abi-encoding-functions"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/SentenceMaker.sol"
+    ],
+    "dir": "07-sentence-maker",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F07-sentence-maker%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/07-sentence-maker"
+  },
+  {
+    "n": 8,
+    "slug": "campus-elections",
+    "title": "Secure Campus Elections",
+    "kind": "build",
+    "summary": "Build a campus election contract with registered voters, one vote each, and a tamper-proof tally.",
+    "concepts": [
+      "mappings",
+      "access control",
+      "events",
+      "custom errors"
+    ],
+    "adaptedFrom": "Plan.md Workshop 3; Solidity docs \"Voting\"",
+    "docs": [
+      "m07-by-example/01-voting"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/Election.sol"
+    ],
+    "dir": "08-campus-elections",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F08-campus-elections%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/08-campus-elections"
+  },
+  {
+    "n": 9,
+    "slug": "fungible-token",
+    "title": "Fungible Token (ERC-20)",
+    "kind": "learn",
+    "summary": "Write the ERC-20 standard from scratch and mint the Ashesi Campus Token.",
+    "concepts": [
+      "interfaces",
+      "ERC-20",
+      "allowances",
+      "events",
+      "fuzz testing"
+    ],
+    "adaptedFrom": "Solana: token program, minting a fungible token",
+    "docs": [
+      "m06-contracts/13-abstract-and-interfaces",
+      "m06-contracts/09-events",
+      "m06-contracts/10-custom-errors"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/CampusToken.sol",
+      "src/IERC20.sol"
+    ],
+    "dir": "09-fungible-token",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F09-fungible-token%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/09-fungible-token"
+  },
+  {
+    "n": 10,
+    "slug": "fundraising",
+    "title": "Fundraising",
+    "kind": "build",
+    "summary": "Raise money for a campus startup: hit the goal before the deadline or refund everyone.",
+    "concepts": [
+      "enum state machine",
+      "payable",
+      "block.timestamp",
+      "pull payments",
+      "modifiers"
+    ],
+    "adaptedFrom": "freeCodeCamp web3: build a fundraising smart contract",
+    "docs": [
+      "m08-security/06-withdrawal-pattern",
+      "m08-security/08-state-machine",
+      "m04-units-and-globals/01-ether-and-time-units"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/Fundraiser.sol"
+    ],
+    "dir": "10-fundraising",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F10-fundraising%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/10-fundraising"
+  },
+  {
+    "n": 11,
+    "slug": "anonymous-access",
+    "title": "Anonymous Club Access",
+    "kind": "build",
+    "summary": "Prove you're a member without revealing who you are, and stop copycats with commit-reveal.",
+    "concepts": [
+      "keccak256",
+      "abi.encodePacked",
+      "commitments",
+      "nullifiers",
+      "commit-reveal",
+      "front-running"
+    ],
+    "adaptedFrom": "Plan.md Workshop 4",
+    "docs": [
+      "m04-units-and-globals/04-errors-math-crypto",
+      "m09-under-the-hood/05-abi-specification",
+      "m07-by-example/03-blind-auction"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/ClubAccess.sol"
+    ],
+    "dir": "11-anonymous-access",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F11-anonymous-access%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/11-anonymous-access"
+  },
+  {
+    "n": 12,
+    "slug": "tic-tac-toe",
+    "title": "Tic-Tac-Toe",
+    "kind": "learn",
+    "summary": "Run many tic-tac-toe games on-chain with enums, 2-D arrays and storage pointers.",
+    "concepts": [
+      "enum",
+      "fixed 2-D arrays",
+      "struct in mapping",
+      "storage references",
+      "custom errors"
+    ],
+    "adaptedFrom": "Solana: Anchor tic-tac-toe parts 1 & 2",
+    "docs": [
+      "m03-types/04-enums-and-udvts",
+      "m03-types/07-arrays-and-slices",
+      "m03-types/06-data-location",
+      "m05-expressions/01-control-structures"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/TicTacToe.sol"
+    ],
+    "dir": "12-tic-tac-toe",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F12-tic-tac-toe%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/12-tic-tac-toe"
+  },
+  {
+    "n": 13,
+    "slug": "leaderboard",
+    "title": "Game Leaderboard",
+    "kind": "build",
+    "summary": "Charge an entry fee, record scores from the game server and keep a sorted top-5.",
+    "concepts": [
+      "payable",
+      "bounded arrays",
+      "sorting in storage",
+      "access control",
+      "pull payments"
+    ],
+    "adaptedFrom": "Solana: build an Anchor leaderboard",
+    "docs": [
+      "m03-types/07-arrays-and-slices",
+      "m08-security/03-ether-and-gas-pitfalls",
+      "m08-security/07-restricting-access"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/Leaderboard.sol"
+    ],
+    "dir": "13-leaderboard",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F13-leaderboard%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/13-leaderboard"
+  },
+  {
+    "n": 14,
+    "slug": "concert-tickets",
+    "title": "Concert Tickets (ERC-721)",
+    "kind": "learn",
+    "summary": "Write the ERC-721 standard from scratch and sell 100 concert tickets as NFTs.",
+    "concepts": [
+      "ERC-721",
+      "ERC-165",
+      "approvals",
+      "safe transfers",
+      "metadata"
+    ],
+    "adaptedFrom": "freeCodeCamp web3: NFTs by building concert tickets (written fresh)",
+    "docs": [
+      "m06-contracts/13-abstract-and-interfaces",
+      "m05-expressions/07-try-catch",
+      "m04-units-and-globals/05-address-members-and-type-info"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/ConcertTickets.sol"
+    ],
+    "dir": "14-concert-tickets",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F14-concert-tickets%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/14-concert-tickets"
+  },
+  {
+    "n": 15,
+    "slug": "certification-nft",
+    "title": "University Certification NFT",
+    "kind": "build",
+    "summary": "Issue soulbound graduation certificates anyone can verify and nobody can sell.",
+    "concepts": [
+      "ERC-721",
+      "soulbound tokens",
+      "ERC-5192",
+      "burning",
+      "array removal"
+    ],
+    "adaptedFrom": "Solana: build a university certification NFT",
+    "docs": [
+      "m06-contracts/13-abstract-and-interfaces",
+      "m06-contracts/11-inheritance"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/Certificates.sol"
+    ],
+    "dir": "15-certification-nft",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F15-certification-nft%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/15-certification-nft"
+  },
+  {
+    "n": 16,
+    "slug": "procurement",
+    "title": "Transparent Public Procurement",
+    "kind": "build",
+    "summary": "Run a sealed-bid government tender with escrowed funds and payment on delivery.",
+    "concepts": [
+      "commit-reveal",
+      "payable",
+      "block.timestamp",
+      "escrow",
+      "pull payments",
+      "state machine"
+    ],
+    "adaptedFrom": "Plan.md Workshop 5 + Solidity docs Blind Auction",
+    "docs": [
+      "m07-by-example/03-blind-auction",
+      "m08-security/06-withdrawal-pattern",
+      "m08-security/08-state-machine"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/Tender.sol"
+    ],
+    "dir": "16-procurement",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F16-procurement%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/16-procurement"
+  },
+  {
+    "n": 17,
+    "slug": "land-registry",
+    "title": "Immutable Land Title Registry",
+    "kind": "build",
+    "summary": "One plot, one title: map land to unique NFTs, freeze disputes and keep the full ownership history.",
+    "concepts": [
+      "inheritance",
+      "virtual/override hooks",
+      "ERC-721",
+      "abi.encode ids",
+      "access control"
+    ],
+    "adaptedFrom": "Plan.md Workshop 6",
+    "docs": [
+      "m06-contracts/11-inheritance",
+      "m06-contracts/12-multiple-inheritance",
+      "m09-under-the-hood/05-abi-specification"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/LandRegistry.sol",
+      "src/ERC721Minimal.sol"
+    ],
+    "dir": "17-land-registry",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F17-land-registry%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/17-land-registry"
+  },
+  {
+    "n": 18,
+    "slug": "fortune-teller-dapp",
+    "title": "Fortune Teller dApp",
+    "kind": "build",
+    "summary": "Build a fortune-telling contract and a Node client that calls it over JSON-RPC.",
+    "concepts": [
+      "JSON-RPC",
+      "viem",
+      "anvil",
+      "ABI",
+      "events",
+      "pseudo-randomness"
+    ],
+    "adaptedFrom": "NEAR fortune teller + NEAR/Solana client-side app projects",
+    "docs": [
+      "m09-under-the-hood/05-abi-specification",
+      "m08-security/01-private-data-and-randomness",
+      "m06-contracts/09-events"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/FortuneTeller.sol",
+      "client/get-fortune.mjs"
+    ],
+    "features": {
+      "ghcr.io/devcontainers/features/node:1": {
+        "version": "22"
+      }
+    },
+    "extraCheck": "cd client && npm install --no-audit --no-fund && node --test",
+    "dir": "18-fortune-teller-dapp",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F18-fortune-teller-dapp%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/18-fortune-teller-dapp"
+  },
+  {
+    "n": 19,
+    "slug": "deploy",
+    "title": "Deploy",
+    "kind": "learn",
+    "summary": "Write a tested deploy script, ship to a local chain, and learn safe habits for public networks.",
+    "concepts": [
+      "forge script",
+      "vm.envOr",
+      "broadcast",
+      "keystores",
+      "anvil",
+      "cast"
+    ],
+    "adaptedFrom": "Solana: deploy to devnet + build for mainnet",
+    "docs": [
+      "m09-under-the-hood/01-using-the-compiler",
+      "m09-under-the-hood/06-metadata"
+    ],
+    "openFiles": [
+      "README.md",
+      "script/Deploy.s.sol",
+      "src/Counter.sol"
+    ],
+    "dir": "19-deploy",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F19-deploy%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/19-deploy"
+  },
+  {
+    "n": 20,
+    "slug": "open-source-africa",
+    "title": "Open-Source Africa Capstone",
+    "kind": "build",
+    "summary": "Ship your civic contracts as one tested, documented, open-source library.",
+    "concepts": [
+      "interfaces",
+      "conformance tests",
+      "code coverage",
+      "formatting",
+      "NatSpec",
+      "releasing"
+    ],
+    "adaptedFrom": "Plan.md Workshop 7 + Solana freeform app",
+    "docs": [
+      "m02-source-and-structure/03-comments-and-natspec",
+      "m02-source-and-structure/05-style-guide",
+      "m08-security/05-recommendations"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/interfaces/ICivicElection.sol"
+    ],
+    "features": {
+      "ghcr.io/devcontainers/features/node:1": {
+        "version": "22"
+      }
+    },
+    "extraCheck": "forge fmt --check && forge coverage --report summary | node \"$REPO_ROOT/scripts/coverage-gate.mjs\" 90",
+    "dir": "20-open-source-africa",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F20-open-source-africa%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/20-open-source-africa"
+  }
+]

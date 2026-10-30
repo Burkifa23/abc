@@ -1,0 +1,11 @@
+{
+  "n": 14,
+  "slug": "concert-tickets",
+  "title": "Concert Tickets (ERC-721)",
+  "kind": "learn",
+  "summary": "Write the ERC-721 standard from scratch and sell 100 concert tickets as NFTs.",
+  "concepts": ["ERC-721", "ERC-165", "approvals", "safe transfers", "metadata"],
+  "adaptedFrom": "freeCodeCamp web3: NFTs by building concert tickets (written fresh)",
+  "docs": ["m06-contracts/13-abstract-and-interfaces", "m05-expressions/07-try-catch", "m04-units-and-globals/05-address-members-and-type-info"],
+  "openFiles": ["README.md", "src/ConcertTickets.sol"]
+}

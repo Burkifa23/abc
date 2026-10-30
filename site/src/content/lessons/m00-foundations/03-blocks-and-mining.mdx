@@ -1,0 +1,77 @@
+---
+title: "Blocks and proof of work"
+summary: "Explain how a block is built, why changing history is expensive, and how mining turns hashing into a race."
+covers: []
+---
+
+import Figure from "../../../components/Figure.astro";
+import ChainOfBlocks from "../../../components/diagrams/ChainOfBlocks.astro";
+import MiningDemo from "../../../components/MiningDemo.astro";
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./03-blocks-and-mining";
+
+Suppose the Ashesi Student Council runs an online vote on a new cafeteria menu. Anyone on the network may submit votes, and anyone may help publish the official tally. If publishing were free and instant, one person could flood the network with page after page of a tally that favours their choice. The network needs a way to make publishing a page *costly*, so that spamming fake history is not worth it.
+
+Blockchains solve this with **proof of work**.
+
+## What is inside a block
+
+From lesson 1, a block is a page of the ledger. A real block has two parts:
+
+- the **header**: the hash of the previous block, a fingerprint of the entries, a timestamp, and a counter called the **nonce** (explained below). Our diagrams also number blocks to make them easy to discuss; that is a simplification, not a header field in every chain;
+- the **body**: the list of entries (transactions).
+
+A block's own hash is computed from its header. Since the header contains the previous hash, each block commits to everything before it.
+
+<Figure caption="Each block's hash covers its header, which includes the previous block's hash.">
+  <ChainOfBlocks />
+</Figure>
+
+## Why rewriting history is hard
+
+Say someone edits an entry in Block 2 of a 100-block chain. Block 2's hash changes. Block 3 stored the old hash, so Block 3 is now invalid. To fix it, the editor recomputes Block 3, which changes *its* hash, which breaks Block 4. They must redo every later block.
+
+If recomputing a hash is nearly free, that is annoying but possible. Proof of work makes each block expensive to produce, so redoing 98 of them is very expensive.
+
+## Proof of work and the nonce
+
+The rule is simple. A block is only valid if its hash is **below a target number**. Since hashes look random, a small target means the hash must start with several zeros. For example, if the target requires four leading zeros:
+
+```text
+0000a1c3...  valid
+00c71e90...  not valid
+```
+
+You cannot choose your hash, because it is determined by the header. But you *can* change one field that has no other meaning: the **nonce** (a "number used once"). Changing the nonce gives a completely different hash, thanks to the avalanche effect.
+
+So **mining** is a loop:
+
+```js
+let nonce = 0;
+while (sha256(header + nonce) >= target) {
+  nonce = nonce + 1;
+}
+// now sha256(header + nonce) < target: the block is valid
+```
+
+There is no shortcut. Miners can only try nonce after nonce until one works. The result is "proof" that a lot of computation (the **work**) was done, yet **checking** it takes a single hash. Hard to produce, trivial to verify.
+
+Try it. Mine a block below, then raise the difficulty and watch the number of attempts grow.
+
+<MiningDemo />
+
+## Difficulty
+
+The target controls how hard the puzzle is. Each extra leading zero (in hex) makes valid hashes sixteen times rarer, so the expected number of attempts grows sharply. Bitcoin adjusts its target automatically so that a block is found roughly every ten minutes, no matter how many miners join.
+
+<div class="callout"><strong>Watch out.</strong> Mining is <em>not</em> solving a clever maths problem, and a miner who finds a nonce first did not "calculate" it faster: they were just luckier or tried more guesses per second. Also, the work does not make the transactions correct. Other nodes still check each transaction against the rules; the work only makes it costly to publish blocks.</div>
+
+## Tying it together
+
+Combine the two ideas. To rewrite Block 2 in a long chain, an attacker must redo the proof of work for Block 2 *and* every later block, while the honest network keeps adding new ones. They would need more computing power than everyone else combined. That is why old blocks are considered safe, and why a block with many blocks on top of it is called **buried**.
+
+In the next lessons you will see how entries are authorised (signatures) and what happens when two miners find a block at the same time (consensus).
+
+## Check your understanding
+
+<Quiz questions={quiz} />

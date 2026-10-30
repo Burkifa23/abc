@@ -1,0 +1,104 @@
+---
+title: "Block and transaction properties"
+summary: "The built-in variables that tell a contract who is calling, how much they sent, and what block it is running in, plus which ones you must never trust."
+covers: ["Units and Globally Available Variables", "Units and Globally Available Variables > Special Variables and Functions", "Cheatsheet", "Cheatsheet > Block and Transaction Properties"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./02-block-and-transaction";
+
+When you hand in a lab at Ashesi, the portal stamps it with your name, the time, and the course. You never type those three facts in; the system knows them. A contract gets the same service. Every call arrives with facts about the caller and the moment, and Solidity exposes them as **global variables**: names that exist everywhere without being declared. Together with a handful of global functions, these are the "special variables and functions" of the language. This lesson covers the ones about the current block and transaction. The next three cover the functions.
+
+## Message, transaction and block
+
+Three families of names matter, and the difference between them is worth getting straight.
+
+- **`msg`** describes the *current call*: the message that entered the function you are reading.
+- **`tx`** describes the *whole transaction* that started everything.
+- **`block`** describes the *block* that contains the transaction.
+
+A transaction can bounce through several contracts. If Ama calls contract A, and A calls contract B, then inside B the `msg.sender` is A (the direct caller) but `tx.origin` is still Ama (the account that signed the transaction). All members of `msg`, including `msg.sender` and `msg.value`, can change on every external function call, and that includes calls to library functions. The `tx` and `block` members stay fixed for the whole transaction.
+
+## The message members
+
+| Name | Type | Meaning |
+|---|---|---|
+| `msg.sender` | `address` | Who made the current call (an account or a contract) |
+| `msg.value` | `uint256` | Wei sent along with the call |
+| `msg.data` | `bytes calldata` | The complete calldata |
+| `msg.sig` | `bytes4` | First four bytes of the calldata, which identify the function |
+
+`msg.value` is only meaningful in a function marked `payable`; a non-payable function rejects any call that carries wei before its body even starts, and the compiler also stops non-payable public functions from reading `msg.value`. `msg.sig` is the same four-byte function identifier you will meet again in lesson 3.
+
+## The transaction members
+
+| Name | Type | Meaning |
+|---|---|---|
+| `tx.origin` | `address` | The account that signed the whole transaction |
+| `tx.gasprice` | `uint256` | The gas price this transaction pays, in wei per unit of gas |
+
+`gasleft()` is a global function rather than a member: it returns how much gas the current call still has. Contracts sometimes check it before starting an expensive loop.
+
+## The block members
+
+| Name | Type | Meaning |
+|---|---|---|
+| `block.timestamp` | `uint256` | Block time in seconds since 1 January 1970 (Unix epoch) |
+| `block.number` | `uint256` | Height of the block |
+| `block.chainid` | `uint256` | Identifier of the chain (1 for Ethereum mainnet) |
+| `block.basefee` | `uint256` | Minimum fee per gas in this block (EIP-1559) |
+| `block.blobbasefee` | `uint256` | Fee per unit of blob data (EIP-4844 blobs, used by rollups) |
+| `block.gaslimit` | `uint256` | Most gas the block may use |
+| `block.coinbase` | `address payable` | Account that receives this block's fees (the block proposer's fee address) |
+| `block.prevrandao` | `uint256` | Value produced by the beacon chain's randomness mechanism (EIP-4399) |
+| `block.difficulty` | `uint256` | Deprecated alias of `block.prevrandao` on post-Merge chains |
+
+Two more built-ins relate to blocks. `blockhash(n)` returns the hash of block number `n`, but only for the 256 most recent blocks before the current one; for anything older, or the current block, it returns zero. `blobhash(i)` returns the versioned hash of the `i`-th blob attached to the transaction, or zero if no such blob exists. Newer compilers also describe a `block.slotnum` member that depends on a future network upgrade, so it is not something a mainnet contract can use yet.
+
+`block.difficulty` used to mean mining difficulty. After the Merge (the Paris upgrade) the same opcode returns the randomness value, so Solidity renamed it `block.prevrandao` and keeps the old name only as a deprecated alias that will go away. Write the new name in new code.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Whoami {
+    event Seen(address caller, address signer, uint256 paid, uint256 atTime, uint256 chain);
+
+    function ping() external payable {
+        emit Seen(msg.sender, tx.origin, msg.value, block.timestamp, block.chainid);
+    }
+
+    function selector() external pure returns (bytes4) {
+        return msg.sig;
+    }
+
+    function recentHash() external view returns (bytes32) {
+        return blockhash(block.number - 1);
+    }
+}
+```
+
+Here `selector()` returns the same four bytes you used to call it, which is a trick for functions that route requests.
+
+## Who may be trusted?
+
+Not all of these values deserve the same trust, and a lot of broken contracts come from confusing them.
+
+**`tx.origin` is not an identity check.** Suppose a contract lets the club treasurer withdraw funds by checking `tx.origin == treasurer`. A scammer deploys a contract that the treasurer is tempted to call, perhaps by promising a free airdrop. Inside the scammer's contract the call continues into the club contract, where `tx.origin` is still the treasurer, so the check passes and the scammer drains the funds. Use `msg.sender` to see who is calling you. Legitimate uses of `tx.origin` are rare. An old one was `require(tx.origin == msg.sender)` to refuse calls from contracts, but since EIP-7702 an ordinary account can carry delegated code and still pass that test, so it no longer proves the caller is a plain wallet (Module 8, lesson 04 covers this).
+
+**Time and hashes are not randomness.** It is tempting to pick a raffle winner with `block.timestamp % entrants`. The proposer who builds the block has some freedom over the timestamp (it must exceed the parent's, and clients reject blocks too far in the future, but a few seconds of slack remain). For the block hash the situation is worse: the value is public the moment the block exists, and anyone can compute the outcome of a function that depends on it before deciding whether to call it. `block.prevrandao` is better but is still biasable by the proposer, who can skip a slot at the price of a missed reward. For a student raffle with airtime as a prize that may be fine; for anything valuable use a verifiable randomness service.
+
+**Some values depend on the chain.** `block.number` and `block.timestamp` behave differently on some layer-2 networks (a rollup may update the timestamp less often, or keep its own block numbering), so check the chain's documentation before building a contract around exact counts. `block.chainid` lets you notice which chain you are on, which is why signed messages usually include it, so they cannot be replayed elsewhere.
+
+<div class="callout"><strong>Watch out.</strong> <code>block.coinbase</code> used to be called the "miner address". On Ethereum today there are no miners, and the value is the fee recipient chosen by the block proposer. Do not use it to decide anything about trust.</div>
+
+## Try it
+
+Complete the `Guestbook` contract. The payable function `sign()` must record three facts in the state variables that already exist: who called, how much they paid, and when. An empty function body will not pass.
+
+<CodeExercise id="guestbook" {...exercises["guestbook"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

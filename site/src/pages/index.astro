@@ -1,7 +1,9 @@
 ---
 import Base from "../layouts/Base.astro";
 import LabCard from "../components/LabCard.astro";
-import { labs, socials } from "../data";
+import { socials } from "../data";
+import labs from "../labs.json";
+import { modules } from "../content/modules";
 const base = import.meta.env.BASE_URL;
 const pillars = [
   { t: "Civic, not speculative", d: "We build for real African problems: elections, procurement, land registries. No token pumps." },
@@ -13,14 +15,14 @@ const pillars = [
   <main>
     <section class="hero container">
       <img class="logo-img" src={`${base}logo.png`} alt="ABC, Ashesi Blockchain Community" width="433" height="239" />
-      <a class="badge" href={`${base}labs/`}>Workshop 03 lab is live →</a>
+      <a class="badge" href={`${base}labs/`}>Labs are live →</a>
       <h1>Build civic infrastructure on-chain.</h1>
       <p class="lead">
         A hands-on curriculum for Ashesi students who want to engineer trustworthy public systems
         with smart contracts. You start with ledgers and finish by shipping open-source code.
       </p>
       <div class="hero-actions">
-        <a class="btn btn-primary" href={`${base}docs/`}>Get started</a>
+        <a class="btn btn-primary" href={`${base}docs/`}>Start learning</a>
         <a class="btn btn-outline" href={`${base}labs/`}>Browse labs</a>
       </div>
     </section>
@@ -36,8 +38,22 @@ const pillars = [
     <section class="section">
       <div class="container">
         <div class="section-head">
+          <span class="eyebrow">Course</span>
+          <h2>Learn Solidity, module by module.</h2>
+        </div>
+        <div class="grid">
+          {modules.map((m, i) => (
+            <a class="card" href={`${base}docs/#${m.id}`}><h3>{i}. {m.title}</h3></a>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
           <span class="eyebrow">Curriculum</span>
-          <h2>Seven workshops, one portfolio.</h2>
+          <h2>Learn by building.</h2>
           <p class="lead">Foundations first, then four civic builds, then a hackathon sprint where we publish the results under the club's name.</p>
         </div>
         <div class="grid">{labs.map((lab) => <LabCard lab={lab} />)}</div>

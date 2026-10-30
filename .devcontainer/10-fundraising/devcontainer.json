@@ -1,0 +1,29 @@
+{
+  "name": "Lab 10: Fundraising",
+  "build": {
+    "dockerfile": "../Dockerfile"
+  },
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}/labs/10-fundraising",
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "README.md",
+        "src/Fundraiser.sol"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "NomicFoundation.hardhat-solidity"
+      ],
+      "settings": {
+        "files.exclude": {
+          ".solution": true,
+          "out": true,
+          "cache": true,
+          "lab.json": true
+        }
+      }
+    }
+  },
+  "postAttachCommand": "forge build --silent && echo 'Run: forge test'"
+}

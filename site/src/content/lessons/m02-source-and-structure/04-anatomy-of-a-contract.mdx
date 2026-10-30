@@ -1,0 +1,147 @@
+---
+title: "Anatomy of a contract"
+summary: "Tour the seven kinds of member a contract can declare: state variables, functions, modifiers, events, errors, structs and enums."
+covers: ["Structure of a Contract", "Structure of a Contract", "Structure of a Contract > State Variables", "Structure of a Contract > Functions", "Structure of a Contract > Function Modifiers", "Structure of a Contract > Events", "Structure of a Contract > Errors", "Structure of a Contract > Struct Types", "Structure of a Contract > Enum Types"]
+---
+
+import Figure from "../../../components/Figure.astro";
+import ContractAnatomy from "../../../components/diagrams/ContractAnatomy.astro";
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./04-anatomy-of-a-contract";
+
+A student club at Ashesi keeps a membership register. It needs a place to remember who joined, a rule that only the chair may add people, a way to tell the outside world "someone joined", a clear failure when a stranger tries, and a tidy way to describe a member. Each of those needs maps to one kind of Solidity declaration. This lesson is a guided tour of all seven, so that when you open any contract you can say what each part is for.
+
+## The big picture
+
+Solidity contracts resemble classes in object-oriented languages. A contract bundles data and behaviour, and it can inherit from other contracts. Inside, you find some mix of seven kinds of declaration. There are also two special kinds of contract, *libraries* and *interfaces*, which later lessons cover. This lesson is the quick overview; each member kind gets its full treatment in the Contracts and Types chapters.
+
+<Figure caption="One contract and the seven kinds of member it can hold. A contract uses as many or as few as it needs.">
+  <ContractAnatomy />
+</Figure>
+
+## State variables
+
+A *state variable* is a value that belongs to the contract and stays between calls. Normally it is written into the contract's permanent **storage**. If you mark it `transient` it lives in transient storage instead, which is cleared at the end of every transaction. Lesson 5 of the previous module compared these data areas.
+
+```solidity
+contract ClubRegister {
+    uint256 memberCount;   // a state variable
+}
+```
+
+Types such as `uint256`, `address` and `mapping` come in the Types chapter, and visibility (who may read the value) is covered where we discuss getters.
+
+## Functions
+
+A *function* is a unit of executable code. Most live inside contracts, but Solidity also lets you define them at file level, outside any contract. These "free" functions are available to every contract in the file (and files that import them).
+
+```solidity
+contract Raffle {
+    function enter() public payable { /* ... */ }   // inside a contract
+}
+
+function halve(uint256 x) pure returns (uint256) {  // outside any contract
+    return x / 2;
+}
+```
+
+Calls to functions can be *internal* (jumps inside the same code) or *external* (a message to another account), and each function has a visibility that controls who may call it. Functions take parameters and may return values; both topics get their own lessons later.
+
+## Function modifiers
+
+A *modifier* changes how a function behaves, in a way that you can read from the declaration. The typical use is a pre-condition check that you do not want to repeat in every function:
+
+```solidity
+contract Hall {
+    address public warden;
+
+    modifier onlyWarden() {
+        require(msg.sender == warden, "warden only");
+        _;                       // the modified function's body runs here
+    }
+
+    function open() public onlyWarden { /* ... */ }
+}
+```
+
+The `_;` marks where the original function body is inserted. Two points to remember. Modifiers cannot be overloaded: you cannot declare two modifiers with the same name and different parameters. Like functions, though, they can be overridden in a derived contract.
+
+## Events
+
+An *event* is a convenient wrapper around the EVM's logging facility. When a function runs `emit Joined(...)`, a record is written to the transaction's log. Contracts cannot read their past logs, but wallets, explorers and web apps can, and they are cheap compared with storage. Since version 0.8.22 an event can also be declared at file level, outside any contract, like a free function.
+
+```solidity
+event Joined(address indexed who, string name);
+
+contract ClubRegister {
+    function join(address who, string calldata name) external {
+        emit Joined(who, name);   // triggers the event
+    }
+}
+```
+
+The details, such as what `indexed` does, belong to the Contracts chapter.
+
+## Errors
+
+An *error* gives a failure a descriptive name and, optionally, typed data. You raise it with `revert`:
+
+```solidity
+/// The meal costs `price` but the card holds only `balance`.
+error CardTooLow(uint256 price, uint256 balance);
+
+contract Canteen {
+    mapping(address => uint256) cardBalance;
+
+    function pay(uint256 price) external {
+        uint256 balance = cardBalance[msg.sender];
+        if (balance < price) revert CardTooLow(price, balance);
+        cardBalance[msg.sender] = balance - price;
+    }
+}
+```
+
+Compared with a string message, a custom error is much cheaper and can carry data, such as the price and the balance. The comment above the error is NatSpec, which wallets can show to a user (the previous lesson covered NatSpec). Like events, errors can be declared at file level.
+
+## Struct types
+
+A *struct* groups several variables into one custom type. It is the way to model "a thing with fields", such as a voter or a member:
+
+```solidity
+contract Poll {
+    struct Voter {
+        bool registered;
+        bool hasVoted;
+        uint256 choice;
+    }
+}
+```
+
+## Enum types
+
+An *enum* creates a type with a small, finite set of named constants. They read better than magic numbers like `0`, `1`, `2`:
+
+```solidity
+contract Order {
+    enum Stage { Placed, Paid, Delivered }
+}
+```
+
+Inside the program an enum value is stored as a small integer starting from zero, so `Stage.Placed` is 0.
+
+## Putting the parts together
+
+Our imaginary register uses everything. A `Status` enum and a `Member` struct describe members. State variables hold the chair's address and the count. An error `NotChair` and a modifier `onlyChair` protect the doorway. A function `join` does the work and emits the event `Joined`. In the exercise you assemble exactly that.
+
+<div class="callout"><strong>Watch out.</strong> Declaring an error or event is not the same as using it. An <code>error</code> does nothing until a <code>revert</code> raises it, and an <code>event</code> logs nothing until you <code>emit</code> it. Forgetting the <code>revert</code> or <code>emit</code> compiles fine and is easy to miss.</div>
+
+## Try it
+
+Fill in the `ClubRegister` skeleton so that it has one of each member kind and they work together. The checks look for the declarations, the revert inside the modifier, the event, the counter, and the ABI entries.
+
+<CodeExercise id="club-register" {...exercises["club-register"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

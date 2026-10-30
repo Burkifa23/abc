@@ -1,0 +1,11 @@
+{
+  "n": 1,
+  "slug": "hello-foundry",
+  "title": "Hello Foundry",
+  "kind": "learn",
+  "summary": "Run your first tests and write a contract that greets the campus.",
+  "concepts": ["contract", "state variable", "constructor", "view", "event", "custom error"],
+  "adaptedFrom": "Solana & NEAR hello-world setup projects",
+  "docs": ["m01-smart-contracts/02-simple-storage", "m02-source-and-structure/04-anatomy-of-a-contract"],
+  "openFiles": ["README.md", "src/HelloWorld.sol"]
+}

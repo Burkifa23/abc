@@ -1,0 +1,97 @@
+---
+title: "Fixed-size bytes and literals"
+summary: "The bytes1 to bytes32 types, and every kind of literal you can write in source: addresses, big numbers, strings, unicode and hex."
+covers: ["Types", "Types > Value Types", "Types > Conversions between Literals and Elementary Types"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./03-bytes-and-literals";
+
+A student ID card carries a barcode. The barcode is not a number you do sums with; it is a fixed-length pattern of bits that you compare, slice and look up. Contracts have many things like that: hashes, function selectors, short tags. For them Solidity offers fixed-size byte arrays. This lesson covers those, and then the different ways of writing constant values in your source, which the language calls **literals**.
+
+## Fixed-size byte arrays
+
+The types `bytes1`, `bytes2`, up to `bytes32` hold exactly that many raw bytes. `byte` on its own used to mean `bytes1` but was removed. A `bytes32` is the natural size of an EVM word, and the output of `keccak256` has this type.
+
+```solidity
+bytes4 tag = 0xc0ffee01;
+bytes1 first = tag[0];     // 0xc0 : index 0 is the leftmost, most significant byte
+uint len = tag.length;     // 4
+```
+
+What you can do with them:
+
+- Compare with `<=, <, ==, !=, >=, >`.
+- Use bit operators `&, |, ^, ~`, and shifts `<<`, `>>`. Shifts here move *bits* and fill the gap with zeros; bytes that fall off the end are lost. They do not change the length.
+- Read one byte with `x[i]`. The index must be below `.length`, else the call panics. The result is a `bytes1`.
+- Read `.length`, which is a constant fixed by the type.
+
+You cannot write to an element (`tag[0] = 0xff` is rejected), and the type has no `push`. If you need a byte array whose size changes, use `bytes` (dynamic, a reference type; lesson 7), not `bytes32`.
+
+One more difference from integers: with `bytesN` the first byte is the "high" end. Converting `bytes4` to `uint32` keeps the same bits in the same order, but converting between bytes sizes pads or truncates on the *right* (lesson 11).
+
+## Address literals
+
+A hexadecimal number written in source that is 39 to 41 digits long and passes the **checksum** test is typed as a plain `address` (wrap it in `payable(...)` when you want to send ether to it). The checksum (EIP-55) works by choosing the upper or lower case of each letter according to a hash of the address, so one mistyped character is almost always detected. If the case pattern is wrong, the compiler stops you with an error that even prints the correct spelling.
+
+```solidity
+address constant TREASURER = 0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed;
+```
+
+That is exactly the protection you want, because a mistyped constant would otherwise send money to nowhere. Digits of the wrong length are just treated as an ordinary number literal.
+
+## Integer and rational literals
+
+Plain numbers in source are written in decimal (`2024`) or hexadecimal (`0xff`). Leading zeros are not allowed, and there are no octal literals. Decimal fractions such as `3.14` and `.5` are allowed, and so is scientific notation: `2e9` is two billion, `1.5e-3` is 0.0015. Underscores make long numbers readable: `1_000_000` equals `1000000`, as long as the underscore sits between digits.
+
+```solidity
+uint256 constant SUPPLY = 21_000_000 * 1e18;   // 21 million tokens with 18 decimals
+```
+
+Here is the surprising part. Number literals have **arbitrary precision** and are held as exact fractions until the compiler needs them to become a real type. That is why `(2**800 + 1) - 2**800` is exactly 1 and `(1 / 4) * 8` is exactly 2, with no overflow or rounding in between. The result then has to fit the target type, or compilation fails. As soon as a literal meets a variable, it must fit the variable's type first: `uint8 x = ...; x + 300` does not compile, because 300 is not a `uint8`.
+
+Fractions with no integer value cannot be assigned to integers: `uint y = 5 / 2;` fails to compile, because the literal expression is the exact fraction 2.5, while the same division with a `uint` variable gives 2.
+
+There are also unit suffixes on literals. `wei`, `gwei` and `ether` multiply by 1, 10^9 and 10^18; `seconds`, `minutes`, `hours`, `days` and `weeks` multiply by 1, 60, 3600, 86400 and 604800. So `2 hours` is `7200`, and `1 ether == 1e18`.
+
+## String literals
+
+A string literal sits in double or single quotes: `"Ghana"` or `'Ghana'`. It has no terminating zero byte, so `"abc"` is three bytes. Writing `"foo" "bar"` next to each other joins them into `"foobar"`. The usual escapes work: `\n`, `\\`, `\"`, `\'`, plus `\xNN` for one byte and `\uNNNN` for a Unicode code point (stored as UTF-8). A backslash at the end of a line continues the literal.
+
+Strings may only contain printable ASCII directly. A literal converts implicitly to `bytes1...bytes32` if it is short enough (the leftover bytes are zero-filled on the **right**), to `bytes`, and to `string`.
+
+## Unicode literals
+
+To put real non-ASCII text in the source, prefix the quote with `unicode`:
+
+```solidity
+string constant WELCOME = unicode"Akwaaba! Welcome to Ashesi ✓";
+```
+
+The compiler requires valid UTF-8 inside. It matters because `"Akwaaba ✓"` without the prefix is rejected. Remember that on-chain a `string` is just bytes: its `.length` counts bytes, not letters, and a single emoji takes four.
+
+## Hexadecimal literals
+
+`hex"c0ffee01"` is a literal made of raw bytes rather than characters. It must contain an even number of hex digits, and you may use single underscores between bytes (`hex"c0ff_ee01"`) as well as joining pieces by writing them next to each other. It converts exactly like a string literal: to `bytesN` if it fits, or to `bytes` and `string`.
+
+## Literals meeting elementary types
+
+When a literal is put into a typed slot, these rules apply. They are summarised here and drawn together with other conversions in lesson 11.
+
+- A decimal or hex integer literal converts to any integer type **if the value fits**. The zero literal `0` is also allowed for any `bytesN`.
+- A decimal literal never converts to `bytesN`. A hex literal such as `0x12345678` converts to `bytes4` only if its digits exactly fill the width (8 digits for 4 bytes). `bytes4 b = 0x12;` is an error.
+- Strings and `hex"..."` literals fit into a `bytesN` that is at least as long as the content.
+- A correctly checksummed address literal is an `address`; use `payable(...)` if it must receive ether.
+
+<div class="callout"><strong>Watch out.</strong> <code>"AB"</code> as a <code>bytes4</code> becomes <code>0x41420000</code> (padding on the right), but <code>0x4142</code> as a <code>bytes4</code> is rejected, and <code>uint32(0x4142)</code> is 0x00004142 (padding on the left). The same two bytes land in different places depending on the kind of literal.</div>
+
+## Try it
+
+Declare a constant `MAGIC` of type `bytes4` set from a hex literal (use `hex"..."`, 4 bytes), and a `string` constant `GREETING` set from a unicode literal.
+
+<CodeExercise id="magic-constants" {...exercises["magic-constants"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

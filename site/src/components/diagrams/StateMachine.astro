@@ -1,0 +1,36 @@
+---
+---
+<svg viewBox="0 0 640 220" role="img" aria-labelledby="sm-t" font-family="var(--mono)" font-size="12">
+  <title id="sm-t">A hackathon contract as a state machine with four stages: Registration, Building, Judging and Closed. Each arrow to the next stage is labelled with the time that triggers it. Every function call first runs the timedTransitions modifier, which advances the stage if time has passed, and then the atStage modifier, which allows the call only in the stage it names.</title>
+  <defs>
+    <marker id="sm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="currentColor" />
+    </marker>
+  </defs>
+  <g stroke-width="1.5" fill="none">
+    <rect x="10" y="30" width="125" height="50" rx="8" stroke="currentColor" stroke-width="2" />
+    <rect x="175" y="30" width="125" height="50" rx="8" stroke="currentColor" stroke-width="2" />
+    <rect x="340" y="30" width="125" height="50" rx="8" stroke="currentColor" stroke-width="2" />
+    <rect x="505" y="30" width="125" height="50" rx="8" stroke="currentColor" stroke-width="2" />
+    <path d="M137 55 H173" stroke="currentColor" marker-end="url(#sm-arrow)" />
+    <path d="M302 55 H338" stroke="currentColor" marker-end="url(#sm-arrow)" />
+    <path d="M467 55 H503" stroke="currentColor" marker-end="url(#sm-arrow)" />
+    <rect x="10" y="130" width="620" height="76" rx="8" stroke="var(--border)" />
+  </g>
+  <g fill="currentColor" font-weight="600" text-anchor="middle">
+    <text x="72" y="60">Registration</text>
+    <text x="237" y="60">Building</text>
+    <text x="402" y="60">Judging</text>
+    <text x="567" y="60">Closed</text>
+  </g>
+  <g fill="var(--muted-fg)" text-anchor="middle">
+    <text x="155" y="22">day 2</text>
+    <text x="320" y="22">day 5</text>
+    <text x="485" y="22">day 6</text>
+  </g>
+  <g fill="currentColor">
+    <text x="22" y="153">Every call:</text>
+    <text x="22" y="173">1. timedTransitions: move forward if the clock says so</text>
+    <text x="22" y="193">2. atStage(X): revert unless the stage is now X</text>
+  </g>
+</svg>

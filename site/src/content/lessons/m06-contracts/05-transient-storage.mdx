@@ -1,0 +1,145 @@
+---
+title: "Transient storage and its caveats"
+summary: "A scratch area that the chain wipes at the end of every transaction: how to declare it, what it is good for, and why it can break composability."
+covers: ["Contracts", "Contracts > Transient Storage", "Contracts > Composability of Smart Contracts and the Caveats of Transient Storage"]
+---
+
+import Figure from "../../../components/Figure.astro";
+import DataLocations from "../../../components/diagrams/DataLocations.astro";
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./05-transient-storage";
+
+Think of the whiteboard in an Ashesi lecture hall. During a class you scribble numbers on it and refer back to them, but the cleaner wipes it before the next lecture. You would never keep the exam timetable there, yet for working-out it is perfect: free to use and no one has to archive it. **Transient storage** is a whiteboard for contracts. It behaves like storage, with slots holding 32-byte words, but everything in it is reset to zero when the transaction ends.
+
+## What it is
+
+Transient storage arrived with Ethereum's Cancun upgrade (EIP-1153), with two new opcodes: `TSTORE` writes a slot and `TLOAD` reads one. Compared with the permanent kind:
+
+- **Lifetime.** One transaction. When it finishes, nothing is kept.
+- **Cost.** Both opcodes are cheap (about 100 gas), against thousands for a first write to storage.
+- **Scope.** Each contract has its own transient store, private to it, just like its normal storage. All the frames of calls into that contract within one transaction share the same store.
+- **Reverts.** If a call reverts, its transient writes are undone, including those of calls it made.
+
+The data-areas figure from Module 1, lesson 05 shows where transient storage sits among the EVM's data areas.
+
+<Figure caption="Transient storage sits beside persistent storage, with the same slot structure but a one-transaction lifetime.">
+  <DataLocations />
+</Figure>
+
+You need a compiler target of Cancun or newer, and for the `transient` keyword on variables, Solidity 0.8.28 or later.
+
+## Declaring one
+
+Put `transient` between the type and the name:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+contract Turnstile {
+    uint256 public passes;        // permanent storage
+    uint256 transient attempts;   // reset when the transaction ends
+    bool public transient inside; // a public transient variable still gets a getter
+
+    function enter() external {
+        attempts += 1;
+        inside = true;
+        passes += 1;
+    }
+
+    function attemptsThisTx() external view returns (uint256) {
+        return attempts;
+    }
+}
+```
+
+The rules for now:
+
+- **Value types only.** Booleans, integers, addresses, enums and so on. Arrays, mappings, structs, and local or parameter variables cannot be transient yet.
+- **No initialiser.** Writing `bool transient x = true;` is refused, because the assignment would be wiped at the end of the creating transaction and so mean nothing. Transient variables start at the default value.
+- **Not with `constant` or `immutable`.** Those are inlined into code, not stored.
+- **Separate address space.** The order of transient variables does not move your normal variables, and the names share one namespace, so you cannot reuse a name.
+- A function that reads transient storage is not `pure`, and one that writes it is not `view`. `TSTORE` inside a static call fails; `TLOAD` is allowed.
+
+## The good use: a cheap reentrancy lock
+
+A **reentrancy guard** blocks a function from being called again while it is still running, for example by a contract that receives money and calls back. The standard version is a flag set at entry and cleared at exit. In normal storage that costs a costly write on each call; in transient storage it costs almost nothing, and the flag is wiped even if you forget.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+contract Payout {
+    mapping(address => uint256) public owed;
+    bool transient locked;
+
+    error Reentered();
+    error TransferFailed();
+
+    modifier nonReentrant() {
+        if (locked) revert Reentered();
+        locked = true;
+        _;
+        locked = false;
+    }
+
+    function fund(address student) external payable {
+        owed[student] += msg.value;
+    }
+
+    function withdraw() external nonReentrant {
+        uint256 amount = owed[msg.sender];
+        owed[msg.sender] = 0;
+        (bool ok, ) = msg.sender.call{value: amount}("");
+        if (!ok) revert TransferFailed();
+    }
+}
+```
+
+Look at the last line of the modifier. It *releases* the lock even though the lock would be wiped at the end of the transaction anyway. That is deliberate, and the next section explains why.
+
+## The catch: composability
+
+A big strength of smart contracts is **composability**: because the EVM guarantees that a call behaves the same whether it is made in its own transaction or alongside other calls, developers can combine contracts like building blocks. Wallets batch several calls into one transaction ("multicall"), routers chain several protocols together, and so on. Until transient storage, you could split a sequence of calls across transactions or fuse them into one and get the same answer.
+
+Transient storage breaks that assumption, because state now survives between calls *inside* a transaction but vanishes between transactions. Consider:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+contract Converter {
+    uint256 transient rate;
+
+    function setRate(uint256 r) external {
+        rate = r;
+    }
+
+    function convert(uint256 amount) external view returns (uint256) {
+        return amount * rate;
+    }
+}
+```
+
+Run `setRate(130)`, then `convert(1)` and `convert(2)` in one batched transaction and you get 130 and 260. Send the same three calls as three separate transactions and `rate` is zero by the time `convert` runs, so you get 0 and 0. If `rate` lived in normal storage, both ways would agree. Anyone who wrote a script or a wallet that batches calls to your contract would be surprised.
+
+The reverse problem happens too. If you use transient storage as a cheap lookup table (say a mapping of "already counted" flags) and never clear it, then a second call to your contract in the same transaction sees the leftovers of the first. A complex transaction that touches your contract twice may get wrong answers that tests of single calls never reveal.
+
+The recommended habits:
+
+1. Treat transient storage as scratch for the duration of one call into your contract, and **clear it before returning**, including the reentrancy lock. Skipping the reset to save a little gas means the contract can only be entered once per transaction, which breaks batching.
+2. Do not use transient storage to pass settings from one external call to another unless the design says explicitly that those calls must go together.
+3. Test sequences of calls in a single transaction, not just individual calls.
+
+<div class="callout"><strong>Watch out.</strong> A lock that is set but not cleared at the end of the call looks fine in a test, where each call is its own transaction. In production, a router that calls your function twice in one transaction will revert on the second call with "Reentered". Always release the lock in the same modifier that set it.</div>
+
+## Try it
+
+`Stipend` uses a storage lock, which costs a lot of gas for a flag that only matters during the call. Move it to transient storage and fill in the modifier.
+
+<CodeExercise id="transient-lock" {...exercises["transient-lock"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

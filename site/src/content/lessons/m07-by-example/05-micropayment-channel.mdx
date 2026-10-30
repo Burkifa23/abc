@@ -1,0 +1,178 @@
+---
+title: "Micropayment channels and signatures"
+summary: "Paying a print shop page by page without a transaction per page: signed messages, ecrecover, replay protection and the checks that keep them safe."
+covers: ["Solidity by Example", "Solidity by Example > Micropayment Channel"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import Figure from "../../../components/Figure.astro";
+import SignatureFlow from "../../../components/diagrams/SignatureFlow.astro";
+import { quiz, exercises } from "./05-micropayment-channel";
+
+A student uses the campus print shop all semester: a few pages before each lecture, a poster now and then. If every print job were a blockchain transaction, the fees would cost more than the paper. A **payment channel** solves this by moving the many small payments off the chain and settling once. The student locks a sum in a contract. For each print job she signs a message saying "I owe the shop this much in total", and hands it to the shop directly, with no transaction at all. At the end of the semester the shop submits only the **last** signed message to the contract, which pays the shop that amount and returns the rest to the student. One deposit, one settlement, any number of payments in between.
+
+This works because of digital signatures, the topic of the foundations module. The matching exercise is in [Lab 03](/abc/labs/). Here we look at how a contract checks a signature, and why that check needs more care than the documentation's short version suggests.
+
+## Signatures in the EVM
+
+A **signature** proves that the owner of a private key approved a particular message. Anyone can verify it using the matching public key or address, and nobody without the key can forge one.
+
+<Figure caption="The student signs off-chain with her private key. The shop, or the contract, recovers the signer's address from the message and the signature and compares it with the expected one.">
+  <SignatureFlow />
+</Figure>
+
+Ethereum signatures come as three numbers, `r`, `s` and `v`, usually glued into 65 bytes: 32 bytes of `r`, 32 bytes of `s`, one byte of `v`. The EVM has a built-in function, `ecrecover(hash, v, r, s)`, which takes the 32-byte hash that was signed together with those three numbers and returns the **address** of whoever produced the signature. Note the direction: verification means recovering an address and comparing it with the one you expected.
+
+## What goes into the message
+
+Our message is a hash of everything the contract wants to be sure about. The documentation lists three ingredients, and we add a fourth.
+
+1. **Who it is for**: the contract's own address, so that a signature meant for one channel cannot be used on another.
+2. **How much**: the cumulative total owed so far.
+3. **Protection against replay**: a way to make sure a signed message cannot be used again. Including the contract address handles it across channels, and because the contract closes after paying, one message cannot be paid twice within the same channel. This design is replay-safe only because closing ends the channel and every amount is a cumulative total. A channel that stays open (or is reused) needs a nonce in the signed digest in addition to the contract address, or an old note could be presented again.
+4. **The chain**: `block.chainid`, so a signature made for a test network cannot be replayed on the real one.
+
+```solidity
+bytes32 digest = keccak256(abi.encodePacked(address(this), block.chainid, amount));
+```
+
+`abi.encodePacked` joins the raw bytes of an address (20 bytes) and two numbers (32 bytes each). All three have fixed sizes, so the result cannot be confused with a different set of inputs. Then wallets add one more layer on top.
+
+### The `\x19Ethereum Signed Message:` prefix
+
+If a wallet would sign any 32 bytes you hand it, a malicious site could trick you into signing the hash of a real transaction. To prevent that, wallets following **EIP-191** prepend a fixed text before hashing and signing:
+
+```solidity
+function ethSigned(bytes32 digest) internal pure returns (bytes32) {
+    return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", digest));
+}
+```
+
+The `\n32` says that 32 bytes follow. Signing with a library call such as `signer.signMessage(bytesOfDigest)` in ethers adds this prefix for you, so the contract must rebuild the same prefixed hash before calling `ecrecover`. Forget the prefix and recovery returns a different, random-looking address.
+
+## Recovering the signer, carefully
+
+Splitting a 65-byte `bytes` value into its parts takes a little inline assembly, which reads raw memory:
+
+```solidity
+function recoverSigner(bytes32 digest, bytes memory sig) public pure returns (address) {
+    if (sig.length != 65) revert BadSignature();
+
+    bytes32 r;
+    bytes32 s;
+    uint8 v;
+    assembly {
+        r := mload(add(sig, 32))        // first 32 bytes after the length word
+        s := mload(add(sig, 64))        // next 32 bytes
+        v := byte(0, mload(add(sig, 96)))  // one final byte
+    }
+
+    // reject the "mirror" version of the signature (see below)
+    if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) revert BadSignature();
+    if (v != 27 && v != 28) revert BadSignature();
+
+    address signer = ecrecover(digest, v, r, s);
+    if (signer == address(0)) revert BadSignature();
+    return signer;
+}
+```
+
+Three checks beyond the bare call are essential.
+
+**Check for `address(0)`.** When the inputs are not a valid signature, `ecrecover` does not revert. It quietly returns the zero address. If your contract then compares the result with an expected address that happens to be unset, zero equals zero and the forged "signature" passes. Always treat a zero result as failure.
+
+**Reject high `s` values (malleability).** The mathematics of the signature scheme means that for every valid signature `(r, s, v)` there is a second valid one, with `s` replaced by `n - s` (where `n` is the order of the curve) and `v` flipped. Both recover the same signer for the same message. That is harmless if you only care about who signed, but if any logic treats the signature bytes as a unique identifier (for example "this signature was already used"), an attacker can produce the mirror and slip past it. The standard remedy is to accept only the lower half, `s <= n/2`; the long constant above is exactly that bound.
+
+**Check `v`.** Valid values are 27 and 28 (some tools produce 0 and 1; normalise them before calling).
+
+For anything beyond a teaching example, use a library: OpenZeppelin's `ECDSA` does all of this, and **EIP-712** structured signing lets wallets show a human-readable summary of what is being signed instead of an opaque hash.
+
+## The channel contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract PrintTab {
+    address payable public immutable student;
+    address payable public immutable shop;
+    uint256 public expiresAt;
+    bool public closed;
+
+    error NotShop();
+    error NotStudent();
+    error AlreadyClosed();
+    error AmountTooLarge();
+    error BadSignature();
+    error NotExpired();
+    error CannotShorten();
+    error TransferFailed();
+
+    constructor(address payable shop_, uint256 durationSeconds) payable {
+        student = payable(msg.sender);
+        shop = shop_;
+        expiresAt = block.timestamp + durationSeconds;
+    }
+    // recoverSigner and ethSigned from above live here too
+}
+```
+
+**Opening the channel.** The student deploys the contract with `msg.value` as the lock-up. That sum is the ceiling on what the shop can ever claim, so the shop can see it before accepting any signed note.
+
+**Making payments.** Nothing touches the chain. Each time, the student signs the digest for a new, **larger** total and sends the signature to the shop. Because each message states the running total, not the increment, the shop only needs to keep the latest one; older ones are worthless.
+
+**Closing the channel.** The shop sends the final amount and signature:
+
+```solidity
+function close(uint256 amount, bytes calldata sig) external {
+    if (msg.sender != shop) revert NotShop();
+    if (closed) revert AlreadyClosed();
+    if (amount > address(this).balance) revert AmountTooLarge();
+
+    bytes32 digest = ethSigned(keccak256(abi.encodePacked(address(this), block.chainid, amount)));
+    if (recoverSigner(digest, sig) != student) revert BadSignature();
+
+    closed = true;
+    (bool ok, ) = shop.call{value: amount}("");
+    if (!ok) revert TransferFailed();
+    // best effort: if the student rejects ether, the rest waits for reclaim()
+    (ok, ) = student.call{value: address(this).balance}("");
+}
+```
+
+The order of checks mirrors the documentation's list: the message is for this contract, the total is no more than what was locked, and the signature is valid and comes from the student. Only then does money move, after `closed` has been set. The shop is paid first, and if that transfer fails the whole call reverts. The refund to the student is deliberately **not** required to succeed: a student whose account rejects ether could otherwise block the shop's payout forever. If the refund fails, the remainder simply stays in the contract and the student collects it with `reclaim()` once the channel has expired.
+
+**Channel expiration.** What if the shop disappears and never closes? The student must not be stuck, so after `expiresAt` the student can take everything back:
+
+```solidity
+function reclaim() external {
+    if (msg.sender != student) revert NotStudent();
+    if (block.timestamp < expiresAt) revert NotExpired();
+    closed = true;
+    (bool ok, ) = student.call{value: address(this).balance}("");
+    if (!ok) revert TransferFailed();
+}
+
+function extend(uint256 newExpiry) external {
+    if (msg.sender != student) revert NotStudent();
+    if (newExpiry <= expiresAt) revert CannotShorten();
+    expiresAt = newExpiry;
+}
+```
+
+Only the student may extend, and never backwards. The shop must therefore submit its claim before the expiry, otherwise the student could reclaim the funds first; this is why shops close channels regularly.
+
+**Verifying payments.** The shop does not need the chain to check a note: it can recompute the digest and run the same recovery off-chain, then confirm the total is within the locked amount. The shop should only release the print job once that check passes.
+
+<div class="callout"><strong>Watch out.</strong> <code>ecrecover</code> returns <code>address(0)</code> for a bad signature instead of reverting. Compare the result against a real, non-zero expected address, and reject zero explicitly, or an invalid signature can look like a valid one from an unset address.</div>
+
+## Try it
+
+The starter already splits the signature into `r`, `s` and `v`. Finish `recoverSigner(bytes32,bytes)`: reject high `s`, call `ecrecover`, and revert with `InvalidSignature` if the result is the zero address.
+
+<CodeExercise id="recover-signer" {...exercises["recover-signer"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

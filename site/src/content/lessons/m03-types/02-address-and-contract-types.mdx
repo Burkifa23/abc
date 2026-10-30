@@ -1,0 +1,87 @@
+---
+title: "Addresses and contract types"
+summary: "The 20-byte address type, how address payable differs, the members every address has, and how a contract name becomes a type."
+covers: ["Types", "Types > Value Types"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./02-address-and-contract-types";
+
+Every student at Ashesi has an ID number; every account on Ethereum has an **address**. When a contract has to know who called it, who is owed money, or which other contract to talk to, it holds an address. Solidity gives addresses their own type so you cannot accidentally do arithmetic on one or mix it up with an amount.
+
+## The address type
+
+An `address` is 20 bytes (160 bits) long, usually written as 40 hexadecimal digits with a `0x` prefix. There are two flavours.
+
+- `address`: just the identifier. You can compare it (`==`, `!=`, `<`, and so on) and read facts about it.
+- `address payable`: the same 20 bytes, but flagged as something you are allowed to send ether to. It adds the two sending members `transfer` and `send`.
+
+The split is a safety net. If a function's parameter is a plain `address`, the compiler stops you sending ether to it by mistake. You move from the strict flavour to the permissive one on purpose, with `payable(addr)`. Going the other way, from `address payable` to `address`, is implicit and needs nothing.
+
+```solidity
+address owner = msg.sender;                 // msg.sender is a plain address
+address payable shop = payable(owner);      // you decided this one may receive ether
+address back = shop;                        // fine, no cast needed
+```
+
+### Conversions
+
+An address converts explicitly to and from `uint160`, `bytes20`, and contract types. `address(uint160(n))` and `uint160(addr)` both work; because they are the same width, no bits are lost. Converting from any other integer size or from `bytes32` is accepted only through one of those exact widths, which stops a wrong-sized value from sneaking in. A contract converts to `address` with `address(c)`, and the result is `address payable` only if that contract has a `receive` function or a `payable` fallback. If you want the contract's own address, write `address(this)`.
+
+### Members of an address
+
+| Member | What it gives you |
+|---|---|
+| `.balance` | the account's ether, in wei, as a `uint256` |
+| `.code` | the contract's deployed bytecode as `bytes memory` (empty for a plain wallet) |
+| `.codehash` | the hash of that code, as a `bytes32` |
+| `.transfer(amount)` | sends wei, reverts if it fails (payable only) |
+| `.send(amount)` | sends wei, returns `false` on failure instead of reverting (payable only) |
+| `.call(data)` | low-level call; returns `(bool ok, bytes memory ret)` |
+| `.delegatecall(data)` | runs the other contract's code **against your own storage** |
+| `.staticcall(data)` | like `call`, but any state change inside makes it fail |
+
+`transfer` and `send` pass along only 2300 gas, enough to log an event but not enough for the receiver to do anything clever. That limit was meant to prevent re-entrancy but breaks with receivers that legitimately need more, and gas prices have changed over time. Modern code usually uses `call` with a value, checks the returned flag, and defends against re-entrancy in another way (a later module). Recent compilers mark both as deprecated and warn when you use them. For now just remember the shape:
+
+```solidity
+(bool ok, ) = payable(student).call{value: refund}("");
+require(ok, "refund failed");
+```
+
+`delegatecall` deserves respect. It borrows another contract's code but runs it with *your* storage and *your* `msg.sender`, so a bad target can overwrite everything you own. It is how upgradeable proxies work, and a common source of disasters. `staticcall` is the safe variant for reading from untrusted contracts. All three low-level calls return a flag instead of reverting, so you must check it; a call to an address with no code also "succeeds".
+
+Reading `.balance` is free and pure data: `address(this).balance` tells a contract how much ether it holds. It is also not fully under the contract's control, because ether can be pushed into it without any function running.
+
+## Contract types
+
+Every `contract` you define becomes a type of its own. If you write `contract Library { ... }`, then `Library` can be used for variables and parameters:
+
+```solidity
+contract Library { function borrow(uint id) public {} }
+
+contract Student {
+    Library lib;
+    constructor(Library l) { lib = l; }
+    function go() public { lib.borrow(7); }   // call through the typed handle
+}
+```
+
+The variable `lib` stores only an address under the hood, but the compiler knows which functions exist at that address, so the call is type-checked. Rules to know:
+
+- A contract converts **implicitly** to a base contract it inherits from (a `Library` that inherits `Catalogue` can be used wherever a `Catalogue` is expected). Converting to a derived contract needs an explicit cast and is your responsibility.
+- Contract types support no operators; you compare them by converting to `address`.
+- Conversion to `address` is explicit: `address(lib)`. There is no automatic way to get from an `address` back to a typed handle except the cast `Library(addr)`, which does *not* verify that a `Library` really lives there.
+- The members you see on a contract-typed variable are its external functions and public state variables. The type also exposes `type(C).name` and the creation and runtime bytecode (`type(C).creationCode`, `type(C).runtimeCode`); for interfaces there is also `type(I).interfaceId`.
+
+<div class="callout"><strong>Watch out.</strong> Casting an address to a contract type tells the compiler to trust you. If nothing (or a different contract) lives there, the high-level call will revert on the code-size check or misbehave. Never assume a typed handle proves the contract is what you expect.</div>
+
+## Try it
+
+Write `balanceOf(address who)`, a `view` function returning the wei balance of any address by reading its `.balance` member.
+
+<CodeExercise id="balance-of" {...exercises["balance-of"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

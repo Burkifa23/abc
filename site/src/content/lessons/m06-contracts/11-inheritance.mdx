@@ -1,0 +1,99 @@
+---
+title: "Inheritance, overriding and constructors"
+summary: "Building one contract on top of another: is, virtual and override, calling the parent with super, and passing arguments to a base constructor."
+covers: ["Contracts", "Contracts > Inheritance"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./11-inheritance";
+
+Every club on campus follows the same basic rules: it has a name, it collects dues, and it has an officer who signs things. The Chess Club then adds its own twist, such as an equipment levy. Nobody rewrites the general rules for each club; the new club says "same as a normal club, except...". **Inheritance** lets a contract do the same thing. You write the shared parts once in a **base** contract, and a **derived** contract starts with all of them and changes only what it needs to.
+
+## Deriving with `is`
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract Club {
+    string public name;
+    uint256 internal dues;
+
+    constructor(string memory name_, uint256 dues_) {
+        name = name_;
+        dues = dues_;
+    }
+
+    function fee() public view virtual returns (uint256) {
+        return dues;
+    }
+}
+
+contract DebateClub is Club("Debate", 30) {
+    function motion() external pure returns (string memory) {
+        return "This house would ban phones in class";
+    }
+}
+```
+
+`DebateClub` can read `name`, use `dues`, and call `fee()` without declaring them. It gets every member of the base that is not `private`. Inside the derived contract, `internal` functions and variables are fully usable; from outside they stay hidden, exactly as before.
+
+An important detail is what ends up on the chain. Only **one** contract is created. The compiler copies the code of all the bases into it. A call from the derived contract to a base function is therefore an ordinary internal jump, not a message call to some other address.
+
+Another rule is that state variables cannot be **shadowed**. If `Club` has `dues`, then `DebateClub` may not declare another variable called `dues`, because that would leave two slots with one visible name. The compiler rejects it as an error. Pick a new name instead.
+
+## Letting a function change: `virtual` and `override`
+
+By default a function cannot be replaced. The base author opts in with `virtual`, and a derived function that replaces it must say `override`:
+
+```solidity
+contract ChessClub is Club("Chess", 20) {
+    uint256 public constant EQUIPMENT = 5;
+
+    function fee() public view virtual override returns (uint256) {
+        return super.fee() + EQUIPMENT;
+    }
+}
+```
+
+This is **polymorphism**: any call to `fee()`, whether from inside the contract or from a user, runs the version in the most derived contract. Notice that `ChessClub.fee` is itself `virtual`. Leave that word off and the chain is sealed: no contract below it can override `fee` again.
+
+The signature must match. The name and the parameter types are the same, and the return types have to agree too. You are allowed a few adjustments:
+
+- Visibility can go from `external` to `public`, and nothing else.
+- Mutability can get stricter: non-payable may become `view` or `pure`, and `view` may become `pure`. A `payable` function cannot change.
+- A `public` state variable can override an `external` function, because its getter has the same shape. For example `uint256 public override fee;` would replace an `external` `fee()` that returns `uint256`. The variable itself cannot be overridden further.
+- `private` functions cannot be `virtual`, since derived contracts cannot see them. A function with no body must be `virtual`, except in interfaces, where all functions are virtual already. Since 0.8.8 you do not even need `override` when you implement an interface function (unless several bases define it).
+
+## Calling up the chain
+
+Two forms reach the parent's version. `Club.fee()` names a specific contract. `super.fee()` asks for "the next one up in the final order", which the next lesson makes precise. With a single line of inheritance the two are identical, and `super` is the safer habit, as a longer family tree will show.
+
+## Constructor arguments
+
+If the base constructor takes arguments, the derived contract must supply them, or it cannot be created (it has to be marked `abstract`, which lesson 13 covers). There are two places to do it:
+
+```solidity
+contract Hackers is Club("Hackers", 10) {}              // in the "is" list: fixed value
+
+contract Robotics is Club {                              // in the constructor header: can use parameters
+    constructor(uint256 dues_) Club("Robotics", dues_) {}
+}
+```
+
+The first form suits values that are the same for everyone. The second form lets the deployer choose, using the derived constructor's own parameters. Giving the same base arguments in both places is an error; pick one.
+
+Constructors always run from the most base-like contract to the most derived one. They follow the **linearized order**, not the order in which you wrote the arguments in the header. The base's constructor finishes completely, state variable defaults and all, before the derived constructor body begins.
+
+<div class="callout"><strong>Watch out.</strong> Overriding does not fix a base function's bugs, and <code>override</code> will happily replace a function that guarded something. If <code>Club</code> had <code>withdrawFees()</code> with an owner check and you override it, your new version has no such check unless you write it or call <code>super.withdrawFees()</code>. Always ask what the base function was protecting before you replace it.</div>
+
+## Try it
+
+`ChessClub` should take its dues as a constructor argument, pass them to `Club` together with the fixed name, and add the equipment levy on top of the base fee by calling the parent's version.
+
+<CodeExercise id="chess-club" {...exercises["chess-club"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

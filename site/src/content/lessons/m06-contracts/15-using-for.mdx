@@ -1,0 +1,120 @@
+---
+title: "using for"
+summary: "Attaching library and free functions to types as methods and operators with using A for B, and what global does."
+covers: ["Contracts", "Contracts > Using For"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./15-using-for";
+
+Writing `Tally.sum(marks)` works, but it reads backwards: the thing being summed comes second. Most languages let you write `marks.sum()`. The directive **`using ... for ...`** gives Solidity the same trick. It attaches functions to a type, so that `marks.sum()` becomes shorthand for `Tally.sum(marks)`. For user-defined types it can even attach **operators**, so you can write `a + b` on your own money type.
+
+## Attaching a library
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+library Tally {
+    function sum(uint256[] storage marks) internal view returns (uint256 total) {
+        for (uint256 i = 0; i < marks.length; i++) {
+            total += marks[i];
+        }
+    }
+
+    function highest(uint256[] storage marks) internal view returns (uint256 top) {
+        for (uint256 i = 0; i < marks.length; i++) {
+            if (marks[i] > top) top = marks[i];
+        }
+    }
+}
+
+contract Course {
+    using Tally for uint256[];
+
+    uint256[] public marks;
+
+    function add(uint256 m) external {
+        marks.push(m);
+    }
+
+    function report() external view returns (uint256 total, uint256 top) {
+        return (marks.sum(), marks.highest());
+    }
+}
+```
+
+The value before the dot is passed as the first argument. In `using L for T`, every non-private function of the library `L` becomes available on `T`. The type is checked when you call, not when you attach, so a function whose first parameter does not match is simply not usable on that value.
+
+## Attaching a list of functions
+
+You can also name functions one by one, in braces. They may come from a library or be **free functions** (declared outside any contract):
+
+```solidity
+function isPass(uint256 mark) pure returns (bool) {
+    return mark >= 50;
+}
+
+using {isPass} for uint256;
+
+contract Check {
+    function test(uint256 m) external pure returns (bool) {
+        return m.isPass();
+    }
+}
+```
+
+With a list, the compiler checks that the type can be converted to the first parameter of every listed function, even those you never call.
+
+## Where it applies
+
+A `using` directive works only in the scope where you write it: inside a contract, or in the file for a directive at file level. Neither includes other files, and not even the contracts that inherit from it, unless they repeat the directive. At file level, the type must be spelled out explicitly (with no data location, so `uint256[]`, not `uint256[] storage`). Inside a contract you may write `using L for *;` to attach `L` to every type.
+
+## Operators on your own types
+
+For a **user-defined value type**, an entry in the list can be assigned an operator with `as`:
+
+```solidity
+type Cedis is uint256;
+
+using {add as +, lessThan as <} for Cedis global;
+
+function add(Cedis a, Cedis b) pure returns (Cedis) {
+    return Cedis.wrap(Cedis.unwrap(a) + Cedis.unwrap(b));
+}
+
+function lessThan(Cedis a, Cedis b) pure returns (bool) {
+    return Cedis.unwrap(a) < Cedis.unwrap(b);
+}
+
+contract Till {
+    function topUp(Cedis a, Cedis b) external pure returns (Cedis) {
+        return a + b;
+    }
+}
+```
+
+Operator rules:
+
+- The function must be a **free function** (not a library member) and must be `pure`.
+- The type must be a user-defined value type.
+- Binary operators take two operands of that type. Arithmetic and bitwise ones return that type; comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`) return `bool`.
+- Unary minus and binary minus are different operators with different signatures, so you attach each one separately. The compiler chooses by how you write it.
+- Operator definitions must be `global`.
+
+## What `global` means
+
+Without `global`, the attachment lasts only in the file where you wrote it. Add the word `global` at the end and the functions travel with the type, into every file that can see the type. There is a condition: `global` is allowed only at file level, and only for a user-defined type **declared in the same file** as the directive. You cannot globally attach functions to `uint256`, or to a type imported from somewhere else. Operators require it, because an operator would otherwise behave differently depending on which file you are in.
+
+<div class="callout"><strong>Watch out.</strong> An operator on a custom type does not stop being a function call, and it does not change the rules of arithmetic. Inside <code>add</code> above, the addition is on plain <code>uint256</code>, so it still checks for overflow. If your operator hides a rounding rule or a clamp, anybody reading <code>a + b</code> will not see it. Use operators only where the meaning is obvious.</div>
+
+## Try it
+
+`Price` is a user-defined type, and `add` is already written. Attach it as the `+` operator, globally, and then use `+` in `total`.
+
+<CodeExercise id="price-plus" {...exercises["price-plus"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

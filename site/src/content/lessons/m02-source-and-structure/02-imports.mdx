@@ -1,0 +1,138 @@
+---
+title: "Imports and import path resolution"
+summary: "Split a project across files, then follow an import path step by step until the compiler finds the file."
+covers: ["Layout of a Solidity Source File", "Layout of a Solidity Source File", "Layout of a Solidity Source File > Importing other Source Files", "Import Path Resolution", "Import Path Resolution > Virtual Filesystem", "Import Path Resolution > Imports", "Import Path Resolution > Base Path and Include Paths", "Import Path Resolution > Allowed Paths", "Import Path Resolution > Import Remapping", "Import Path Resolution > Using URLs in imports"]
+---
+
+import Figure from "../../../components/Figure.astro";
+import VirtualFilesystem from "../../../components/diagrams/VirtualFilesystem.astro";
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./02-imports";
+
+A campus election contract grows. First it needs a voter list, then a counting routine, then the test suite wants to share helpers with it. One file stops being practical, so you split the code up and join the pieces with `import`. The syntax is short, but one question deserves a careful answer: how does the compiler turn the text between the quotes into a file? The answer is a small system of names, folders and rewrite rules. You meet it every time a lab says `import "forge-std/Test.sol";`.
+
+## The import statement
+
+Solidity borrows its syntax from modern JavaScript, with one difference: there is no "default export". Everything at file level is a named symbol, and you decide what to take.
+
+```solidity
+import "Registry.sol";                                  // 1. everything
+import * as Reg from "Registry.sol";                    // 2. everything, behind a prefix
+import "Registry.sol" as Reg;                           // 2b. same meaning as 2
+import {Voter, Roll as VoterRoll} from "Registry.sol";  // 3. only these, one renamed
+```
+
+The text in quotes is the *import path*. Form 1 pastes every top-level symbol of `Registry.sol` (and of whatever it imported) into your file's global scope. It works but is discouraged: when the other file adds a new top-level name next month, the name silently appears in every file that imported it this way, and may clash with your own. Form 2 keeps those names behind `Reg.`, so you write `Reg.Voter`. Form 3 is usually best, because a reader sees exactly what you use, and `as` settles a name collision on the spot.
+
+## Names, not folders: the virtual filesystem
+
+If import paths pointed at real folders, a project that builds on Kwesi's Windows laptop might fail on Efua's Linux server simply because the paths differ. For reproducible builds the compiler hides the real disk. It keeps an internal table called the *virtual filesystem* (VFS), where every piece of source code has a unique **source unit name**. That name is an opaque label; it merely often looks like a path.
+
+An import path is *translated* into a source unit name, which is then looked up in the VFS.
+
+<Figure caption="An import path is remapped into a source unit name. If the VFS lacks that name, the loader searches the base path and include paths for a matching file.">
+  <VirtualFilesystem />
+</Figure>
+
+### What fills the VFS
+
+The VFS starts with whatever you hand to the compiler:
+
+- **Command line.** `solc Ballot.sol` registers the file under its path, tidied into a canonical form (explained below).
+- **Standard JSON.** This is the structured input format used by tools like Foundry and Hardhat. The keys of its `sources` object become the source unit names directly, and they can be anything.
+- **Standard JSON with `urls`.** Instead of source text you give a list of places to try. The compiler offers them one by one to the import callback until one works. The key is still the name, whichever address succeeded.
+- **Standard input.** Piping code into `solc -` stores it under the name `<stdin>`.
+
+After that, new files can only arrive through the **import callback**. When an import resolves to a name the VFS does not have, the compiler calls the callback and asks it to supply the code. The command-line compiler ships a basic callback, the *host filesystem loader*, which treats the name as a path on disk (switch it off with `--no-import-callback`). The JavaScript build has no callback unless you write one, which is why the exercises on this site compile exactly one file. Other tools offer richer callbacks: Remix, for example, can fetch from HTTP, IPFS or npm. If nothing can supply the name, compilation fails.
+
+For portability, use forward slashes in import paths (they work everywhere) and avoid anything that depends on one callback or one operating system. Backslash handling and letter case differ between machines.
+
+## Direct and relative imports
+
+Every import path falls into one of two groups. A **relative** import starts with `./` or `../` and is read against the *source unit name of the importing file*. A **direct** import is anything else, and the path simply is the name.
+
+```solidity
+// inside the unit named contracts/vote/Ballot.sol
+import "./Voter.sol";             // relative -> contracts/vote/Voter.sol
+import "../lib/Count.sol";        // relative -> contracts/lib/Count.sol
+import "contracts/lib/Count.sol"; // direct   -> contracts/lib/Count.sol
+import "Voter.sol";               // direct   -> Voter.sol  (NOT the neighbour!)
+```
+
+That last line is a classic trap. `"Voter.sol"` is not `"./Voter.sol"`; it names a top-level entry in the VFS.
+
+To resolve a relative import, the compiler starts from the importer's name and removes its last segment (the file name). Then it walks the import path from the left: a `.` is skipped, a `..` removes one more segment, and any other segment is appended after a single slash. Names are not shell paths, so nothing else is tidied. A direct name such as `lib/./grades.sol` or `lib//grades.sol` stays exactly as typed, and the VFS counts it as a different unit from `lib/grades.sol`, even if a disk would treat them as one file. Where the loader does read one disk file for two names, the compiler still sees two source units. The part contributed by the import path is tidied Unix-style, but the importer's own name is left alone, which keeps an `https://` prefix from collapsing into `https:/`.
+
+Leading `..` segments get brittle fast. The docs advise using direct imports with a base path and include paths instead.
+
+## Base path and include paths
+
+When the host filesystem loader needs a name, it glues the **base path** in front and checks the disk. If nothing is there, it repeats with each **include path**, in order. A sensible set-up is the project root as base path and library folders as include paths.
+
+```text
+solc Ballot.sol --base-path . --include-path libs/ --include-path /opt/shared-libs/
+```
+
+Now `import "gradekit/utils/Rounding.sol";` works whether the library sits in `libs/`, in the shared folder, or directly inside your tree, and the build produces identical metadata. The default base path is empty, which leaves names untouched (the only setting where absolute names mean real absolute paths). Include paths need a non-empty base path and cannot be empty strings. Paths may overlap, but if one name matches existing files under two of them, the compiler reports the ambiguity.
+
+### How command-line files get their names
+
+A file named on the command line must receive the same name wherever the compiler runs. So its path is made absolute, `.` and `..` are collapsed, separators become `/`, a drive letter that matches the working drive becomes `/`, and symbolic links are left alone. Then the compiler tries the base path and, failing that, each include path, and strips the one that is an exact prefix. What remains is the name. If that result would not be unique, you get an error. Before version 0.8.8 this stripping did not exist, so old compilers want you to run them from the base path.
+
+## Allowed paths
+
+Reading arbitrary files is risky, so the loader only reads from a short list of safe directories. Outside Standard JSON mode, those are the folders of files named on the command line, the folders of remapping targets, and the base and include paths. In Standard JSON mode the list shrinks to the base path and include paths. Extra folders are whitelisted with `--allow-paths`, a comma-separated list. The compiler does not verify that they exist, and the comparison is case-sensitive. Links do not extend the list: a file reachable only through a symlink that leads outside the allowed set is refused.
+
+That explains two lines in the labs' `foundry.toml` that look redundant:
+
+```toml
+remappings = ["forge-std/=/opt/forge-std/src/"]
+allow_paths = ["/opt/forge-std"]
+```
+
+The first rewrites names. The second tells the loader that `/opt/forge-std` is a place it may read, because the remapping target alone does not grant access when Foundry drives the compiler through Standard JSON.
+
+## Import remapping
+
+A *remapping* rewrites the name that an import produces, before the VFS is consulted. Its written form is `context:prefix=target`, and each part has a job:
+
+- `prefix` is the text to look for at the start of the produced name. It is required.
+- `target` is what replaces it. It may be empty, in which case the prefix simply disappears.
+- `context` narrows the rule to importers whose own name starts with that text. Leave it empty and the rule covers every file.
+
+In a lab, `forge-std/=/opt/forge-std/src/` turns `forge-std/Test.sol` into `/opt/forge-std/src/Test.sol`, and the loader then reads that file from disk. Contexts let two parts of one project disagree about a dependency: say the election code should use `vendor/pay-v1/` while the fees code uses `vendor/pay-v2/`.
+
+```text
+election/:pay/=vendor/pay-v1/
+fees/:pay/=vendor/pay-v2/
+```
+
+Here is how to think about what a remapping can and cannot do, grouped by theme.
+
+**What it touches.** Only the step from import path to name. Files you name on the command line, and entries under `urls` in Standard JSON, already have their names and are never rewritten. Matching also happens on *names*, never on the raw text you typed. So `./` cannot be a prefix (it has already been turned into the importer's folder by then), but that folder name can be.
+
+**How matching works.** Context and prefix are compared as plain text from the first character, and a match may stop in the middle of a folder or file name: the prefix `/ha` would match the name `/hall/Rooms.sol`. Slashes are literal too. A pattern containing a doubled slash will not match a name with a single one, and the reverse, because names are never tidied.
+
+**What the target becomes.** It is pasted in verbatim: no cleaning, no slash added. With the rule `/campus/=/hall`, the name `/campus/x.sol` becomes `/hallx.sol`, because the slash you left off is not supplied. A target starting with `./` is measured from the base path, not from the file that did the importing. The internally added base path is not part of the name, so it cannot be remapped.
+
+**Which rule wins.** Never more than one per import. When several match, the longest context wins; if contexts tie, the longest prefix wins; if both tie, the rule listed last wins. Rules do not feed each other, so `x=y y=z` leaves `x` as `y`.
+
+Remappings are recorded in the contract metadata, and a hash of the metadata is embedded in the bytecode. Changing a remapping therefore changes the bytecode. For the same reason, keep personal paths such as `/home/ama/libs/` out of targets, and prefer an include path for a library folder.
+
+## URLs in imports
+
+An address that begins with `https://` or `data://` has no special power in an import path; the compiler sees only characters in a name. One prefix, `file://`, is understood by the host filesystem loader, which removes it before looking on disk.
+
+To build offline code that imports from a web address, remap the address onto a local clone of the repository. For instance, if students import `https://example.org/abc/tokens/Coin.sol` and you cloned that repository to `/work/tokens/`:
+
+```text
+:https://example.org/abc/tokens/=/work/tokens/
+```
+
+When the context is empty you still write the colon in front. Without it the compiler reads everything before the first colon, here `https`, as the context.
+
+<div class="callout"><strong>Watch out.</strong> An import without <code>./</code> is never "next to this file". <code>import "Voter.sol";</code> looks for a unit literally named <code>Voter.sol</code> at the top of the VFS. If you meant the neighbour, write <code>./Voter.sol</code>.</div>
+
+## Check your understanding
+
+<Quiz questions={quiz} />

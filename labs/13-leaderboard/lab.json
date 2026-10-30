@@ -1,0 +1,11 @@
+{
+  "n": 13,
+  "slug": "leaderboard",
+  "title": "Game Leaderboard",
+  "kind": "build",
+  "summary": "Charge an entry fee, record scores from the game server and keep a sorted top-5.",
+  "concepts": ["payable", "bounded arrays", "sorting in storage", "access control", "pull payments"],
+  "adaptedFrom": "Solana: build an Anchor leaderboard",
+  "docs": ["m03-types/07-arrays-and-slices", "m08-security/03-ether-and-gas-pitfalls", "m08-security/07-restricting-access"],
+  "openFiles": ["README.md", "src/Leaderboard.sol"]
+}

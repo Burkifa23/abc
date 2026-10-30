@@ -1,0 +1,11 @@
+{
+  "n": 5,
+  "slug": "shared-bank",
+  "title": "Shared Bank",
+  "kind": "learn",
+  "summary": "Hold real ether safely: deposit, transfer, withdraw, and survive a reentrancy attack.",
+  "concepts": ["payable", "msg.value", "receive", "call{value:}", "checks-effects-interactions", "reentrancy"],
+  "adaptedFrom": "Plan.md Workshop 2 + Solidity docs Subcurrency",
+  "docs": ["m01-smart-contracts/03-subcurrency", "m04-units-and-globals/02-block-and-transaction", "m08-security/02-reentrancy", "m08-security/06-withdrawal-pattern"],
+  "openFiles": ["README.md", "src/SharedBank.sol"]
+}

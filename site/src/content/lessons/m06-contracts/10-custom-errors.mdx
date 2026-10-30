@@ -1,0 +1,78 @@
+---
+title: "Custom errors"
+summary: "Named, parameterised failures that cost less than strings, how they are encoded on the wire, and why you should not trust error data from other contracts."
+covers: ["Contracts", "Contracts > Custom Errors"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./10-custom-errors";
+
+When a student's fee payment is refused, "Payment failed" is a poor explanation. "Short by 120 cedis: you paid 380, the fee is 500" tells them what to do. Earlier you met `require(cond, "message")`, which carries a text string. A **custom error** carries a name and typed values instead, and it is cheaper and easier for programs to read.
+
+## Declaring and raising
+
+An error is declared with `error`, a name and a parameter list. Declare it at file level or inside a contract, interface or library. Then raise it with a `revert` statement:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.27;
+
+/// The payment is below the fee.
+/// @param paid what the student sent
+/// @param fee what the term costs
+error Underpaid(uint256 paid, uint256 fee);
+
+contract TermFee {
+    uint256 public fee = 500;
+    mapping(address => bool) public cleared;
+
+    function pay() external payable {
+        if (msg.value < fee) revert Underpaid(msg.value, fee);
+        cleared[msg.sender] = true;
+    }
+
+    function payChecked() external payable {
+        require(msg.value >= fee, Underpaid(msg.value, fee));
+        cleared[msg.sender] = true;
+    }
+}
+```
+
+An error value can only be created in two places: after `revert`, or as the second argument of `require`. The second form needs Solidity 0.8.26 with the via-IR pipeline, or 0.8.27 with the legacy one. The compiler allocates memory for the error only if the condition fails, so `require(cond, Err(...))` is about as cheap as `if (!cond) revert Err(...)`. Like all function-style arguments, the expression passed to `require` is evaluated even when the condition holds, so keep it cheap. Named arguments work too: `revert Underpaid({paid: msg.value, fee: fee})`.
+
+A revert undoes every state change made in the current call, and hands the error data to the caller. For a user, that is the wallet or tool showing the message; for another contract, it is something it can catch with `try`/`catch` (Module 5, lesson 07). Remember that only reverts coming from an **external call** can be caught. A revert in an internal call, or in the same function, simply ends the whole call.
+
+## What goes on the wire
+
+An error is ABI-encoded exactly like a call to a function with the same name and parameter types would be. The returned data is a 4-byte **selector** (the first four bytes of the keccak256 hash of `Underpaid(uint256,uint256)`) followed by the arguments, each padded to 32 bytes.
+
+For an error with no parameters, that is only 4 bytes. This is why custom errors beat string reasons: `require(ok, "Not enough fee was paid")` has to store the string in the contract's code and return the text each time, while `revert NotEnough()` is four bytes. You can still document the reason in a NatSpec comment (the `///` lines above). Those comments are not stored on-chain, so they cost nothing.
+
+Two built-in errors you already know have the same shape, and cannot be declared by you: `Error(string)` is what `require(cond, "text")` produces, and `Panic(uint256)` is what a failed `assert`, an overflow or a division by zero produces.
+
+Every error has a `.selector` member of type `bytes4`:
+
+```solidity
+bytes4 s = Underpaid.selector;   // same as bytes4(keccak256("Underpaid(uint256,uint256)"))
+```
+
+That is useful in tests, or in a `catch (bytes memory data)` block when you want to compare the first four bytes.
+
+## Rules and limits
+
+- **No overloading, no overriding.** There can be only one error per name in a scope. Errors *are* inherited by derived contracts.
+- **Same name in two scopes is allowed**, for example in two unrelated contracts. From the outside, only the name and parameter types matter in the ABI, not which contract or file defined it, so the two are indistinguishable to callers.
+- Errors are for **reporting**, not control flow. Do not branch on which error an inner call returned as if it were a trustworthy message.
+
+<div class="callout"><strong>Watch out.</strong> Revert data from an inner call is passed up the chain by default. A contract you call can therefore return an error that <em>looks</em> like one your own contract would raise, including the same selector, with whatever values it likes. Never treat error data from an external call as proof of what happened in your code. Use it to show a message, not to make a security decision.</div>
+
+## Try it
+
+`Canteen` should refuse a purchase when the balance is too low. Declare an error with two parameters and revert with it.
+
+<CodeExercise id="balance-error" {...exercises["balance-error"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

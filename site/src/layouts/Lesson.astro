@@ -1,0 +1,65 @@
+---
+import Base from "./Base.astro";
+import { lessonsByModule, solidityLink } from "../lib/lessons";
+
+const { entry } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const href = (id: string) => `${base}docs/${id}/`;
+const groups = await lessonsByModule();
+const flat = groups.flatMap((g) => g.lessons);
+const i = flat.findIndex((l) => l.id === entry.id);
+const prev = flat[i - 1];
+const next = flat[i + 1];
+// Authoring convention: <CodeExercise> takes a literal id="…" prop.
+const re = /<CodeExercise\b[^>]*?\sid=["']([^"']+)["']/g;
+const exerciseIds = (body: string | undefined) => Array.from((body ?? "").matchAll(re), (m) => m[1]).join(",");
+---
+<Base title={`${entry.data.title} · Docs · Ashesi Blockchain Community`} description={entry.data.summary} current="docs">
+  <div class="docs">
+    <aside class="sidebar">
+      <nav aria-label="Lessons">
+        <a href={`${base}docs/`}><strong>All lessons</strong></a>
+        {groups.map((g) => (
+          <>
+            <h4>{g.title}</h4>
+            {g.lessons.map((l) => <a href={href(l.id)} data-lesson-link={l.id} data-exercises={exerciseIds(l.body)} aria-current={l.id === entry.id ? "page" : undefined}>{l.data.title}</a>)}
+          </>
+        ))}
+      </nav>
+    </aside>
+
+    <main class="prose">
+      <span class="eyebrow">Docs</span>
+      <h1>{entry.data.title}</h1>
+      <p class="lead">{entry.data.summary}</p>
+      <article data-lesson={entry.id} data-exercises={exerciseIds(entry.body)}><slot /></article>
+
+      {entry.data.covers.length > 0 && (
+        <>
+          <h2>Docs sections covered</h2>
+          <ul>
+            {entry.data.covers.map((c: string) => <li><a href={solidityLink(c)}>{c}</a></li>)}
+          </ul>
+        </>
+      )}
+
+      <nav class="card" aria-label="Previous and next" style="display:flex;justify-content:space-between;gap:16px;padding:16px;margin-top:32px">
+        {prev ? <a href={href(prev.id)}>&larr; {prev.data.title}</a> : <span />}
+        {next ? <a href={href(next.id)}>{next.data.title} &rarr;</a> : <span />}
+      </nav>
+    </main>
+  </div>
+</Base>
+
+<script>
+  import { createProgress } from "../lib/progress";
+  const paint = () => {
+    const p = createProgress();
+    document.querySelectorAll<HTMLElement>("[data-lesson-link]").forEach((a) => {
+      const id = a.dataset.lessonLink!;
+      a.toggleAttribute("data-done", p.isDone(id, (a.dataset.exercises || "").split(",").filter(Boolean)));
+    });
+  };
+  paint();
+  document.addEventListener("abc:progress", paint);
+</script>

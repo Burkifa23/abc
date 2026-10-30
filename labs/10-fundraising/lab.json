@@ -1,0 +1,11 @@
+{
+  "n": 10,
+  "slug": "fundraising",
+  "title": "Fundraising",
+  "kind": "build",
+  "summary": "Raise money for a campus startup: hit the goal before the deadline or refund everyone.",
+  "concepts": ["enum state machine", "payable", "block.timestamp", "pull payments", "modifiers"],
+  "adaptedFrom": "freeCodeCamp web3: build a fundraising smart contract",
+  "docs": ["m08-security/06-withdrawal-pattern", "m08-security/08-state-machine", "m04-units-and-globals/01-ether-and-time-units"],
+  "openFiles": ["README.md", "src/Fundraiser.sol"]
+}

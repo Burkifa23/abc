@@ -1,0 +1,176 @@
+---
+title: "The style guide"
+summary: "Lay out and name your Solidity so that any reader can find things quickly: spacing, wrapping, ordering, naming and NatSpec."
+covers: ["Style Guide", "Style Guide > Introduction", "Style Guide > Code Layout", "Style Guide > Order of Layout", "Style Guide > Naming Conventions", "Style Guide > NatSpec"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import { quiz, exercises } from "./05-style-guide";
+
+Two students in the ABC reading group review each other's code before a hackathon. One file has tabs, a constructor hidden at the bottom, and a function called `Update_Thing`. The other puts everything in a predictable place. Without running either program, you already know which review will go faster. The Solidity style guide exists for that reason: it makes code easy to *read*, which makes it easier to check, which on a blockchain means fewer expensive mistakes.
+
+## What the guide is, and is not
+
+The guide borrows its structure from Python's PEP 8. Its stated goal is **consistency**, not "the one right way". The rule of thumb: being consistent with the guide is good, being consistent within your project matters more, and being consistent within a single function matters most. Many teams publish their own guide, and when it conflicts with this one, the project's wins. The final piece of advice is to know when to break a rule: if a convention makes a particular piece of code harder to read, use your judgement. Look at other examples and ask.
+
+## Code layout
+
+### Indentation, spaces, blank lines
+
+- Use four spaces per level. Spaces are preferred over tabs, and never mix the two.
+- Put two blank lines around top-level declarations (contracts, libraries and the like), and one blank line between functions inside a contract. You may omit the blank lines between a group of related one-line declarations, such as the abstract stubs of an interface-like contract.
+- Prefer UTF-8 or plain ASCII for the file encoding.
+- Put `import` statements at the top of the file, under the pragma.
+
+### Line length and wrapping
+
+Keep lines to about 120 characters. When a call, assignment or event is too long, wrap it like this: leave the opening parenthesis alone on its line, indent the arguments one level (one level only), give each argument its own line, and put the closing `);` on a line by itself.
+
+```solidity
+registry.recordAttendance(
+    studentId,
+    courseCode,
+    sessionDate,
+    isLate
+);
+
+event LongAttendance(
+    address indexed marker,
+    uint256 studentId,
+    bytes32 courseCode
+);
+```
+
+The same shape applies to nested-mapping assignments and to `emit` statements. Avoid the styles that hang later arguments from the first one, or that put the closing parenthesis at the end of the last argument.
+
+### Order of functions
+
+Group functions by kind, so readers know where to look:
+
+1. constructor
+2. `receive`
+3. `fallback`
+4. external
+5. public
+6. internal
+7. private
+
+Within one group, put `view` and `pure` functions last.
+
+### Whitespace in expressions
+
+Skip padding inside parentheses, brackets and braces (the single-line function body is the exception), and before commas and semicolons. Do not align assignments with extra spaces. Write `receive()` and `fallback()` without a space before the parentheses. Surround binary operators with a single space on each side, though tightly binding operators may drop the spaces to show precedence: `x = 2*y + 3*z;` is fine, as long as you use the same spacing on both sides of a given operator.
+
+### Braces and control structures
+
+Braces for contracts, libraries, functions and structs open on the same line as the declaration, after one space, and close on their own line at the declaration's indent. The same holds for `if`, `else`, `while` and `for`, with a space between the keyword and its condition and between the condition and `{`. A body of one statement may skip the braces if it fits on a single line. An `else` joins the closing brace of its `if`:
+
+```solidity
+if (score < 40) {
+    status = Status.Retake;
+} else if (score > 70) {
+    status = Status.Distinction;
+} else {
+    status = Status.Pass;
+}
+```
+
+### Function declarations
+
+A short declaration keeps its `{` on the same line. The modifiers, in this order, are: visibility, mutability, `virtual`, `override`, then custom modifiers.
+
+```solidity
+function balanceOf(address who) public view override onlyMember returns (uint256) {
+    return balances[who];
+}
+```
+
+For long declarations, put each parameter on its own line, then the closing parenthesis alone, then each modifier on its own line, then `{` alone:
+
+```solidity
+function transferWithNote(
+    address to,
+    uint256 amount,
+    bytes32 note
+)
+    public
+    onlyMember
+    returns (bool)
+{
+    // ...
+}
+```
+
+Multi-line return lists and `return (...)` tuples use the same wrapped style, and when a constructor passes arguments to several base contracts, drop each base constructor call onto its own line. A very short function with one statement may live on a single line.
+
+### Mappings, arrays, strings
+
+Write `mapping(address => bool) seen;` with no space between `mapping` and its parenthesis, including in nested mappings. Write `uint256[] list;` with no space before the brackets. Use double quotes for strings.
+
+## Order of layout
+
+At file level, use this order: pragmas, imports, events, errors, interfaces, libraries, contracts.
+
+Inside a contract, library or interface: type declarations (enums, structs), state variables, events, errors, modifiers, then functions. The guide admits that it can read better to declare a type right next to the event or variable that uses it, so treat this as a default rather than a law.
+
+## Naming conventions
+
+Names carry information, so a consistent scheme saves readers a lot of thought. First, the vocabulary: *CapWords* (`LabBooking`), *mixedCase* (`labBooking`), and *UPPER_CASE_WITH_UNDERSCORES*. For initialisms, capitalise every letter: `HTTPServerError` over `HttpServerError`, and in mixedCase `xmlHTTPRequest` (the first one stays lowercase at the start). Never use the single letters `l`, `O` or `I` as names, because they look like digits.
+
+| Thing | Style | Example |
+|---|---|---|
+| Contract, library | CapWords, matching the file name | `LabBooking` in `LabBooking.sol` |
+| Struct | CapWords | `Member` |
+| Event | CapWords | `Booked` |
+| Error | CapWords | `LabClosed` |
+| Enum | CapWords | `Slot` |
+| Function | mixedCase | `bookSlot` |
+| Function argument | mixedCase | `newOwner` |
+| Local and state variable | mixedCase | `totalSupply` |
+| Constant | UPPER_CASE_WITH_UNDERSCORES | `MAX_BOOKINGS` |
+| Modifier | mixedCase | `onlyBefore` |
+
+If a file holds several contracts, name it after the core one (though one contract per file is better). A library function that works on a struct takes that struct as its first argument, always named `self`.
+
+Two underscore habits. A trailing underscore (`end_`) avoids a clash with an existing name or a reserved word. A leading underscore (`_helper`) marks non-external functions and state variables, those that are `private` or `internal` (a variable with no stated visibility is internal). The leading underscore has a safety side effect: if you decide to make such a function external, you rename it, and the rename makes you review every place that calls it. That manual review is a real guard against accidentally exposing functions, which is a common source of vulnerabilities. Do it by hand rather than by find-and-replace.
+
+## NatSpec in the guide
+
+Document your contracts with NatSpec, written with `///` or `/** ... */` directly above the function or statement it describes. The guide recommends full coverage of the public interface, everything that appears in the ABI. A small attendance contract with the recommended comments looks like this:
+
+```solidity
+/// @title Lecture attendance
+/// @author ABC reading group
+contract Attendance {
+    mapping(address => uint256) public sessionsAttended;
+
+    /// Mark the caller present for one more session.
+    /// @param sessions how many sessions to add
+    /// @dev adds to the caller's running total
+    function markPresent(uint256 sessions) public {
+        sessionsAttended[msg.sender] += sessions;
+    }
+
+    /// Report how often a student has attended.
+    /// @param student the student's address
+    /// @return the number of sessions attended
+    function attendanceOf(address student) public view returns (uint256) {
+        return sessionsAttended[student];
+    }
+}
+```
+
+The previous lesson explains each tag in detail.
+
+<div class="callout"><strong>Watch out.</strong> A style guide is advice about readability, not about safety. A tidy contract can still be wrong, and a messy one can be correct. The one place the guide touches safety is the leading underscore, so keep that habit and keep reviewing visibility changes.</div>
+
+## Try it
+
+The contract below compiles, but its parts are in random order. Rearrange it to follow the guide: type, state variables, event, errors, modifier, constructor, then external functions (state-changing before `view`), then the private helper. Do not change the code itself. The checks use order patterns and also require that the compiler stays quiet.
+
+<CodeExercise id="reorder-lab-booking" {...exercises["reorder-lab-booking"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

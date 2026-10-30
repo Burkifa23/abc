@@ -1,0 +1,11 @@
+{
+  "n": 7,
+  "slug": "sentence-maker",
+  "title": "Sentence Maker",
+  "kind": "build",
+  "summary": "Let the whole class write one sentence, a word at a time, with rules enforced on-chain.",
+  "concepts": ["string and bytes", "struct arrays", "string.concat", "custom errors", "access control"],
+  "adaptedFrom": "NEAR: build a sentence-making smart contract",
+  "docs": ["m03-types/03-bytes-and-literals", "m03-types/08-structs", "m04-units-and-globals/03-abi-encoding-functions"],
+  "openFiles": ["README.md", "src/SentenceMaker.sol"]
+}
