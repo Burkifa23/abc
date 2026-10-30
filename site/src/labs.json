@@ -1,5 +1,114 @@
 [
   {
+    "n": 1,
+    "slug": "hello-foundry",
+    "title": "Hello Foundry",
+    "kind": "learn",
+    "summary": "Run your first tests and write a contract that greets the campus.",
+    "concepts": [
+      "contract",
+      "state variable",
+      "constructor",
+      "view",
+      "event",
+      "custom error"
+    ],
+    "adaptedFrom": "Solana & NEAR hello-world setup projects",
+    "docs": [
+      "m01-smart-contracts/02-simple-storage",
+      "m02-source-and-structure/04-anatomy-of-a-contract"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/HelloWorld.sol"
+    ],
+    "dir": "01-hello-foundry",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F01-hello-foundry%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/01-hello-foundry"
+  },
+  {
+    "n": 2,
+    "slug": "mini-blockchain",
+    "title": "Mini Blockchain",
+    "kind": "learn",
+    "summary": "Build blocks, hashes and proof-of-work inside a smart contract.",
+    "concepts": [
+      "struct",
+      "dynamic arrays",
+      "keccak256",
+      "abi.encode",
+      "proof of work",
+      "events"
+    ],
+    "adaptedFrom": "freeCodeCamp web3: digital ledgers + proof-of-work",
+    "docs": [
+      "m00-foundations/03-blocks-and-mining",
+      "m03-types/07-arrays-and-slices",
+      "m04-units-and-globals/04-errors-math-crypto"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/MiniChain.sol"
+    ],
+    "dir": "02-mini-blockchain",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F02-mini-blockchain%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/02-mini-blockchain"
+  },
+  {
+    "n": 3,
+    "slug": "signatures",
+    "title": "Signatures",
+    "kind": "learn",
+    "summary": "Prove who sent a transfer with a signature, then let anyone relay it.",
+    "concepts": [
+      "ecrecover",
+      "keccak256",
+      "abi.encode",
+      "nonces",
+      "replay protection",
+      "signed messages"
+    ],
+    "adaptedFrom": "freeCodeCamp web3: digital signatures by building a wallet",
+    "docs": [
+      "m00-foundations/04-keys-and-signatures",
+      "m04-units-and-globals/04-errors-math-crypto",
+      "m07-by-example/05-micropayment-channel"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/SignedCoin.sol"
+    ],
+    "dir": "03-signatures",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F03-signatures%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/03-signatures"
+  },
+  {
+    "n": 4,
+    "slug": "video-game-marketplace",
+    "title": "Video Game Marketplace",
+    "kind": "build",
+    "summary": "Build a game shop where players earn coins, buy items and sell them back.",
+    "concepts": [
+      "mapping",
+      "nested mapping",
+      "string keys",
+      "custom errors",
+      "events"
+    ],
+    "adaptedFrom": "freeCodeCamp web3: build a video game marketplace blockchain",
+    "docs": [
+      "m03-types/09-mappings",
+      "m06-contracts/10-custom-errors"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/GameMarketplace.sol"
+    ],
+    "dir": "04-video-game-marketplace",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F04-video-game-marketplace%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/04-video-game-marketplace"
+  },
+  {
     "n": 8,
     "slug": "campus-elections",
     "title": "Secure Campus Elections",

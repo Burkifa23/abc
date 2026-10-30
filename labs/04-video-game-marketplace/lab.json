@@ -1,0 +1,11 @@
+{
+  "n": 4,
+  "slug": "video-game-marketplace",
+  "title": "Video Game Marketplace",
+  "kind": "build",
+  "summary": "Build a game shop where players earn coins, buy items and sell them back.",
+  "concepts": ["mapping", "nested mapping", "string keys", "custom errors", "events"],
+  "adaptedFrom": "freeCodeCamp web3: build a video game marketplace blockchain",
+  "docs": ["m03-types/09-mappings", "m06-contracts/10-custom-errors"],
+  "openFiles": ["README.md", "src/GameMarketplace.sol"]
+}
