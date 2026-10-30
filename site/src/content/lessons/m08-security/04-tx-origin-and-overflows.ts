@@ -51,6 +51,7 @@ export const exercises: Record<string, { starter: string; solution: string; chec
       { type: "abi", contract: "DepartmentWallet", kind: "function", name: "payOut", inputs: ["address", "uint256"], outputs: [], stateMutability: "nonpayable", message: "Has payOut(address, uint256)" },
       { type: "regex", pattern: "msg\\.sender\\s*(!=|==)\\s*head|head\\s*(!=|==)\\s*msg\\.sender", message: "Compares msg.sender with head" },
       { type: "regex", pattern: "^(?![\\s\\S]*tx\\.origin)[\\s\\S]*$", message: "No longer mentions tx.origin" },
+      { type: "regex", pattern: "revert\\s+NotHead\\s*\\(", message: "Still reverts with NotHead for other callers" },
     ],
   },
 };
