@@ -1,0 +1,11 @@
+{
+  "name": "fortune-teller-client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "viem": "2.57.13"
+  }
+}

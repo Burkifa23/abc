@@ -1,0 +1,35 @@
+{
+  "name": "Lab 18: Fortune Teller dApp",
+  "build": {
+    "dockerfile": "../Dockerfile"
+  },
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}/labs/18-fortune-teller-dapp",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
+  },
+  "customizations": {
+    "codespaces": {
+      "openFiles": [
+        "README.md",
+        "src/FortuneTeller.sol",
+        "client/get-fortune.mjs"
+      ]
+    },
+    "vscode": {
+      "extensions": [
+        "NomicFoundation.hardhat-solidity"
+      ],
+      "settings": {
+        "files.exclude": {
+          ".solution": true,
+          "out": true,
+          "cache": true,
+          "lab.json": true
+        }
+      }
+    }
+  },
+  "postAttachCommand": "forge build --silent && echo 'Run: forge test'"
+}

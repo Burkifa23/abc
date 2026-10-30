@@ -462,5 +462,40 @@
     "dir": "17-land-registry",
     "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F17-land-registry%2Fdevcontainer.json",
     "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/17-land-registry"
+  },
+  {
+    "n": 18,
+    "slug": "fortune-teller-dapp",
+    "title": "Fortune Teller dApp",
+    "kind": "build",
+    "summary": "Build a fortune-telling contract and a Node client that calls it over JSON-RPC.",
+    "concepts": [
+      "JSON-RPC",
+      "viem",
+      "anvil",
+      "ABI",
+      "events",
+      "pseudo-randomness"
+    ],
+    "adaptedFrom": "NEAR fortune teller + NEAR/Solana client-side app projects",
+    "docs": [
+      "m09-under-the-hood/05-abi-specification",
+      "m08-security/01-private-data-and-randomness",
+      "m06-contracts/09-events"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/FortuneTeller.sol",
+      "client/get-fortune.mjs"
+    ],
+    "features": {
+      "ghcr.io/devcontainers/features/node:1": {
+        "version": "22"
+      }
+    },
+    "extraCheck": "cd client && npm install --no-audit --no-fund && node --test",
+    "dir": "18-fortune-teller-dapp",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F18-fortune-teller-dapp%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/18-fortune-teller-dapp"
   }
 ]
