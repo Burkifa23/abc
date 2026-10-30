@@ -1,0 +1,11 @@
+{
+  "n": 15,
+  "slug": "certification-nft",
+  "title": "University Certification NFT",
+  "kind": "build",
+  "summary": "Issue soulbound graduation certificates anyone can verify and nobody can sell.",
+  "concepts": ["ERC-721", "soulbound tokens", "ERC-5192", "burning", "array removal"],
+  "adaptedFrom": "Solana: build a university certification NFT",
+  "docs": ["m06-contracts/13-abstract-and-interfaces", "m06-contracts/11-inheritance"],
+  "openFiles": ["README.md", "src/Certificates.sol"]
+}

@@ -380,5 +380,31 @@
     "dir": "14-concert-tickets",
     "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F14-concert-tickets%2Fdevcontainer.json",
     "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/14-concert-tickets"
+  },
+  {
+    "n": 15,
+    "slug": "certification-nft",
+    "title": "University Certification NFT",
+    "kind": "build",
+    "summary": "Issue soulbound graduation certificates anyone can verify and nobody can sell.",
+    "concepts": [
+      "ERC-721",
+      "soulbound tokens",
+      "ERC-5192",
+      "burning",
+      "array removal"
+    ],
+    "adaptedFrom": "Solana: build a university certification NFT",
+    "docs": [
+      "m06-contracts/13-abstract-and-interfaces",
+      "m06-contracts/11-inheritance"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/Certificates.sol"
+    ],
+    "dir": "15-certification-nft",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F15-certification-nft%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/15-certification-nft"
   }
 ]
