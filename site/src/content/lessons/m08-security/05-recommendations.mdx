@@ -1,0 +1,101 @@
+---
+title: "Recommendations"
+summary: "Habits that reduce the damage when something goes wrong: heed warnings, cap what is at risk, stay small, order your code safely, add a fail-safe, and get other eyes on it."
+covers: ["Security Considerations", "Security Considerations > Recommendations"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import { quiz, exercises } from "./05-recommendations";
+
+The previous lessons were a tour of ways to get hurt. This one flips the question around: given that you will eventually write a bug, what habits make it survivable? None of the habits below is clever. Security work mostly consists of dull routines done every time, and the best contracts are usually the boring ones.
+
+## Take warnings seriously
+
+When the compiler warns you about something, change the code. Not every warning is a vulnerability, but the pattern is dependable: a warning flags code that does something other than what it looks like it does, and a bug is often hiding next to it. Almost any warning can be silenced by a small, honest edit, such as naming the return value you ignored or marking a function `view`. Silencing one with a comment or by switching it off just hides the evidence.
+
+The compiler also evolves. Newer releases add warnings for newly understood mistakes, so use a recent compiler when writing and reviewing. There is a counterweight: once a contract is audited, deploy it with exactly the version it was audited with, and look that version up in the list of known bugs (the ninth lesson of this module shows how). Messages labelled `info` are optional hints and are not dangerous in themselves.
+
+## Limit what can be lost
+
+Assume that somewhere in your code, the compiler, or the platform there is a bug you have not found. The amount you can lose is then the amount you let the contract hold. For a new or unaudited contract, cap deposits, cap per-user amounts, or release funds in stages. A cap is cheap insurance: the day something goes wrong, the loss is bounded by a number you chose in advance.
+
+## Keep it small and modular
+
+Short contracts with one responsibility are easier to understand, test and review. Move unrelated functionality into other contracts or libraries. Keep functions short, limit the number of local variables, and write NatSpec comments so that a reviewer can see what you *meant* and compare it with what the code does. A mismatch between the comment and the code is one of the best bug detectors there is. The modular-contracts lesson in Solidity by Example is a worked pattern for this.
+
+## Order your code: checks, effects, interactions
+
+You met this in the reentrancy lesson, and it is repeated here because it is the recommendation with the most payoff. In every function: first check who is calling and whether the arguments and payment make sense; second, write your own state; last, call out. Older contracts often waited for an external call to return and only then updated their books, which is exactly the opening reentrancy needs. Even when you believe the contract you are calling is honest, it may call a contract you have never heard of, so apply the order every time. Where several functions share state, add a `nonReentrant` guard to all of them as an additional layer.
+
+## Include a fail-safe mode
+
+Decentralised does not have to mean helpless. For new code, consider a function that runs sanity checks on the contract's own accounting, such as "has any ether leaked?" or "do the balances still add up?", and switches the contract into a safe state if one fails. In that state, risky features are disabled, and perhaps the contract becomes a bare "give me back my ether" box or hands control to a trusted party.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract CanteenFund {
+    address public immutable steward;
+    uint256 public immutable cap;       // most ether we agree to hold
+    uint256 public totalOwed;
+    bool public paused;
+    mapping(address => uint256) public owed;
+
+    event Paused(string reason);
+
+    error IsPaused();
+    error OverCap();
+    error NothingToPay();
+    error PayoutFailed();
+
+    constructor(uint256 maxHolding) {
+        steward = msg.sender;
+        cap = maxHolding;
+    }
+
+    function deposit() external payable {
+        if (paused) revert IsPaused();
+        if (totalOwed + msg.value > cap) revert OverCap();
+        owed[msg.sender] += msg.value;
+        totalOwed += msg.value;
+    }
+
+    // Anyone may run the self-check. The balance may be higher than totalOwed
+    // (ether can be forced in) but must never be lower.
+    function checkBooks() external {
+        if (address(this).balance < totalOwed && !paused) {
+            paused = true;
+            emit Paused("balance below liabilities");
+        }
+    }
+
+    // Withdrawals stay open in the fail-safe state.
+    function withdraw() external {
+        uint256 amount = owed[msg.sender];
+        if (amount == 0) revert NothingToPay();
+        owed[msg.sender] = 0;
+        totalOwed -= amount;
+        (bool ok, ) = msg.sender.call{value: amount}("");
+        if (!ok) revert PayoutFailed();
+    }
+}
+```
+
+Look at the choices. The cap bounds the exposure. The invariant uses `<` rather than `==`, for the forced-ether reason you saw in the gas lesson: someone can push extra wei in, and an equality test would flip the switch for free. The check is a constant amount of work, so it never hits a block gas limit. And `withdraw()` is still available while paused, so users can leave. A fail-safe that traps funds is worse than none. (If the books really are short, the early leavers get paid first, which is an unfairness you would have to design around in a real system.)
+
+Whether a pause button is good is itself a trade-off: it protects users from an exploit, and it also gives someone power over the system. Decide who may trigger it, and say so openly.
+
+## Ask for peer review
+
+The more people look at code, the more bugs surface. Review also tests whether your contract is understandable, which is a quality in its own right. Ask classmates to try to break your lab contracts. Real deployments add paid audits, public contests and bug bounties.
+
+## What the documentation leaves out
+
+A security habit list also needs the tools behind it, which later lessons and labs cover. **Tests** check what you thought of, and **fuzzing** generates inputs you did not think of. **Static analysers** flag known bad patterns. The **SMTChecker**, in the last lesson of this module, tries to prove that properties such as "the balance never drops below what is owed" hold for every input. None of them replaces thinking, and none is a guarantee, but together they catch a great deal.
+
+<div class="callout"><strong>Watch out.</strong> A safeguard that you never test is a guess. Write a test that triggers your pause or cap, so you know it works before the day you need it.</div>
+
+## Check your understanding
+
+<Quiz questions={quiz} />
