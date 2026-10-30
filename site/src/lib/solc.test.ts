@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { buildInput, parseOutput } from "./solc";
+import { buildInput, parseOutput, SOLC_BUILD } from "./solc";
+const URL_OK = "https://binaries.soliditylang.org/bin/" + SOLC_BUILD;
 
 test("buildInput wraps source as standard JSON", () => {
   const i = JSON.parse(buildInput("contract A {}"));
@@ -32,8 +33,8 @@ test("worker answers two messages sent before soljson is ready", async () => {
   new Function(await Bun.file(new URL("../../public/solc-worker.js", import.meta.url)).text())();
   // Function-scoped lets are local, so onmessage is the only thing exposed on self.
   const h = g.self.onmessage;
-  const a = h({ data: { id: 1, url: "u", input: "a" } });
-  const b = h({ data: { id: 2, url: "u", input: "b" } });
+  const a = h({ data: { id: 1, url: URL_OK, input: "a" } });
+  const b = h({ data: { id: 2, url: URL_OK, input: "b" } });
   g.Module.onRuntimeInitialized();
   await Promise.all([a, b]);
   expect(imports).toBe(1);
@@ -48,7 +49,7 @@ test("worker replies with id and error when compile throws after load", async ()
   g.postMessage = (m: any) => posted.push(m);
   g.importScripts = () => { g.Module = { calledRun: true, cwrap: () => () => { throw new Error("boom"); } }; };
   new Function(await Bun.file(new URL("../../public/solc-worker.js", import.meta.url)).text())();
-  await g.self.onmessage({ data: { id: 7, url: "u", input: "x" } });
+  await g.self.onmessage({ data: { id: 7, url: URL_OK, input: "x" } });
   expect(posted).toEqual([{ id: 7, error: "Error: boom" }]);
 });
 
@@ -62,4 +63,17 @@ test("compile rejects and resets the worker when the compiler never replies", as
   compile("y", 20).catch(() => {});
   expect(made).toBe(2);
   await new Promise((r) => setTimeout(r, 40));
+});
+
+test("worker refuses a compiler URL off the pinned host and version", async () => {
+  const g: any = globalThis;
+  const posted: any[] = [];
+  let imports = 0;
+  g.self = {};
+  g.postMessage = (m: any) => posted.push(m);
+  g.importScripts = () => { imports++; };
+  new Function(await Bun.file(new URL("../../public/solc-worker.js", import.meta.url)).text())();
+  await g.self.onmessage({ data: { id: 9, url: "https://evil.example/soljson.js", input: "x" } });
+  expect(imports).toBe(0);
+  expect(posted).toEqual([{ id: 9, loadError: true, error: "untrusted compiler URL" }]);
 });

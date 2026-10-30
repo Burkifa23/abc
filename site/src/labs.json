@@ -550,6 +550,11 @@
       "README.md",
       "src/interfaces/ICivicElection.sol"
     ],
+    "features": {
+      "ghcr.io/devcontainers/features/node:1": {
+        "version": "22"
+      }
+    },
     "extraCheck": "forge fmt --check && forge coverage --report summary | node \"$REPO_ROOT/scripts/coverage-gate.mjs\" 90",
     "dir": "20-open-source-africa",
     "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F20-open-source-africa%2Fdevcontainer.json",

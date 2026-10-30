@@ -18,12 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
     env:
-      STRICT_COVERAGE: ${{ vars.STRICT_COVERAGE }}
+      STRICT_COVERAGE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: cd site && bun install --frozen-lockfile && bun test
       - uses: withastro/action@v3
-        with: { path: site, node-version: 24 }
+        with: { path: site, node-version: 24, package-manager: bun@1.3.6 }
       - id: deploy
         uses: actions/deploy-pages@v4

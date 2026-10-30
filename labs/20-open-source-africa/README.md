@@ -28,7 +28,7 @@ forge coverage      # coverage per file
 
 1. Conformance tests green.
 2. `forge fmt` leaves no changes (`forge fmt --check` passes).
-3. Line coverage is at least 90% **per contract** (not on average). The check is machine-run: `forge coverage --report summary` piped through `scripts/coverage-gate.mjs 90`. Interfaces are excluded.
+3. Line coverage is at least 90% **per contract** (not on average). The check is machine-run: `forge coverage --report summary | node ../../scripts/coverage-gate.mjs 90`. Interfaces are excluded.
 4. NatSpec (`@notice`, `@param`) on every external function. This one is **not machine-checked**: review each other's code. `forge doc` builds a site from it.
 5. A `SECURITY.md` with a threat list per contract (who can do what, what if the admin is corrupt, what if a key leaks).
 6. A `CHANGELOG.md`.

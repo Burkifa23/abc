@@ -10,6 +10,9 @@ function load(url) {
 }
 self.onmessage = async (e) => {
   const { id, url, input } = e.data;
+  // importScripts can't take SRI, so only accept the pinned compiler host and version.
+  if (!String(url).startsWith("https://binaries.soliditylang.org/bin/soljson-v0.8.38+"))
+    return postMessage({ id, loadError: true, error: "untrusted compiler URL" });
   try { await load(url); }
   catch (err) { return postMessage({ id, loadError: true, error: String(err) }); }
   try {
