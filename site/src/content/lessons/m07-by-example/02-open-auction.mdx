@@ -27,7 +27,7 @@ contract RoomAuction {
     bool public settled;
 
     // money owed back to bidders who were outbid
-    mapping(address => uint256) public pendingReturns;
+    mapping(address => uint256) public owed;
 
     event NewLeader(address indexed bidder, uint256 amount);
     event Settled(address indexed winner, uint256 amount);
@@ -45,7 +45,7 @@ contract RoomAuction {
 }
 ```
 
-The two `immutable` values are fixed at deployment. The deadline is an absolute timestamp calculated once, so later calls only need to compare `block.timestamp` against it. The `pendingReturns` mapping is the star of the show: it is a ledger of what each outbid person is owed, not a pile of payments the contract has already sent.
+The two `immutable` values are fixed at deployment. The deadline is an absolute timestamp calculated once, so later calls only need to compare `block.timestamp` against it. The `owed` mapping is the star of the show: it is a ledger of what each outbid person is owed, not a pile of payments the contract has already sent.
 
 ## Placing a bid
 
@@ -55,7 +55,7 @@ function bid() external payable {
     if (msg.value <= leadingBid) revert BidTooLow(leadingBid);
 
     if (leader != address(0)) {
-        pendingReturns[leader] += leadingBid;
+        owed[leader] += leadingBid;
     }
     leader = msg.sender;
     leadingBid = msg.value;
@@ -63,7 +63,7 @@ function bid() external payable {
 }
 ```
 
-A `payable` function receives ether, and the amount arrives in `msg.value`. There is no separate "amount" parameter, which means the bidder cannot claim to have sent one number while sending another. If the new offer beats the leader, the previous leader's money is **recorded** in `pendingReturns`, then the new leader is stored. The contract holds the ether of the current leader plus everything it owes to others.
+A `payable` function receives ether, and the amount arrives in `msg.value`. There is no separate "amount" parameter, which means the bidder cannot claim to have sent one number while sending another. If the new offer beats the leader, the previous leader's money is **recorded** in `owed`, then the new leader is stored. The contract holds the ether of the current leader plus everything it owes to others.
 
 Because we handled the checks first and state second, a failing bid changes nothing. A reverted transaction also sends the ether back to the bidder automatically, so a "too low" bid costs only the gas spent.
 
@@ -83,14 +83,14 @@ The root problem: **one party's behaviour should not be able to block a step eve
 
 ```solidity
 function withdraw() external returns (bool) {
-    uint256 amount = pendingReturns[msg.sender];
+    uint256 amount = owed[msg.sender];
     if (amount == 0) return false;
 
-    pendingReturns[msg.sender] = 0;          // zero it BEFORE sending
+    owed[msg.sender] = 0;          // zero it BEFORE sending
 
     (bool ok, ) = msg.sender.call{value: amount}("");
     if (!ok) {
-        pendingReturns[msg.sender] = amount; // give the claim back
+        owed[msg.sender] = amount; // give the claim back
         return false;
     }
     return true;

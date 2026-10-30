@@ -59,24 +59,24 @@ contract SealedRoomBids {
     uint256 public immutable revealEnd;
 
     mapping(address => Sealed[]) public sealedBids;
-    mapping(address => uint256) public pendingReturns;
+    mapping(address => uint256) public owed;
 
     address public leader;
     uint256 public leadingBid;
     bool public settled;
 
-    error TooEarly(uint256 time);
-    error TooLate(uint256 time);
+    error NotYet(uint256 time);
+    error Closed(uint256 time);
     error LengthMismatch();
     error AlreadySettled();
     error TransferFailed();
 
-    modifier onlyBefore(uint256 t) {
-        if (block.timestamp >= t) revert TooLate(t);
+    modifier beforeTime(uint256 t) {
+        if (block.timestamp >= t) revert Closed(t);
         _;
     }
-    modifier onlyAfter(uint256 t) {
-        if (block.timestamp <= t) revert TooEarly(t);
+    modifier afterTime(uint256 t) {
+        if (block.timestamp <= t) revert NotYet(t);
         _;
     }
 
@@ -92,7 +92,7 @@ contract SealedRoomBids {
         return keccak256(abi.encodePacked(value, fake, secret));
     }
 
-    function commit(bytes32 hash) external payable onlyBefore(revealStart) {
+    function commit(bytes32 hash) external payable beforeTime(revealStart) {
         sealedBids[msg.sender].push(Sealed(hash, msg.value));
     }
 }
@@ -102,58 +102,71 @@ The timeline is controlled by two modifiers that compare `block.timestamp` again
 
 ## Revealing, and the deposit check
 
+Opening many envelopes in one loop gets crowded, so we split the work in two: `reveal` loops over the caller's envelopes, and a private helper `_open` deals with exactly one.
+
 ```solidity
 function reveal(
-    uint256[] calldata values,
-    bool[] calldata fakes,
-    bytes32[] calldata secrets
-) external onlyAfter(revealStart) onlyBefore(revealEnd) {
-    Sealed[] storage mine = sealedBids[msg.sender];
-    uint256 n = mine.length;
-    if (values.length != n || fakes.length != n || secrets.length != n) revert LengthMismatch();
+    uint256[] calldata amounts,
+    bool[] calldata decoys,
+    bytes32[] calldata salts
+) external afterTime(revealStart) beforeTime(revealEnd) {
+    uint256 n = sealedBids[msg.sender].length;
+    if (amounts.length != n || decoys.length != n || salts.length != n) revert LengthMismatch();
 
-    uint256 refund = 0;
+    uint256 back = 0;
     for (uint256 i = 0; i < n; i++) {
-        Sealed storage s = mine[i];
-        if (s.hash != blind(values[i], fakes[i], secrets[i])) continue;  // wrong opening, try again later
-
-        refund += s.deposit;
-        s.hash = bytes32(0);   // an envelope can only be opened once
-
-        if (!fakes[i] && s.deposit >= values[i] && _tryLead(msg.sender, values[i])) {
-            refund -= values[i];   // this much stays locked as the live bid
-        }
+        back += _open(msg.sender, i, amounts[i], decoys[i], salts[i]);
     }
-    pendingReturns[msg.sender] += refund;
+    owed[msg.sender] += back;
 }
 
-function _tryLead(address bidder, uint256 value) private returns (bool) {
-    if (value <= leadingBid) return false;
-    if (leader != address(0)) pendingReturns[leader] += leadingBid;
+function _open(address bidder, uint256 slot, uint256 amount, bool decoy, bytes32 salt)
+    private returns (uint256 back)
+{
+    Sealed storage env = sealedBids[bidder][slot];
+    if (env.hash != blind(amount, decoy, salt)) return 0;   // mismatch: deposit stays locked
+
+    back = env.deposit;     // the whole deposit is refundable...
+    env.hash = bytes32(0);  // ...but an envelope opens only once
+
+    if (decoy || env.deposit < amount) return back;   // not a live bid
+    if (_tryLead(bidder, amount)) back -= amount;     // the winning amount stays put
+}
+
+function _tryLead(address bidder, uint256 amount) private returns (bool) {
+    if (amount <= leadingBid) return false;
+    if (leader != address(0)) owed[leader] += leadingBid;
     leader = bidder;
-    leadingBid = value;
+    leadingBid = amount;
     return true;
 }
+
+function withdraw() external {
+    uint256 sum = owed[msg.sender];
+    owed[msg.sender] = 0;                       // zero first, then send
+    (bool ok, ) = msg.sender.call{value: sum}("");
+    if (!ok) revert TransferFailed();
+}
 ```
 
-Walk through one pass of the loop. First the contract recomputes the hash from the three revealed items and compares it with the stored commitment. If they differ, the opening is wrong, and the bid is skipped, so the bidder can try again before the window closes. If they match, the whole deposit is added to a running `refund`, and the hash is overwritten with zero so the same envelope cannot be opened twice.
+Start with `_open`. It recomputes the hash from the three revealed items and compares it with the stored commitment. If they differ, the opening is wrong: nothing happens, and **that deposit stays locked**. The bidder may call `reveal` again with corrected values before the window closes, but if the window closes first, the deposit is never released. If the hash matches, the full deposit becomes refundable and the hash is overwritten with zero so the envelope cannot be opened twice.
 
-Then comes the line that matters most:
+Then comes the part that matters most:
 
 ```solidity
-if (!fakes[i] && s.deposit >= values[i] && _tryLead(...))
+if (decoy || env.deposit < amount) return back;
 ```
 
-Three conditions must all hold for the bid to count: it is not a fake, **the deposit covers the value**, and it is actually higher than the current leader. The middle one is easy to forget. Suppose a bidder commits value 100 with a deposit of 1. Without the comparison, the contract would crown them leader at 100 while holding only 1 of their money. At the end, the contract pays 100 to the welfare fund, and the missing 99 comes out of other bidders' deposits. The deposit check keeps every promise backed by real ether.
+Two kinds of opening never become bids: decoys, and **under-funded** ones whose deposit is smaller than the amount they claim. The second test is easy to forget. Suppose a bidder commits an amount of 100 with a deposit of 1. Without the comparison, the contract would crown them leader at 100 while holding only 1 of their money. At the end it would pay 100 to the welfare fund, and the missing 99 would come out of other bidders' deposits. The deposit check keeps every promise backed by real ether. Only after both tests does `_tryLead` ask whether the amount actually beats the current leader.
 
-When a bid does become the leading one, its `value` is subtracted from the refund because that part must stay in the contract. The unused part of the deposit (deposit minus value) and all the decoy deposits flow back. If someone is later outbid, `_tryLead` credits the old leader's amount to `pendingReturns`, exactly like the open auction.
+When an amount does take the lead, it is subtracted from `back` because that part must stay in the contract. The unused part of the deposit and all decoy deposits flow back. If someone is later outbid, `_tryLead` credits their old amount to `owed`, exactly as in the open auction.
 
-Notice that `reveal` never sends ether. Everything goes into `pendingReturns`, and a separate `withdraw()` (the one from the last lesson) lets people pull it out. A failing recipient therefore cannot jam the reveal loop.
+`reveal` never sends ether. Everything goes into `owed`, and `withdraw()` is the same pull pattern as the last lesson, with the ledger zeroed before the call. A failing recipient therefore cannot jam the reveal loop.
 
 ## Settlement
 
 ```solidity
-function settle() external onlyAfter(revealEnd) {
+function settle() external afterTime(revealEnd) {
     if (settled) revert AlreadySettled();
     settled = true;
     (bool ok, ) = fund.call{value: leadingBid}("");

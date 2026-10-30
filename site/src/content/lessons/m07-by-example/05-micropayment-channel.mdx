@@ -30,7 +30,7 @@ Our message is a hash of everything the contract wants to be sure about. The doc
 
 1. **Who it is for**: the contract's own address, so that a signature meant for one channel cannot be used on another.
 2. **How much**: the cumulative total owed so far.
-3. **Protection against replay**: a way to make sure a signed message cannot be used again. Including the contract address handles it across channels, and because the contract closes after paying, one message cannot be paid twice within the same channel.
+3. **Protection against replay**: a way to make sure a signed message cannot be used again. Including the contract address handles it across channels, and because the contract closes after paying, one message cannot be paid twice within the same channel. This design is replay-safe only because closing ends the channel and every amount is a cumulative total. A channel that stays open (or is reused) needs a nonce in the signed digest in addition to the contract address, or an old note could be presented again.
 4. **The chain**: `block.chainid`, so a signature made for a test network cannot be replayed on the real one.
 
 ```solidity
@@ -136,19 +136,18 @@ function close(uint256 amount, bytes calldata sig) external {
     closed = true;
     (bool ok, ) = shop.call{value: amount}("");
     if (!ok) revert TransferFailed();
+    // best effort: if the student rejects ether, the rest waits for reclaim()
     (ok, ) = student.call{value: address(this).balance}("");
-    if (!ok) revert TransferFailed();
 }
 ```
 
-The order of checks mirrors the documentation's list: the message is for this contract, the total is no more than what was locked, and the signature is valid and comes from the student. Only then does money move, after `closed` has been set. The leftover goes back to the student.
+The order of checks mirrors the documentation's list: the message is for this contract, the total is no more than what was locked, and the signature is valid and comes from the student. Only then does money move, after `closed` has been set. The shop is paid first, and if that transfer fails the whole call reverts. The refund to the student is deliberately **not** required to succeed: a student whose account rejects ether could otherwise block the shop's payout forever. If the refund fails, the remainder simply stays in the contract and the student collects it with `reclaim()` once the channel has expired.
 
 **Channel expiration.** What if the shop disappears and never closes? The student must not be stuck, so after `expiresAt` the student can take everything back:
 
 ```solidity
 function reclaim() external {
     if (msg.sender != student) revert NotStudent();
-    if (closed) revert AlreadyClosed();
     if (block.timestamp < expiresAt) revert NotExpired();
     closed = true;
     (bool ok, ) = student.call{value: address(this).balance}("");

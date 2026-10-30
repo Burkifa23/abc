@@ -139,7 +139,7 @@ contract Ballot {
       { type: "abi", contract: "Ballot", kind: "function", name: "delegate", inputs: ["address"], outputs: [], stateMutability: "nonpayable", message: "Has delegate(address)" },
       { type: "regex", pattern: "revert\\s+SelfDelegation\\s*\\(", message: "Reverts with SelfDelegation when the chain ends at the caller" },
       { type: "regex", pattern: "\\.handedTo\\s*(!=|==)\\s*address\\s*\\(\\s*0\\s*\\)", message: "Follows handedTo links until a zero address" },
-      { type: "regex", pattern: "\\.done\\s*=\\s*true\\s*;", message: "Marks the delegator as done" },
+      { type: "regex", pattern: "\\bme\\.done\\s*=\\s*true\\s*;", message: "Marks the delegator (me) as done" },
       { type: "regex", pattern: "\\bweight\\s*\\+=", message: "Passes the weight on to the target" },
     ],
   },
