@@ -1,6 +1,7 @@
 name: Labs
 
 on:
+  workflow_dispatch:
   push:
     paths: ['labs/**', '.devcontainer/**', 'scripts/**', '.github/workflows/labs.yml', 'site/src/labs.json']
   pull_request:
