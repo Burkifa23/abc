@@ -1,0 +1,11 @@
+{
+  "n": 16,
+  "slug": "procurement",
+  "title": "Transparent Public Procurement",
+  "kind": "build",
+  "summary": "Run a sealed-bid government tender with escrowed funds and payment on delivery.",
+  "concepts": ["commit-reveal", "payable", "block.timestamp", "escrow", "pull payments", "state machine"],
+  "adaptedFrom": "Plan.md Workshop 5 + Solidity docs Blind Auction",
+  "docs": ["m07-by-example/03-blind-auction", "m08-security/06-withdrawal-pattern", "m08-security/08-state-machine"],
+  "openFiles": ["README.md", "src/Tender.sol"]
+}

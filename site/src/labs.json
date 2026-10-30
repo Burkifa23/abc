@@ -406,5 +406,33 @@
     "dir": "15-certification-nft",
     "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F15-certification-nft%2Fdevcontainer.json",
     "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/15-certification-nft"
+  },
+  {
+    "n": 16,
+    "slug": "procurement",
+    "title": "Transparent Public Procurement",
+    "kind": "build",
+    "summary": "Run a sealed-bid government tender with escrowed funds and payment on delivery.",
+    "concepts": [
+      "commit-reveal",
+      "payable",
+      "block.timestamp",
+      "escrow",
+      "pull payments",
+      "state machine"
+    ],
+    "adaptedFrom": "Plan.md Workshop 5 + Solidity docs Blind Auction",
+    "docs": [
+      "m07-by-example/03-blind-auction",
+      "m08-security/06-withdrawal-pattern",
+      "m08-security/08-state-machine"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/Tender.sol"
+    ],
+    "dir": "16-procurement",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F16-procurement%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/16-procurement"
   }
 ]
