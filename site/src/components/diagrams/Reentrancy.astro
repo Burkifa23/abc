@@ -1,0 +1,36 @@
+---
+---
+<svg viewBox="0 0 640 330" role="img" aria-labelledby="re-t" font-family="var(--mono)" font-size="12">
+  <title id="re-t">Reentrancy in a pool that pays before it clears the ledger. The caller contract calls claim on the pool. The pool checks the credit, then sends ether before zeroing the credit. The caller's receive function runs and calls claim again. The pool still sees the old credit and pays a second time. In the fixed order the credit is zeroed before the send, so the second call finds nothing.</title>
+  <defs>
+    <marker id="re-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="currentColor" />
+    </marker>
+  </defs>
+  <g stroke-width="1.5" fill="none">
+    <rect x="10" y="10" width="200" height="34" rx="8" stroke="currentColor" stroke-width="2" />
+    <rect x="430" y="10" width="200" height="34" rx="8" stroke="currentColor" stroke-width="2" />
+    <path d="M110 44 V315" stroke="var(--border)" stroke-dasharray="4 4" />
+    <path d="M530 44 V315" stroke="var(--border)" stroke-dasharray="4 4" />
+    <path d="M530 80 H112" stroke="currentColor" marker-end="url(#re-arrow)" />
+    <path d="M110 140 H528" stroke="currentColor" marker-end="url(#re-arrow)" />
+    <path d="M530 200 H112" stroke="currentColor" marker-end="url(#re-arrow)" />
+    <path d="M110 260 H528" stroke="currentColor" marker-end="url(#re-arrow)" />
+    <rect x="125" y="150" width="260" height="38" rx="6" stroke="var(--border)" />
+  </g>
+  <g fill="currentColor" font-weight="600" text-anchor="middle">
+    <text x="110" y="32">BursaryPool</text>
+    <text x="530" y="32">Attacker contract</text>
+  </g>
+  <g fill="currentColor">
+    <text x="300" y="72" text-anchor="middle">1. claim()</text>
+    <text x="320" y="132" text-anchor="middle">2. pool sends ether (credit still full)</text>
+    <text x="300" y="192" text-anchor="middle">3. receive() calls claim() again</text>
+    <text x="320" y="252" text-anchor="middle">4. credit still full: paid again</text>
+  </g>
+  <g fill="var(--muted-fg)">
+    <text x="135" y="167">Bug: credit is zeroed only</text>
+    <text x="135" y="182">after step 2 returns.</text>
+    <text x="120" y="296">Fix: zero the credit before step 2, and step 3 finds 0.</text>
+  </g>
+</svg>

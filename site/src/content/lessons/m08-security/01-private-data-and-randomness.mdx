@@ -1,0 +1,95 @@
+---
+title: "Private data and randomness"
+summary: "Why nothing on a public chain is secret, how anyone can read a private variable, and why block-derived randomness cannot pick a fair raffle winner."
+covers: ["Security Considerations", "Security Considerations > Pitfalls"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import { quiz, exercises } from "./01-private-data-and-randomness";
+
+The Computer Science Society wants to raffle a refurbished laptop at the end-of-year party. A student volunteer offers to write the contract. It stores an exam-style "claim code" that only the winner will be given, and it picks the winner with a clever bit of on-chain mathematics. By the end of this lesson you will be able to explain why both halves of that plan are broken, and what to do instead.
+
+This is the first lesson of a module about writing contracts that survive contact with people who want to cheat. The Solidity documentation opens its security chapter with a blunt warning: it is easy to build software that works as intended, and much harder to be sure that nobody can use it in a way you did not anticipate. A smart contract is a public web service that anyone on Earth may call, often with its source code published, and which may be holding real money. Treat every function as if a stranger with a lot of free time is reading it.
+
+## Everything is public
+
+Solidity has a `private` keyword, and the name is a trap. It controls which *code* can read a variable: no other contract, and no derived contract, may access it by name. It does nothing to hide the value from *people*.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract ClaimDesk {
+    address public immutable organiser;
+    bytes32 private claimCode;   // "private" only means other contracts cannot name it
+
+    constructor(bytes32 code) {
+        organiser = msg.sender;
+        claimCode = code;
+    }
+
+    function claim(bytes32 attempt) external view returns (bool) {
+        return attempt == claimCode;
+    }
+}
+```
+
+Storage is part of the chain's state, and every node holds all of it. In the storage lesson you saw that state variables live in numbered 32-byte slots. `organiser` is an `immutable`, so it sits in the contract's code rather than in storage. `claimCode` is therefore the first storage variable and occupies slot 0. Any JSON-RPC node will hand you the content of a slot on request:
+
+```ts
+// ethers v6
+const code = await provider.getStorage(deskAddress, 0);
+console.log(code); // 0x... the "secret", in plain view
+```
+
+or from the command line, `cast storage <address> 0`. The method behind both is `eth_getStorageAt`. No hacking is involved. You ask a public database a question, and it answers. If you know the layout rules (and the compiler will print the layout for you), a mapping entry or a struct field is only a hash computation away.
+
+The same goes for everything else you might hope is hidden:
+
+- **Local variables and arguments.** They exist only during execution, but the transaction that carried the argument is itself on the chain. The `code` passed to the constructor above is sitting in the deployment transaction's input data forever.
+- **Events.** Logs are public by design.
+- **Pending transactions.** Before a transaction is mined it waits in a public pool. Anyone watching can read it, and a bot can send a competing transaction that pays more to be included first. This is why the blind auction in Solidity by Example hides bids behind a hash.
+- **Revert messages and traces.** Anyone can replay a transaction and inspect every step.
+
+So the rule is simple: **never put a secret on-chain in readable form**. If a contract must check a secret, store a hash of it and let the user supply the preimage. Even that has limits. Once the user submits the secret in a transaction it becomes visible, and a watcher can copy it into their own transaction before yours is mined. Designs that need to prove knowledge without revealing it use commit-reveal (which you saw in the blind-auction lesson) or zero-knowledge proofs, which are beyond this course.
+
+## Randomness is harder than it looks
+
+Now the winner selection. Contracts are deterministic: every node must reproduce the same result, so there is no `random()` call that gives each node a different answer. A tempting shortcut is to mix a few block values together:
+
+```solidity
+function draw() external {
+    uint256 pick = uint256(
+        keccak256(abi.encode(block.prevrandao, block.timestamp, entrants.length))
+    ) % entrants.length;
+    winner = entrants[pick];
+}
+```
+
+`block.prevrandao` is the output of the chain's randomness beacon (the RANDAO accumulated by validators, replacing the old proof-of-work `difficulty`). It looks random, and it is, in the sense that you cannot guess it from the distant past. But it is useless for a prize worth cheating for, for three reasons.
+
+**The caller sees the answer before committing.** The values the formula reads belong to the block being built, and a contract executing inside that block can read the same values. An attacker deploys a contract that enters the raffle, computes `pick` using exactly the same expression, and *reverts if it would lose*. They keep retrying in later blocks until it says they win. The cost of losing is a bit of gas, so cheating is practically free.
+
+**The proposer can bias it.** Each block has one validator who proposes it. The RANDAO value that ends up in a block depends partly on what that proposer chose to reveal, and a proposer who dislikes the outcome can skip their slot and let someone else's value take over. That costs them the block reward, so it only matters when the prize is bigger than a block's worth of income, and a valuable raffle can easily be.
+
+**It is known ahead of time.** The `prevrandao` seen by block N is fixed once block N-1 is finished. Anyone, including the proposer of block N, can know it before the block is built and decide whether to participate.
+
+`block.timestamp` is worse. A proposer may choose it within a window of a few seconds. `blockhash(n)` is only available for the 256 most recent blocks, and the proposer of that block influences it as well. None of these make a secure random source for anything valuable.
+
+### What to do instead
+
+You have honest options, in increasing order of effort:
+
+1. **Do not use on-chain randomness for high stakes.** If the prize is small, say a sticker, then `prevrandao` is acceptable and nobody will spend ten thousand cedis of effort to cheat for it.
+2. **Commit-reveal.** Everybody commits a hash of a secret number, then everybody reveals. The result mixes all the revealed numbers, so as long as one participant is honest the outcome cannot be predicted. The weakness is the last person to reveal: they see everyone else's numbers and can choose not to reveal if they would lose. Deposits that are forfeited for not revealing mitigate this. You built this mechanism in lesson 3 of the Solidity by Example module.
+3. **A verifiable random function (VRF) oracle.** An external service produces a random number *together with a cryptographic proof* that it was computed honestly, and the contract verifies the proof. You trade a trust assumption in the oracle for a stronger guarantee than any block value gives.
+
+<div class="callout"><strong>Watch out.</strong> Marking a variable <code>private</code> does not hide it, and hashing block values does not make them random. If a stranger who reads the whole chain could compute your secret or your "random" number before you do, it was never a secret.</div>
+
+## Where we go from here
+
+The next lessons walk through the classic attacks one by one: reentrancy, the quirks of sending ether, `tx.origin` and integer pitfalls. The thread connecting them is the one you met here. A contract runs in public, in front of adversaries, with money at stake, and every assumption that "nobody would think to do that" eventually gets tested.
+
+## Check your understanding
+
+<Quiz questions={quiz} />

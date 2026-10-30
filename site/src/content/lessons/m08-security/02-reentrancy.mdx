@@ -1,0 +1,164 @@
+---
+title: "Reentrancy and checks-effects-interactions"
+summary: "How a contract that pays before it updates its books can be drained by its own recipient, and the ordering rule, guard modifier and cross-function cases that stop it."
+covers: ["Security Considerations", "Security Considerations > Pitfalls", "Security Considerations > Recommendations"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import Figure from "../../../components/Figure.astro";
+import Reentrancy from "../../../components/diagrams/Reentrancy.astro";
+import { quiz, exercises } from "./02-reentrancy";
+
+The students' union runs a bursary pool. Donors deposit ether, the union credits students, and a student calls `claim()` to receive their money. The code looks reasonable, and a single mistake in the *order of its lines* lets one student take everything in the pool. This bug, **reentrancy**, drained tens of millions of dollars from "The DAO" in 2016 and still appears in audits today.
+
+## Calling out hands over control
+
+When your contract sends ether to an address, or calls a function in another contract, the recipient's code runs *before your function continues*. If the recipient is an ordinary wallet, nothing happens. If it is a contract, its `receive` or `fallback` function executes, and that code is free to do anything, including calling back into your contract. Your function is paused halfway down, and a second invocation starts at the top while the first has not finished.
+
+Here is the pool with the mistake in it. Read it slowly:
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+// THIS CONTRACT CONTAINS A BUG - DO NOT USE
+contract BursaryPool {
+    mapping(address => uint256) public credit;
+
+    error NothingToPay();
+    error PayoutFailed();
+
+    function deposit() external payable {
+        credit[msg.sender] += msg.value;
+    }
+
+    function claim() external {
+        uint256 amount = credit[msg.sender];
+        if (amount == 0) revert NothingToPay();
+
+        (bool ok, ) = msg.sender.call{value: amount}("");
+        if (!ok) revert PayoutFailed();
+
+        credit[msg.sender] = 0;      // too late
+    }
+}
+```
+
+The function checks the balance, pays, and *then* zeroes the ledger. An attacker deploys this:
+
+```solidity
+interface IBursaryPool {
+    function deposit() external payable;
+    function claim() external;
+}
+
+contract Looter {
+    IBursaryPool public immutable pool;
+
+    constructor(IBursaryPool target) {
+        pool = target;
+    }
+
+    function attack() external payable {
+        pool.deposit{value: msg.value}();   // become a legitimate creditor
+        pool.claim();
+    }
+
+    receive() external payable {
+        if (address(pool).balance >= msg.value) {
+            pool.claim();                   // re-enter before credit is zeroed
+        }
+    }
+}
+```
+
+<Figure caption="The call to claim() is still running when the pool sends ether, so the attacker's receive function can call claim() again against a ledger that has not been updated.">
+  <Reentrancy />
+</Figure>
+
+Trace it with a 1 ether deposit and 10 ether already in the pool from other donors. `attack()` deposits 1 ether, so `credit[looter]` is 1 ether, and calls `claim()`. The pool reads 1 ether and sends it. Control jumps to `Looter.receive()`, which calls `claim()` again. The pool reads `credit[looter]` again, and it is *still* 1 ether, because the line that zeroes it has not run. The pool sends another 1 ether, and the loop repeats until the pool is empty. Only then do the stack of calls unwind and set `credit` to zero, many times over. An attacker with a 1 ether stake has taken the lot.
+
+Nothing in the language was broken. Each call did exactly what it said. The flaw is that the contract made a decision using information that was already out of date.
+
+## The fix: checks, effects, interactions
+
+Reorder the function into three phases, always in this sequence:
+
+1. **Checks.** Validate everything: who is calling, whether the arguments make sense, whether enough ether was sent, whether they are owed anything.
+2. **Effects.** Write all state changes for this operation: zero the ledger, bump the counters, set the flags.
+3. **Interactions.** Only now talk to other contracts or send ether.
+
+```solidity
+function claim() external {
+    uint256 amount = credit[msg.sender];        // check
+    if (amount == 0) revert NothingToPay();
+
+    credit[msg.sender] = 0;                     // effect
+
+    (bool ok, ) = msg.sender.call{value: amount}("");   // interaction
+    if (!ok) revert PayoutFailed();
+}
+```
+
+Now the re-entering call reads `credit[looter] == 0` and reverts with `NothingToPay`. That revert bubbles up as `ok == false` in the first call, which reverts as well, and a revert undoes *every* state change of the transaction, including the zeroing. If the payout genuinely fails for an honest user, their credit is restored automatically with no extra code. (The pull-payment code in the open-auction lesson restores the entry by hand because it returns `false` rather than reverting.)
+
+The rule holds even when you "know" the recipient. A call to a contract you trust may itself call a contract you have never seen. Applying the order every time costs nothing and removes a whole class of reasoning.
+
+## It is not only about ether
+
+Any call into another contract hands over control. The classic surprise is token standards that run code on transfer. Safe-transfer functions for NFTs call a hook on the receiving contract, and some fungible token designs notify the recipient or sender. A function that "only moves tokens" can therefore re-enter you. You must also keep multi-contract situations in mind: a contract you call can change the state of a *different* contract you depend on.
+
+### Cross-function reentrancy
+
+Guarding one function is not enough when several functions share the same state. Suppose the pool also lets students hand their credit to a friend:
+
+```solidity
+function moveCredit(address to) external {
+    uint256 amount = credit[msg.sender];
+    credit[msg.sender] = 0;
+    credit[to] += amount;
+}
+```
+
+This function is perfectly tidy by itself. But if `claim()` were still in its original order, the attacker's `receive()` could call `moveCredit(accomplice)` instead of `claim()` again. The credit is still full, so it moves to the accomplice, and `claim()` later zeroes the *attacker's* entry, which is already empty. The accomplice then claims the same money a second time. The two functions together are vulnerable even though neither re-enters itself.
+
+### Read-only reentrancy
+
+Even a `view` function can be abused. While `claim()` is mid-call, the pool's books are inconsistent: ether has left but the ledger has not caught up. If another contract asks `credit(student)` or a function that sums balances at that moment, it receives a stale answer and may grant something based on it. The state-changing function that was interrupted is not the victim here. The *reader* is. CEI fixes this at the source, because the books are correct before any call-out. When you rely on another protocol's view functions, remember that they can lie during a callback.
+
+## A guard as a second line
+
+A **reentrancy guard** is a modifier that refuses entry while a protected function is already running. The simplest version records a flag:
+
+```solidity
+bool private locked;
+error Reentered();
+
+modifier nonReentrant() {
+    if (locked) revert Reentered();
+    locked = true;
+    _;
+    locked = false;
+}
+```
+
+Put `nonReentrant` on `claim`, `moveCredit` and every other function that touches the shared state; guarding only one function leaves the cross-function door open. Since Solidity 0.8.24 (with the Cancun upgrade) the flag can live in **transient storage**: a separate area that behaves like storage during a transaction but is wiped at its end, and that costs about 100 gas per access instead of thousands. Inline assembly reaches it with the `tstore` and `tload` instructions. From Solidity 0.8.28 you can declare it directly, for value types:
+
+```solidity
+bool transient private locked;   // needs pragma solidity ^0.8.28;
+```
+
+The guard is a safety net, not a replacement. It does not repair inconsistent books, it adds cost and complexity, and it only protects the functions that carry it. The primary defence is the ordering rule: write down what you have done *before* you call out.
+
+<div class="callout"><strong>Watch out.</strong> Pushing the <code>credit = 0</code> line after the call is the bug, but a version that updates the ledger "after the call succeeds, to be safe" is the same bug in a more cautious costume. If the effect needs to survive a failed call, let the revert undo it for you.</div>
+
+## Try it
+
+The pool below pays before it clears the ledger. Reorder `claim()` into checks-effects-interactions order. You do not need to add new lines; moving one is enough.
+
+<CodeExercise id="cei" {...exercises["cei"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />
