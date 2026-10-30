@@ -1,0 +1,96 @@
+---
+title: "The language grammar"
+summary: "How to read the formal grammar of Solidity: the top-level building blocks, what each rule family allows and forbids, and how a real contract maps onto the rules."
+covers: ["Language Grammar"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import { quiz } from "./10-grammar";
+
+The compiler's parser is generated from a formal **grammar**: a list of named rules, each saying what shapes of text count as that thing. The reference ships this grammar as a page of rule names with a one-line explanation under each. You will rarely need it to write contracts, but it is the place to turn when a compile error says "expected X but got Y", when you build tooling (a formatter, a syntax highlighter, a linter), or when you want to know exactly what is legal rather than what usually works.
+
+## How to read it
+
+Two ideas make the page easy to scan.
+
+**Rules are nested.** Each rule is defined in terms of smaller rules until you reach tokens: keywords, identifiers, numbers and strings. A rule's name tells you what it recognises: `if-statement`, `event-definition`, `mapping-type`. If you start at the top, `source-unit`, and keep expanding, you can derive any legal file.
+
+**Grammar versus meaning.** The grammar says what is *syntactically* possible. Many further restrictions are checked later by the type checker. This split explains why `continue;` outside a loop is reported as a syntax error, while a payable library function is a type error. It also means some things the grammar accepts are still rejected: the notes in the reference mark several such cases.
+
+## The top level: `source-unit`
+
+A file is a sequence of **source units**. On top level Solidity allows:
+
+- pragmas and `import` directives (an import can name symbols and give them aliases, via the `path` and `symbol-aliases` rules);
+- definitions of **contracts**, **interfaces**, **libraries**, structs, enums, constants, functions, errors, events, user-defined value types and `using` directives. Free functions, file-level constants and file-level `using` are what Solidity calls "top-level" items, which sit outside any contract.
+
+Here is a small file that touches many of the rules at once. It compiles, and below we map it back to the grammar.
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+uint256 constant SEAT_LIMIT = 40;
+
+function half(uint256 x) pure returns (uint256) {
+    return x / 2;
+}
+
+interface IRoll {
+    function present(address who) external view returns (bool);
+}
+
+contract Roll is IRoll {
+    enum Status { Absent, Present }
+    struct Entry { Status status; uint64 markedAt; }
+
+    error RollFull(uint256 limit);
+    event Marked(address indexed who);
+
+    mapping(address => Entry) private entries;
+    uint256 public count;
+
+    modifier belowLimit() {
+        if (count >= SEAT_LIMIT) revert RollFull(SEAT_LIMIT);
+        _;
+    }
+
+    constructor() {}
+
+    receive() external payable {}
+
+    function mark(address who) external belowLimit {
+        entries[who] = Entry({status: Status.Present, markedAt: uint64(block.timestamp)});
+        unchecked { count += 1; }
+        emit Marked(who);
+    }
+
+    function present(address who) external view override returns (bool) {
+        return entries[who].status == Status.Present;
+    }
+}
+```
+
+Walking through it by rule name: `SEAT_LIMIT` is a `constant-variable-declaration`; `half` is a `function-definition` in its free-function form; `IRoll` is an `interface-definition`; `Roll is IRoll` is a `contract-definition` with an `inheritance-specifier` (which may also carry constructor arguments for the base). Inside, the `contract-body-element` rule allows enums, structs, errors, events, state variables, modifiers, the constructor, the `receive` function and ordinary functions. `belowLimit` is a `modifier-definition`, and its `_;` is a placeholder statement: inside a modifier the underscore marks where the modified function's body runs, so you cannot use `_` as an identifier there. In `mark`, `belowLimit` is a `modifier-invocation` (its parentheses are optional when there are no arguments), `Entry({status: ..., markedAt: ...})` is a call with named arguments, `unchecked { ... }` is an `unchecked-block`, and `emit Marked(who)` is an `emit-statement`, whose expression must refer to an event.
+
+## What each family of rules tells you
+
+**Contract-like definitions.** Interfaces, libraries and contracts share most of their body rules, with restrictions: an interface cannot contain a constructor or state variables, and a library cannot contain a `fallback` or `receive` function nor non-constant state variables. A constructor must always have a body, and writing `internal` or `public` on one is deprecated; it still parses but the compiler warns that the visibility is ignored. The default state mutability when none is written is `nonpayable`. An `override-specifier` may list base contracts, and where several bases declare the same function you have to list them all, as in `override(A, B)`.
+
+**Function pieces.** A function definition can appear in a contract, a library, an interface, or on its own at file level. In an interface it cannot have a body. Arguments of a call (`call-argument-list`) are either a plain comma-separated list or a set of named arguments in braces. Names may be qualified with dots (`identifier-path`). Parameter lists are used for arguments and return values alike. The `fallback` and `receive` functions each have their own rule.
+
+**Declarations of data.** Structs can sit at top level or within a contract; enums too. A user-defined value type has its own definition rule, as do events and errors, each with a rule for its parameters. The `using-directive` attaches library or free functions to types, can appear inside contracts and libraries or at file level, and can even bind **operators**: the `user-definable-operator` rule lists which operators you are allowed to define for a type this way.
+
+**Types and expressions.** A `type-name` is an elementary type, a function type, a mapping, a user-defined type (contract, struct and so on) or an array. A `mapping-type` accepts only elementary or user-defined types as keys, which you can feel at the parser level: `mapping(uint[] => uint)` fails to parse with "expected `=>`". A data-location keyword is its own small rule. The `expression` rule is a large alternation: index and slice access, member access, function calls with optional call options, conversions, unary and binary operators, comparisons, assignments, ternaries, `new`, tuples, inline arrays and primary expressions. A tuple may have empty slots (`(, , c) = g();`), and an inline array expression has the common type of its items.
+
+**Identifiers and literals.** Besides ordinary non-keyword identifiers, a few words that look like keywords can still be used as identifiers, such as `from` and `error`. (The compiler warns that `error` will be promoted to a keyword, so avoid it.) String literals can be several quoted strings in a row, and the same holds for hex and unicode strings. A number literal may carry a unit suffix.
+
+**Statements.** `if` has an optional `else`; `for` has optional init, condition and post parts; `while` and `do-while` have their own rules. `continue` and `break` are allowed only inside loops. A `try` statement needs an expression that is an external call or a contract creation, followed by `catch` clauses. `return`, `emit` and `revert` statements exist (the `revert` form must refer to an error). A variable declaration can be a single variable with optional initial value, or a tuple, which must have one (`variable-declaration-tuple` allows empty fields).
+
+**Assembly.** The `assembly-statement` is a doorway into a different language. Its contents use a separate scanner, so the set of keywords and legal identifiers inside differs from outside (Yul identifiers may contain dots, for example). An optional flags list (a comma-separated list of double-quoted strings) sits in front of the block, which is where `"memory-safe"` goes. The `yul-*` rules then mirror the Yul grammar from the earlier lesson: blocks, declarations (several variables only when initialised from a call), assignments, `if`, `for`, `switch`, function definitions, calls, literals. A few Yul notes live here too: `break` and `continue` only inside `for` loops, `leave` only inside function bodies, and a `switch` consisting of only a `default` case is deprecated. A Yul path with dots is how assembly refers to something declared *outside* the block, such as `b.slot`.
+
+<div class="callout"><strong>Watch out.</strong> Parsing is only the first gate. Code that matches the grammar can still fail in the type checker, and the type checker is where most of Solidity's safety rules live. Do not read "it parses" as "it is allowed"; for example, an interface with a state variable is syntactically a contract-body element but is rejected right after.</div>
+
+## Check your understanding
+
+<Quiz questions={quiz} />
