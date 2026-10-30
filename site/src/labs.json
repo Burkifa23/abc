@@ -215,5 +215,33 @@
     "dir": "08-campus-elections",
     "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F08-campus-elections%2Fdevcontainer.json",
     "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/08-campus-elections"
+  },
+  {
+    "n": 9,
+    "slug": "fungible-token",
+    "title": "Fungible Token (ERC-20)",
+    "kind": "learn",
+    "summary": "Write the ERC-20 standard from scratch and mint the Ashesi Campus Token.",
+    "concepts": [
+      "interfaces",
+      "ERC-20",
+      "allowances",
+      "events",
+      "fuzz testing"
+    ],
+    "adaptedFrom": "Solana: token program, minting a fungible token",
+    "docs": [
+      "m06-contracts/13-abstract-and-interfaces",
+      "m06-contracts/09-events",
+      "m06-contracts/10-custom-errors"
+    ],
+    "openFiles": [
+      "README.md",
+      "src/CampusToken.sol",
+      "src/IERC20.sol"
+    ],
+    "dir": "09-fungible-token",
+    "codespaceUrl": "https://codespaces.new/Burkifa23/abc?quickstart=1&devcontainer_path=.devcontainer%2F09-fungible-token%2Fdevcontainer.json",
+    "sourceUrl": "https://github.com/Burkifa23/abc/tree/main/labs/09-fungible-token"
   }
 ]
