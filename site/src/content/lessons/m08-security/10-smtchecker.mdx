@@ -106,58 +106,58 @@ Common approximations:
 
 - **Aliasing.** When you assign a reference type (an array, say), the checker forgets what it knew about other references of the same type and data location, because any of them might point to the same data.
 
-```solidity
-contract Aliasing {
-    uint256[] private marks;
-    uint256[][] private groups;
+  ```solidity
+  contract Aliasing {
+      uint256[] private marks;
+      uint256[][] private groups;
 
-    function touch(uint256[] storage other) private {
-        marks[0] = 5;
-        other[0] = 7;
-        assert(marks[0] == 5);     // may be flagged: `other` could alias `marks`
-    }
+      function touch(uint256[] storage other) private {
+          marks[0] = 5;
+          other[0] = 7;
+          assert(marks[0] == 5);     // may be flagged: `other` could alias `marks`
+      }
 
-    function run(uint256 i) external {
-        touch(groups[i]);          // in reality never aliases `marks`
-    }
-}
-```
+      function run(uint256 i) external {
+          touch(groups[i]);          // in reality never aliases `marks`
+      }
+  }
+  ```
 
-The caller only ever passes an element of `groups`, which cannot be `marks`, but the checker does not track that. Its warning is a false positive. If you are sure, add a `require` that gives the solver the missing fact.
+  The caller only ever passes an element of `groups`, which cannot be `marks`, but the checker does not track that. Its warning is a false positive. If you are sure, add a `require` that gives the solver the missing fact.
 - **Unsupported features**, such as inline assembly, are treated as doing anything, so the properties that depend on them may not be provable.
 - **Hash and signature functions** (`keccak256`, `ecrecover`, ABI encoding and similar) are modelled as *uninterpreted functions*: the checker cannot compute them, but knows the same inputs give the same output. That is enough for some proofs.
 - **External calls to unknown code** may do anything, including calling back into your contract. This is how the checker can find reentrancy bugs for you:
 
 ```solidity
-interface IStranger {
-    function callback() external;
+interface IReceiptPrinter {
+    function printed(address who, uint256 amount) external;
 }
 
-contract Treasury {
+contract FeeBox {
     uint256 public total;
-    bool private locked;
-    IStranger public stranger;
+    uint8 private depth;
+    IReceiptPrinter public printer;
 
-    modifier lock() {
-        require(!locked);
-        locked = true;
-        _;
-        locked = false;
-    }
+    error Busy();
 
-    function add(uint256 x) external lock {
-        total += x;
-    }
-
-    function ping() external lock {
+    function deposit(uint256 amount) external {
+        if (depth != 0) revert Busy();
+        depth = 1;
         uint256 before = total;
-        stranger.callback();       // unknown code, free to re-enter
-        assert(before == total);   // holds only because of the lock
+        total += amount;
+        printer.printed(msg.sender, amount);   // unknown code, free to re-enter
+        assert(total >= before);               // holds only because withdraw is blocked meanwhile
+        depth = 0;
+    }
+
+    function withdraw(uint256 amount) external {
+        if (depth != 0) revert Busy();
+        total -= amount;
     }
 }
 ```
 
-The checker can work out that when `callback` runs, `locked` is true, so a re-entrant `add` is impossible and the assertion holds. Remove `lock` from `add`, and it can synthesise a re-entrant call that changes `total`, and show it to you as the failing trace.
+The checker can work out that while `printed` runs, `depth` is 1, so a re-entrant `withdraw` reverts with `Busy` and `total` cannot shrink, and the assertion holds. Delete the `depth` check from `withdraw`, and it can synthesise a re-entrant call that lowers `total`, and show it to you as the failing trace.
 
 ## Real-world assumptions
 

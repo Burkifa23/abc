@@ -14,13 +14,13 @@ Every lesson so far has been about bugs in *your* code. This one is about bugs i
 The compiler repository ships two JSON files in its `docs` folder, both also reachable from the documentation site:
 
 - **`bugs.json`** is an array with one object per bug (or per affected version range).
-- **`bugs_by_version.json`** is a lookup table from a compiler version to the names of the bugs that version contains, so you can answer "what is wrong with 0.8.x?" in one step.
+- **`bugs_by_version.json`** is a lookup table from a compiler version to an object of the form `{ "bugs": [...], "released": "..." }`, where `bugs` lists the names of the bugs that version contains, so you can answer "what is wrong with 0.8.x?" in one step.
 
 Both are meant for tools. Source verification sites, auditors' scripts and IDE plugins read them. You can read them too, with nothing fancier than `jq`:
 
 ```bash
 # which listed bugs affect compiler 0.8.20?
-jq '."0.8.20"' bugs_by_version.json
+jq '."0.8.20".bugs' bugs_by_version.json
 ```
 
 ## Reading one record
