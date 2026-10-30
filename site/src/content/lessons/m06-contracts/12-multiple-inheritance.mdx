@@ -58,7 +58,7 @@ Draw the inheritance as arrows and you get a diamond: `Student` at the bottom, `
 
 The line is built from the order in your `is` list, and here the direction matters. You must list parents from **most base-like to most derived**. So `Student is Computing, Debate` means "Debate is the more specialised one", and it comes later in the list, so it is searched first. The resulting line is: `Student`, `Debate`, `Computing`, `Union`. Python's rule is the reverse (leftmost wins), which trips up people who know both languages.
 
-A quick way to compute it by hand: start with the contract itself, then search the parents from right to left, going depth-first, and skip anything already visited. The common ancestor `Union` is naturally reached last.
+A quick way to compute it by hand: start with the contract itself, then walk the parents from right to left, going depth-first, and write down every contract you meet, repeats included. Then keep only the last occurrence of each. For `Student` the walk gives `Student`, `Debate`, `Union`, `Computing`, `Union`, which reduces to `Student`, `Debate`, `Computing`, `Union`.
 
 Not every shape of graph can be flattened. This one fails with "Linearization of inheritance graph impossible":
 
@@ -82,7 +82,7 @@ The order matters for constructors too. They run in the linear order starting fr
 
 If two parents each define the same function and neither one overrides the other, the child must override it and name both: `override(Computing, Debate)`. In the diamond above, `Computing` and `Debate` both override `Union.register`, so `Student` has to name them both. You list the most derived contracts that define the function, not `Union`.
 
-There is a comforting exception. If only one side overrides and the other just inherits the shared version, a single unique override already settles the matter, and the child needs no `override` list at all. Where the function is defined in a common ancestor and nobody touches it, nothing needs to be said either.
+There is one exception. If the function is defined only in the common ancestor and nobody in between redefines it, the child needs to say nothing. But if one side overrides it and the other merely inherits it, the child still has to override and name both: `override(Union, Computing)` when only `Computing` redefines it.
 
 <div class="callout"><strong>Watch out.</strong> Because <code>super</code> follows the final line, a base contract's behaviour depends on who inherits it. A contract written as a standalone class may be called through a neighbour it has never heard of. Keep functions that take part in a <code>super</code> chain independent: each one should do its own step and then call <code>super</code>, instead of assuming that a particular contract comes next.</div>
 
