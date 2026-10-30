@@ -172,10 +172,12 @@ contract ConformanceTest is Test {
         a.enter(secret);
 
         // front-run: mallory commits to the same secret, ama is first to reveal
+        bytes32 seal_ama = a.sealFor(ama, secret);
         vm.prank(ama);
-        a.commitEntry(a.sealFor(ama, secret));
+        a.commitEntry(seal_ama);
+        bytes32 seal_mallory = a.sealFor(mallory, secret);
         vm.prank(mallory);
-        a.commitEntry(a.sealFor(mallory, secret));
+        a.commitEntry(seal_mallory);
 
         // the same block is too early
         vm.expectRevert(IClubAccess.RevealTooEarly.selector);
@@ -198,8 +200,9 @@ contract ConformanceTest is Test {
         // revoke: a revoked member cannot enter
         vm.prank(admin);
         a.revokeMember(commitment);
+        bytes32 seal_kofi = a.sealFor(kofi, secret);
         vm.prank(kofi);
-        a.commitEntry(a.sealFor(kofi, secret));
+        a.commitEntry(seal_kofi);
         vm.roll(block.number + 1);
         vm.expectRevert(IClubAccess.UnknownCommitment.selector);
         vm.prank(kofi);
