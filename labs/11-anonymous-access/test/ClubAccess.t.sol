@@ -23,8 +23,10 @@ contract ClubAccessTest is Test {
     }
 
     function _commit(address who, bytes32 secret) internal {
+        // Compute first: vm.prank applies to the next external call, which would otherwise be sealFor.
+        bytes32 sealHash = club.sealFor(who, secret);
         vm.prank(who);
-        club.commitEntry(club.sealFor(who, secret));
+        club.commitEntry(sealHash);
     }
 
     // US1
