@@ -84,8 +84,8 @@ solc --optimize --ir-optimized --yul-optimizations 'dhfoD[xarrscLMcCTU]uljmul:fD
 
 - Letters before the colon are the **main sequence**, after it the **cleanup sequence**. If the colon is missing, your string is the main sequence and the default cleanup is used. A colon at the start gives an empty main sequence; at the end, an empty cleanup.
 - `d` (VarDeclInitializer), `h` (FunctionHoister), `f` (BlockFlattener), `o` (ForLoopInitRewriter) and `D` (DeadCodeEliminator) run once first.
-- The part in `[...]` is a **loop**: it repeats until the code stops changing or the maximum number of rounds (currently 12) is reached. It holds `x` (ExpressionSplitter), `a` (SSATransform), `r` (UnusedAssignEliminator, twice), `s` (ExpressionSimplifier), `c` (CommonSubexpressionEliminator), `L` (LoadResolver), `M` (LoopInvariantCodeMotion), `C` (ConditionalSimplifier), `T` (LiteralRematerialiser) and `U` (ConditionalUnsimplifier). Brackets may appear more than once but cannot be nested.
-- `u` (UnusedPruner), `l` (CircularReferencesPruner), `j` (ExpressionJoiner), `m` (Rematerialiser), `u` again finish the main sequence.
+- The part in `[...]` is a **loop**: it repeats until the code stops changing or the maximum number of rounds (currently 12) is reached. It holds `x` (ExpressionSplitter), `a` (SSATransform), `r` (UnusedAssignEliminator, twice), `s` (ExpressionSimplifier), `c` (CommonSubexpressionEliminator), `L` (LoadResolver), `M` (LoopInvariantCodeMotion), `c` (the eliminator a second time), `C` (ConditionalSimplifier), `T` (LiteralRematerialiser) and `U` (ConditionalUnsimplifier). Brackets may appear more than once but cannot be nested.
+- `u` (UnusedPruner), `l` (CircularReferencesPruner), `j` (ExpressionJoiner), `m` (Rematerialiser), then `u` and `l` once more finish the main sequence.
 - After the colon, cleanup: `f D n T O c m u`: flatten, remove dead code, simplify control flow, rematerialise literals, restructure loop conditions, remove common subexpressions, rematerialise and prune.
 
 The order matters, and a step can create chances for ones that already ran, which is why repeating helps. A few steps are hardcoded and always run before and after your sequence: the disambiguator (it gives every identifier a unique name, which every later stage relies on), the function hoister and grouper (which put code in a normal form of one block of statements followed by the function definitions) and the for-loop init rewriter.
@@ -122,7 +122,7 @@ contract Loops {
 }
 ```
 
-The last condition is subtle. In `for (uint8 i = 0; i < uint16(1000); i++)`, the counter is widened to `uint16` for the comparison, so the condition never becomes false while `i` is a `uint8`. The increment can really overflow, so the check must stay.
+The last condition is subtle. In `for (uint16 i = 0; i < uint32(70000); i++)`, the counter is widened to `uint32` for the comparison, and a `uint16` never reaches 70000, so the condition never becomes false. The increment can really overflow, so the check must stay.
 
 <div class="callout"><strong>Watch out.</strong> Optimizer settings change the bytecode you ship, and compilers have had optimizer bugs in the past. Test with the exact settings you will deploy with (optimizer on, the same runs value, the same pipeline), not just the defaults of your test tool.</div>
 

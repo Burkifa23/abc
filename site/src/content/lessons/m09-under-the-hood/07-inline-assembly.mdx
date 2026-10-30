@@ -86,12 +86,13 @@ Solidity expects a fixed arrangement in memory:
 - Allocation starts at `0x80`, the initial value of the free memory pointer.
 - Every memory array element takes a 32-byte multiple (even `bytes1[]`, unlike `bytes` and `string`), and a dynamic array stores its length in its first word. Static arrays have no length word; do not rely on that staying so.
 
-An allocator in Yul is three lines:
+A bump allocator in Yul reserves a region by moving the pointer past it:
 
 ```
-function allocate(size) -> ptr {
-    ptr := mload(0x40)
-    mstore(0x40, add(ptr, size))
+function bump(size) -> start {
+    start := mload(0x40)
+    let end := add(start, size)
+    mstore(0x40, end)
 }
 ```
 
@@ -106,22 +107,22 @@ If your block follows the rules, say so: `assembly ("memory-safe") { ... }`. A b
 3. the scratch space at `0x00` to `0x3f`,
 4. temporary memory *after* the current free pointer, without moving the pointer.
 
-The rules hold even if the block ends by reverting. A block that neither touches memory nor assigns memory variables is treated as safe automatically. This revert-with-the-last-call's-data helper is **not** safe, because return data may be larger than the 64 scratch bytes:
+The rules hold even if the block ends by reverting. A block that neither touches memory nor assigns memory variables is treated as safe automatically. Suppose you want to bubble up only the four-byte error selector of a failed call. This version is **not** safe, because it writes at `0x80`, exactly where Solidity may already keep live objects:
 
 ```solidity
 assembly {
-    returndatacopy(0, 0, returndatasize())
-    revert(0, returndatasize())
+    returndatacopy(0x80, 0, 4)
+    revert(0x80, 4)
 }
 ```
 
-and this one is (so annotate it):
+and this one is, since it only uses memory past the free pointer (so annotate it):
 
 ```solidity
 assembly ("memory-safe") {
     let p := mload(0x40)
-    returndatacopy(p, 0, returndatasize())
-    revert(p, returndatasize())
+    returndatacopy(p, 0, 4)
+    revert(p, 4)
 }
 ```
 
@@ -137,7 +138,7 @@ You may go beyond the 64 scratch bytes, up to but not including `0x80`, and stil
 
 ## Things to avoid
 
-Assembly reads like a high-level language, with `if`, `switch` and `for`, but it is extremely low-level. Those constructs are rewritten by simple rules into jumps. All the assembler does for you is rearrange functional-style opcodes, count stack height so variable access works, and drop block-local variables from the stack at the end of the block. In practice:
+Assembly reads like a high-level language, with `if`, `switch` and `for`, but underneath it is thin. The `if`, `switch` and `for` forms are mechanically rewritten into jumps, and the assembler's only real help is ordering the nested opcode calls, tracking stack depth so that variable access works, and popping block-local variables when the block closes. In practice:
 
 - no overflow checks: `add`, `mul` and `sub` wrap silently, and `div` by zero returns zero rather than reverting;
 - no type or bounds checks, so a wrong offset corrupts storage or memory without any error;

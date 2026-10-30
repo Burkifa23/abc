@@ -36,7 +36,7 @@ Use the GitHub issue tracker, and include: the Solidity version, the source code
 The project does not forbid AI tools, but it applies the same standard to every contribution however it was produced, and demands openness about it. In plain terms:
 
 - When you submit AI-generated code, you are stating that you have **reviewed** it, **understand** it, **can explain** it, and **tested** it as thoroughly as if you had typed it yourself.
-- If AI tools produced code, tests or documentation in any part of your contribution, you **must disclose** this in the pull request.
+- Whenever an AI tool helped write any piece of your contribution, whether code, tests or docs, you **must disclose** that in the pull request.
 - A PR found to contain undisclosed AI-generated content may be closed.
 
 The effect is that the reviewer's time is not spent on code its author cannot defend. Using a tool is acceptable; passing off its output unseen is not.
@@ -50,12 +50,12 @@ You can run a subset by filtering on suite and test name (with `*` wildcards), a
 **Syntax tests** check that the compiler gives the right messages for invalid code and accepts valid code. Each is a small `.sol` file in the syntax test folder with the expectation written as comments after a `// ----` separator:
 
 ```solidity
-contract test {
-    uint256 variable;
-    uint128 variable;
+contract Dup {
+    function ping() public {}
+    function ping() public {}
 }
 // ----
-// DeclarationError: (36-52): Identifier already declared.
+// DeclarationError: (19-44): Function with same name and parameter types defined twice.
 ```
 
 The code above does not compile on purpose: the test passes because the compiler reports exactly the error written after the separator. The number range gives the character position of the error, and the file name should describe what is being tested (one aspect per file, and one contract per file unless you test inheritance). If the contract should compile cleanly, leave out the separator. A tool called `isoltest` runs these and, when a test fails, offers to **edit** the file in your editor, **update** the expectation to match the real output, **skip** it, or **quit**.
@@ -78,7 +78,7 @@ For example, the template `Hello <who>: <#xs><x>;</xs>` with `who = "Ada"` and t
 
 ## Documentation style guide
 
-For people writing docs for Solidity: use international English and avoid local slang; use **Title Case** for headings (capitalise main words, not articles, conjunctions and prepositions unless they start the title); expand contractions ("do not", not "don't"); use passive voice for technical reference (what the language defines) and active voice when recommending how to apply something; and prefer the terms "function parameters" and "return variables" over input and output parameters. Every code block that starts with `pragma solidity`, `contract`, `library` or `interface` is run through the compiler by continuous integration, so examples must work; each should start with a pragma covering the widest range of versions where the code is valid, for example `pragma solidity >=0.4.0 <0.9.0;`. Before submitting, run the documentation checker script, which installs its dependencies and finds broken links and syntax problems.
+For people writing docs for Solidity: use international English and avoid local slang; use **Title Case** for headings (capitalise the significant words; small words such as articles, conjunctions and prepositions stay lowercase unless they open the title); expand contractions ("do not", not "don't"); use passive voice for technical reference (what the language defines) and active voice when recommending how to apply something; and prefer the terms "function parameters" and "return variables" over input and output parameters. Every code block that starts with `pragma solidity`, `contract`, `library` or `interface` is run through the compiler by continuous integration, so examples must work; each should start with a pragma covering the widest range of versions where the code is valid, for example `pragma solidity >=0.4.0 <0.9.0;`. Before submitting, run the documentation checker script, which installs its dependencies and finds broken links and syntax problems.
 
 ## Solidity language design
 
@@ -88,7 +88,7 @@ The place to propose and debate language ideas, in their early form, is the **So
 
 If you print "Solidity" on a workshop poster, build a tool with the name in it, or place the logo on a website, the brand guide tells you what is expected.
 
-**The brand.** Solidity is an open-source community project run by a core team. The team belongs to the **Argot Collective**, a non-profit that develops and maintains the language. The project was originally started and sponsored by the Ethereum Foundation.
+**The brand.** Solidity is an open-source community project run by a core team. The team is part of the **Argot Collective**, a non-profit organisation that is responsible for building and maintaining the language. The project was originally started and sponsored by the Ethereum Foundation.
 
 **The name.** "Solidity" refers to the Solidity programming language and nothing else. Do not use it for another language; do not use it so as to mislead or imply that unrelated tools, documents or modules are associated with the language; and do not use it in a way that leaves people unsure whether the language is open source and free to use.
 
@@ -96,7 +96,7 @@ If you print "Solidity" on a workshop poster, build a tool with the name in it, 
 
 **Logo guidelines.** In addition, keep the logo's proportions: do not stretch or crop it. And do not change its colours unless it is absolutely necessary.
 
-**Credits.** The guide was derived in part from the Python Software Foundation Trademark Usage Policy and the Rust Media Guide, which is a useful reminder that open projects often borrow each other's governance documents.
+**Credits.** Parts of the guide are adapted from two other projects' documents, the Python Software Foundation's trademark usage policy and the Rust media guide, which is a useful reminder that open projects often borrow each other's governance documents.
 
 <div class="callout"><strong>Watch out.</strong> The licence lets you reuse the <em>logo</em>, not claim the project's blessing. A tool called, say, "Solidity Studio Pro" with the logo and no explanation could easily read as an official product. Say plainly what you built and credit the source.</div>
 

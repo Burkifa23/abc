@@ -64,7 +64,7 @@ Return values are variables: you assign them, and whatever they hold at the end 
 
 ## Compiling Yul on its own
 
-Yul works without Solidity around it. On the command line, `solc --strict-assembly file.yul` compiles it, and `--optimize` turns on the optimizer. Through Standard JSON you set `"language": "Yul"`, give the source in `sources`, and use the usual `settings` such as `optimizer.enabled` and `optimizer.details.yul`. Stand-alone Yul uses the *object notation* described below so that code can be treated as data to deploy other contracts. Bytecode generation is only fully implemented for the EVM dialect targeting the plain EVM 1.0 baseline, so treat the stand-alone mode as a work in progress.
+Yul works without Solidity around it. On the command line, `solc --strict-assembly file.yul` compiles it, and `--optimize` turns on the optimizer. Through Standard JSON you set `"language": "Yul"`, give the source in `sources`, and use the usual `settings` such as `optimizer.enabled` and `optimizer.details.yul`. Stand-alone Yul uses the *object notation* described below so that code can be treated as data to deploy other contracts. Only the EVM dialect, aimed at the original EVM 1.0 target, has complete code generation today, so treat stand-alone mode as unfinished.
 
 ## The language, piece by piece
 
@@ -88,7 +88,7 @@ The reference spells all of this out as a grammar and a set of rules.
 
 **Grammar.** A block is braces around statements. A statement is a nested block, function definition, variable declaration, assignment, `if`, a bare expression, `switch`, `for`, `break`/`continue` or `leave`. An expression is a function call, an identifier or a literal. Identifiers start with a letter, `_` or `$` and may continue with digits and dots.
 
-**Restrictions beyond the grammar.** Every expression evaluates to zero or more values: identifiers and literals give exactly one, and a call gives as many as the function has return variables. Only a declaration or assignment may use a multi-value expression on the right. An expression used as a statement must give zero values (for example `pop(x)` for a value you want to discard). `leave` is legal only inside a function. A loop condition must give exactly one value. Types must match exactly, with no implicit conversion; any conversion would have to be a builtin of the dialect.
+**Restrictions beyond the grammar.** Each expression yields some number of values: a name or a literal yields one, and a call yields as many as the called function has return variables (possibly none). Only a declaration or assignment may use a multi-value expression on the right. An expression used as a statement must give zero values (for example `pop(x)` for a value you want to discard). `leave` is legal only inside a function. A loop condition must give exactly one value. Types must match exactly, with no implicit conversion; any conversion would have to be a builtin of the dialect.
 
 **Scoping.** Scopes follow blocks, with one exception: the init block of a `for` loop is visible across the rest of that loop, so `for { I } C { P } { B }` behaves like `{ I for {} C { P } { B } }`. Variables are visible only *after* their declaration, so `let a := add(a, 1)` is an error: a variable cannot be used in its own initialiser. Parameters and return variables are visible in the function body and must have distinct names. **Shadowing is not allowed**: you may not declare a name at a point where another declaration of that name is visible, even if it would be unreachable from inside the function.
 
