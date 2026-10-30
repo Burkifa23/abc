@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+/// Lab 06: Word Guess
+/// Fill in every TODO until `forge test` is all green.
+/// Do not rename anything here: the tests depend on these names.
+contract WordGuess {
+    error NotOwner();
+    error NoSecret();
+
+    event SecretSet(uint256 indexed round, bytes32 secretHash);
+    event HintAdded(uint256 indexed round, string hint);
+    event Guessed(uint256 indexed round, address indexed guesser, string guess, bool correct);
+
+    address public immutable owner; // immutable: takes no storage slot
+    string private naiveSecret; // slot 0: the "wrong way", set by setNaiveSecret
+    bytes32 public secretHash; // slot 1
+    uint256 public round; // slot 2
+    string[] internal hints;
+    address[] internal winners;
+
+    modifier onlyOwner() {
+        // TODO 1: revert NotOwner() unless msg.sender == owner.
+        _; // this line means "now run the function body"
+    }
+
+    constructor() {
+        owner = msg.sender; // already written, as in lab 01
+    }
+
+    function setNaiveSecret(string calldata word) external onlyOwner {
+        // TODO 2: store `word` in naiveSecret. This is the WRONG way to keep a secret; test_04 shows why.
+    }
+
+    function hashWord(string calldata word) public pure returns (bytes32) {
+        // TODO 3: return keccak256(bytes(word)).
+    }
+
+    function setSecret(bytes32 hash) external onlyOwner {
+        // TODO 4: start a new round. Increase `round`, store `hash` in secretHash,
+        //         clear `hints` and `winners` (use `delete`), and emit SecretSet(round, hash).
+    }
+
+    function addHint(string calldata hint) external onlyOwner {
+        // TODO 5a: add the hint to `hints` and emit HintAdded(round, hint).
+    }
+
+    function viewHints() external view returns (string[] memory) {
+        // TODO 5b: return all the hints.
+    }
+
+    function makeGuess(string calldata guess) external returns (bool correct) {
+        // TODO 6: revert NoSecret() if secretHash is zero.
+        //         correct = hashWord(guess) == secretHash. If correct, add msg.sender to `winners`.
+        //         Emit Guessed(round, msg.sender, guess, correct). Return `correct`.
+    }
+
+    function viewWinners() external view returns (address[] memory) {
+        // TODO 7: return all the winners.
+    }
+}

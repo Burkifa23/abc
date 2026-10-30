@@ -1,0 +1,11 @@
+{
+  "n": 6,
+  "slug": "word-guess",
+  "title": "Word Guess",
+  "kind": "learn",
+  "summary": "Build a guessing game and learn why private data on-chain is never secret.",
+  "concepts": ["modifier", "onlyOwner", "keccak256", "private vs secret", "storage slots", "events"],
+  "adaptedFrom": "NEAR: word guessing game",
+  "docs": ["m06-contracts/03-function-modifiers", "m08-security/01-private-data-and-randomness", "m09-under-the-hood/03-storage-layout"],
+  "openFiles": ["README.md", "src/WordGuess.sol"]
+}
