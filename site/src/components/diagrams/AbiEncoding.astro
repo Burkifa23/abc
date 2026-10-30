@@ -1,0 +1,39 @@
+---
+// ABI encoding of postNotice(uint256,string,uint16[],bytes8) with (3, "Exam hall", [101, 204], tag).
+// Head words hold static values or offsets; the tail holds the dynamic data the offsets point at.
+const rows = [
+  { v: "09956c05", n: "selector (4 bytes)" },
+  { v: "3", n: "head: board, static" },
+  { v: "0x80", n: "offset to title" },
+  { v: "0xc0", n: "offset to rooms" },
+  { v: "0x4142...4748", n: "tag, bytes8 left-aligned" },
+  { v: "9", n: "tail: title byte length" },
+  { v: "Exam hall + zero padding", n: "title: data" },
+  { v: "2", n: "rooms: item count" },
+  { v: "101 (0x65)", n: "rooms[0]" },
+  { v: "204 (0xcc)", n: "rooms[1]" },
+];
+const top = 22;
+const step = 28;
+const cy = (i: number) => top + i * step + 12;
+---
+<svg viewBox="0 0 640 330" role="img" aria-labelledby="ae-t" font-family="var(--mono)" font-size="11">
+  <title id="ae-t">ABI encoding of a call with four arguments. After the four-byte selector come four head words: the number 3, an offset 0x80 to the string, an offset 0xc0 to the array, and a bytes8 value. The tail follows: the string's length 9 and padded text, then the array's count 2 and its two items. The offsets are measured from the start of the arguments and point at the string length word and the array count word.</title>
+  <defs>
+    <marker id="ae-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--muted-fg)" />
+    </marker>
+  </defs>
+  {rows.map((r, i) => (
+    <g>
+      <rect x="60" y={top + i * step} width="340" height="24" rx="4" fill="none" stroke="var(--border)" stroke-width="1.5" />
+      <text x="4" y={cy(i) + 4} fill="var(--muted-fg)">{i === 0 ? "" : i - 1}</text>
+      <text x="72" y={cy(i) + 4} fill="currentColor" font-weight={i === 0 ? "600" : "400"}>{r.v}</text>
+      <text x="440" y={cy(i) + 4} fill="var(--muted-fg)">{r.n}</text>
+    </g>
+  ))}
+  <line x1="56" y1={top + 5 * step - 2} x2="404" y2={top + 5 * step - 2} stroke="var(--muted-fg)" stroke-width="1" stroke-dasharray="4 3" />
+  <path d={`M60 ${cy(2)} H44 V${cy(5)} H58`} stroke="var(--muted-fg)" stroke-width="1.5" fill="none" marker-end="url(#ae-arrow)" />
+  <path d={`M400 ${cy(3)} H418 V${cy(7)} H402`} stroke="var(--muted-fg)" stroke-width="1.5" fill="none" marker-end="url(#ae-arrow)" />
+  <text x="4" y="322" fill="var(--muted-fg)">Offsets count bytes from the first argument word, not from the selector.</text>
+</svg>

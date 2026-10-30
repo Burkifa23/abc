@@ -1,0 +1,103 @@
+---
+title: "Memory, calldata, cleanup and source mappings"
+summary: "How memory is laid out and why it differs from storage, what calldata looks like, how the compiler scrubs unused high bits, and how bytecode is tied back to your source lines."
+covers: ["Layout in Memory", "Layout in Memory > Differences to Layout in Storage", "Layout of Call Data", "Cleaning Up Variables", "Source Mappings"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import Figure from "../../../components/Figure.astro";
+import MemoryLayout from "../../../components/diagrams/MemoryLayout.astro";
+import { quiz, exercises } from "./04-memory-and-calldata-layout";
+
+Storage is where data lives between transactions. During a transaction, the working area is **memory**: a byte-addressed scratch pad that starts empty on every call and disappears when the call ends. This lesson covers the shape of memory, the format of the input a contract receives, the way the compiler keeps small values tidy inside 256-bit words, and the map that links bytecode back to source code.
+
+## Layout in memory
+
+Solidity reserves the first four 32-byte words of memory for its own use, and the addresses below include both endpoints:
+
+- `0x00`–`0x3f` (64 bytes): **scratch space**, used for things like hashing. You may use it between statements, for example inside inline assembly.
+- `0x40`–`0x5f` (32 bytes): the **free memory pointer**, which stores the address where the next new object will go.
+- `0x60`–`0x7f` (32 bytes): the **zero slot**. It is the starting value of empty dynamic memory arrays, and must never be written.
+
+Everything you allocate begins at `0x80`, which is the value the pointer holds at the start. Allocation is a "bump": the compiler puts the new object where the pointer says and then moves the pointer past it. Memory is never freed, so a long loop that creates objects keeps growing it, and memory cost grows faster than linearly as it expands.
+
+<Figure caption="The first 128 bytes of memory are reserved. The first array allocated with new uint256[](3) takes a length word and three element words, and moves the free memory pointer to 0x100.">
+  <MemoryLayout />
+</Figure>
+
+I confirmed these numbers by running a contract that reads `mload(0x40)` before and after allocating. Before any allocation it is `0x80`. After `new uint256[](3)` the array sits at `0x80` with its length in the first word, and the pointer reads `0x100`. An empty `uint256[] memory e;` has the value `0x60`, pointing at the zero slot.
+
+Other rules to know:
+
+- Every element of a memory array takes a full 32-byte word, even for `bytes1[]` or `uint8[]`. The exceptions are `bytes` and `string`, which are packed bytes (rounded up to a whole word at the end). A `bytes1[5]` array occupies 160 bytes plus a length word; `new bytes(5)` occupies one word of length and one of data.
+- A multi-dimensional memory array is an array of pointers to the inner arrays.
+- A dynamic array's length is its first word, followed by the elements.
+- Some operations need a temporary area bigger than the 64-byte scratch space. They use the memory at the free pointer but do *not* move it, because the data is short-lived. That memory may or may not be zero, so never assume that "free" memory is cleared.
+
+<div class="callout"><strong>Watch out.</strong> Do not reach for <code>msize</code> to find a "definitely clean" region of memory and then use it for something lasting without moving the free memory pointer. The next allocation will land on top of your data. If you write assembly that allocates, read <code>mload(0x40)</code>, use that address, and store the new pointer back yourself.</div>
+
+### How memory differs from storage
+
+The packing you saw in the last lesson does not exist in memory. An array of four `uint8` values, `uint8[4]`, fits into one storage slot but takes 128 bytes (four words) in memory. A struct shows the same effect:
+
+```solidity
+contract Venue {
+    struct Seat {
+        uint64 row;
+        uint64 col;
+        uint256 id;
+        bool vip;
+    }
+}
+```
+
+In storage `row` and `col` share slot 0, `id` takes slot 1, and `vip` takes slot 2: three slots, 96 bytes. In memory every member gets its own word, so a `Seat` is 128 bytes. (I allocated one and watched the free memory pointer move from `0x80` to `0x100`.) This is also why shrinking types in function parameters or local variables does not save gas: there is no packing to benefit from.
+
+## Layout of calldata
+
+The input of an external call, its **calldata**, follows the ABI format covered in lesson 5: a four-byte function selector, then the arguments padded to multiples of 32 bytes. Internal function calls (one function of your contract calling another) use a different, private convention instead.
+
+Constructor arguments are special. When you deploy, the constructor's arguments are not in calldata but are appended to the end of the creation bytecode, also ABI-encoded. The constructor finds them at an offset the compiler hard-codes, not by looking at `codesize`, since the code size changes whenever arguments are tacked on.
+
+## Cleaning up variables
+
+The EVM only understands 256-bit words. A `uint8` holds 8 bits of information, so the other 248 bits of its word are "dirty" if they contain anything but zeros (or sign bits). The compiler's job is to make sure junk in those bits cannot change the result. It cleans a value *before any operation that could be affected by it*: before writing it to memory (it may be hashed or sent as call data) or to storage (otherwise someone could observe the garbled word).
+
+Two things it deliberately does not do. It skips cleaning when the next operation ignores the extra bits, so a `bool` heading into a `jumpi` (which treats any non-zero value as true) is not cleaned. And it does not clean anything for you when you read or write the variable from inline assembly.
+
+Here is what happens to an invalid value of each type:
+
+| Type | Valid values | What the compiler does with an invalid value |
+|---|---|---|
+| `enum` with n members | 0 to n - 1 | reverts (panic) |
+| `bool` | 0 or 1 | becomes 1 |
+| signed integers | high bits equal the sign bit | sign-extends to a valid value |
+| unsigned integers | high bits zero | masks the high bits off |
+
+Take a `uint8` whose word is `0x1ff` (binary `…0001 1111 1111`). Nine bits are set, which a `uint8` cannot represent, so cleaning masks it down to `0xff`. For an `int8`, cleaning copies bit 7, the sign bit, into every higher bit: a word ending `…1000 0000` becomes `…1111 1000 0000`, which is -128. The docs warn that this "silently fix it" behaviour may become an exception in a future release.
+
+I tried each rule by writing the dirty value in assembly and returning it from a function with a Solidity return type. `uint8` set to `0x105` returned `5`. A `bool` set to `2` returned `1`. An `enum` set to `5` ended in `Panic(0x21)`. An `int8` set to `0x180` returned `-128`. All matched the table, in both code generators.
+
+Values arriving through *calldata* are handled more strictly in the default setup of current compilers (the ABI decoder version 2). When I called a function taking `uint8` with `0x105`, one taking `bool` with `2`, and one taking an enum with `5`, each call reverted rather than being cleaned. A well-formed `int8` argument passed; one with garbage in the high bits reverted. So the table above matters most for values the compiler meets after the decoder, such as ones your own assembly produced.
+
+## Source mappings
+
+A compiler is only useful to a debugger if the bytecode can be linked back to the lines that made it. The compiler supplies two kinds of map.
+
+**In the AST**, each node carries a range written `s:l:f`: `s` is the byte offset where the node starts in the file, `l` its length in bytes, and `f` the source file's index. The index of a file is its `id` in the `sources` section of the compiler output.
+
+**For bytecode**, the map is a list of `s:l:f:j:m` entries separated by `;`, one per *instruction* (not per byte, because `push` instructions are longer than one byte). The first three fields are as above. The fourth, `j`, says whether a jump goes into a function (`i`), returns out of one (`o`), or is an ordinary jump such as in a loop (`-`). The fifth, `m`, is the **modifier depth**: it rises when execution enters the `_` placeholder of a modifier and falls when it leaves, so a debugger can follow a modifier used twice, or several placeholders in one modifier. An instruction with no source file, such as ones from compiler-generated assembly, gets the file index `-1`. Utility code the compiler writes itself is a numbered file too, obtainable from `generatedSources`.
+
+To keep maps short, two compression rules apply: an empty field means "same as the previous entry", and if a `:` is missing, all the following fields are considered empty. So
+
+```text
+5:10:0:-:0;7:3;;:6:1
+```
+
+expands to four entries: `5:10:0:-:0`, `7:3:0:-:0`, `7:3:0:-:0` again (the empty entry repeats everything), and `7:6:1:-:0` (start 7 is inherited, length 6, file 1). The compiler's own output for a small contract begins `57:80:0:-:0;;;;;;` (a run of instructions all from range 57, length 80, file 0, the whole contract, which is the constructor preamble) and later contains pieces such as `:::i` (same range, jump into a function).
+
+One caveat: if you use the `verbatim` Yul builtin, source maps become invalid, because the compiler counts the whole verbatim block as a single instruction.
+
+## Check your understanding
+
+<Quiz questions={quiz} />

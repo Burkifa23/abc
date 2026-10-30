@@ -1,0 +1,230 @@
+---
+title: "The contract ABI specification"
+summary: "The exact byte format of calls, return values, events and errors: selectors, head and tail encoding of static and dynamic types, the JSON description, and the packed mode that must not be used for calls."
+covers: ["Contract ABI Specification", "Contract ABI Specification > Basic Design", "Contract ABI Specification > Function Selector", "Contract ABI Specification > Argument Encoding", "Contract ABI Specification > Types", "Contract ABI Specification > Design Criteria for the Encoding", "Contract ABI Specification > Formal Specification of the Encoding", "Contract ABI Specification > Function Selector and Argument Encoding", "Contract ABI Specification > Examples", "Contract ABI Specification > Use of Dynamic Types", "Contract ABI Specification > Events", "Contract ABI Specification > Errors", "Contract ABI Specification > JSON", "Contract ABI Specification > Strict Encoding Mode", "Contract ABI Specification > Non-standard Packed Mode", "Contract ABI Specification > Encoding of Indexed Event Parameters"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import CodeExercise from "../../../components/CodeExercise.astro";
+import Figure from "../../../components/Figure.astro";
+import AbiEncoding from "../../../components/diagrams/AbiEncoding.astro";
+import { quiz, exercises } from "./05-abi-specification";
+
+When a wallet calls `transfer`, or a frontend reads a balance, or one contract calls another, they all send raw bytes. Nothing in those bytes says "this is a function" or "this is a number". Both sides agree in advance how to turn typed values into bytes and back. That agreement is the **Application Binary Interface (ABI)**. It is the format used for calls from outside the chain and for calls between contracts, and it is also how return values, events and errors are packed.
+
+## Basic design
+
+The ABI is **not self-describing**. The bytes carry no type labels, so a decoder needs the interface (the list of function signatures) to make sense of them. The format assumes interfaces are strongly typed, fixed at compile time and known to every caller. Contracts whose interface is only discovered at run time are outside its scope, and libraries use a slightly different variant.
+
+## The function selector
+
+The first four bytes of the call data pick the function. They are the first four bytes (the high-order end) of the Keccak-256 hash of the function's **signature**: the name, then the types of the parameters in parentheses, separated by single commas and with no spaces. Only the *canonical* type names count, with no data location: `uint` must be written `uint256`, and so on.
+
+For the most famous function in the ecosystem, the signature is `transfer(address,uint256)`, and its hash begins `a9059cbb`. So every ERC-20 transfer call begins with the bytes `0xa9059cbb`.
+
+The return type is not part of the signature. That mirrors Solidity's rule that overloads are told apart by parameters only, which keeps calls from depending on context. (The JSON description, below, does list outputs.)
+
+## Argument encoding
+
+After the selector comes the encoding of the arguments, starting at the fifth byte. The same encoding is used for return values (without a selector) and for event data. The format below is what Solidity calls `abi.encode`.
+
+## The types
+
+The ABI knows these elementary types:
+
+- `uint<M>` and `int<M>`: M-bit integers with `M` a multiple of 8 between 8 and 256; signed ones are two's complement. `uint` and `int` mean `uint256` and `int256`, but in a selector you must spell out the 256.
+- `address`: like `uint160`, treated as an address. `bool`: like `uint8` restricted to 0 and 1.
+- `bytes<M>`: M bytes, from 1 to 32.
+- `function`: a 20-byte address followed by a 4-byte selector, encoded like `bytes24`.
+- `fixed<M>x<N>` and `ufixed<M>x<N>`: fixed-point numbers, value `v / 10**N`. Solidity itself cannot yet use them for real.
+
+Fixed-size arrays are written `T[k]`. Dynamic ones are `bytes`, `string` and `T[]` (UTF-8 for strings). Several types can be grouped as a **tuple**, `(T1,T2,...)`, and tuples nest. Arrays of zero elements exist in the spec but the compiler does not support them.
+
+Some Solidity types have no ABI name of their own and borrow one:
+
+| Solidity type | ABI type |
+|---|---|
+| `address payable`, any `contract` | `address` |
+| `enum` | `uint8` (since 0.8.0; earlier versions picked the smallest integer that fit all members) |
+| user-defined value type | its underlying type |
+| `struct` | a tuple of its members |
+
+## Design criteria
+
+Two goals shaped the encoding. First, reading a value should take at most as many reads as it is nested deep: to fetch `a[k][l][r]` you need four reads, no matter how many other dynamic values there are. (An older version of the ABI could need a number of reads that grew with the count of dynamic parameters.) Second, a value's data is never interleaved with other data, and it uses only *relative* offsets, so a block can be moved around without rewriting pointers.
+
+## The formal encoding
+
+Types split into **static** and **dynamic**. A type is dynamic if it is `bytes`, `string`, `T[]` for any `T`, a fixed array `T[k]` whose element type is dynamic, or a tuple with a dynamic member. Everything else is static. Static values are written in place. Dynamic ones are written *after* the fixed part, and the fixed part holds a pointer to them.
+
+For a tuple of values `X1 … Xk` (and a call's argument list is exactly such a tuple), the encoding is a **head** followed by a **tail**:
+
+- The head has one entry per value. For a static value the entry is the encoded value itself. For a dynamic value it is an **offset**: the number of bytes from the start of this tuple's encoding to where that value's data begins in the tail.
+- The tail holds the encoded data of the dynamic values, in order.
+
+Each kind of value is encoded as follows:
+
+- Integers and `bool` (as `uint8`, 1 or 0) and `address` (as `uint160`): 32 bytes, big-endian, padded on the left. Negative numbers are padded with `0xff` bytes (sign extension), non-negative with `0x00`.
+- `bytes<M>`: the bytes, then zero padding **on the right** up to 32 bytes.
+- `bytes`: the length as a 32-byte number, then the bytes, then right-padding to a multiple of 32. `string` is the same, treating its UTF-8 bytes as `bytes`. The length counts bytes, not characters.
+- `T[k]` (fixed array): encoded as a tuple of `k` values of the same type.
+- `T[]` (dynamic array of `k` items): the number `k`, then the items encoded as a tuple of `k` values.
+- Fixed-point: the value multiplied by `10**N`, encoded as an integer.
+
+Every encoded piece is a multiple of 32 bytes. A full call is `selector ++ enc((a_1, ..., a_n))`, and a return of `v_1 ... v_k` is `enc((v_1, ..., v_k))`.
+
+## Worked examples
+
+Everything here I generated with a compiler and then checked by hand; the selectors come from real Keccak-256.
+
+### All static arguments
+
+`enrol(uint32 course, bool paid)` called with `(2027, true)`. The selector is `cf296a68`, and there are two words:
+
+```text
+0xcf296a68
+00000000000000000000000000000000000000000000000000000000000007eb   2027
+0000000000000000000000000000000000000000000000000000000000000001   true
+```
+
+68 bytes in total: 4 + 2 × 32. A static array is just its elements back to back. `pairUp(bytes4[2])` with `[0xdeadbeef, 0x01020304]` (selector `ef2ec564`) is two words, each holding four bytes at the **left** and zeros on the right:
+
+```text
+deadbeef00000000000000000000000000000000000000000000000000000000
+0102030400000000000000000000000000000000000000000000000000000000
+```
+
+### Mixing static and dynamic arguments
+
+`postNotice(uint256 board, string title, uint16[] rooms, bytes8 tag)` called with `(3, "Exam hall", [101, 204], 0x4142434445464748)`. The selector is `09956c05`. Here is every word:
+
+```text
+0x09956c05
+ 0  0000…0003   board = 3
+ 1  0000…0080   offset to title's data (4 head words = 0x80)
+ 2  0000…00c0   offset to rooms' data
+ 3  4142434445464748 000…   tag, left-aligned bytes8
+ 4  0000…0009   title: length, 9 bytes
+ 5  4578616d2068616c6c 000…   "Exam hall", right-padded
+ 6  0000…0002   rooms: count, 2
+ 7  0000…0065   101
+ 8  0000…00cc   204
+```
+
+<Figure caption="The head holds each static value and, for dynamic ones, an offset counted from the start of the arguments. The tail holds the dynamic data; the two arrows show where the offsets 0x80 and 0xc0 point.">
+  <AbiEncoding />
+</Figure>
+
+The title's data starts after the 4-word head, so its offset is `4 × 32 = 0x80`. It occupies two words (length plus one padded data word), so the next dynamic value starts at `0x80 + 0x40 = 0xc0`. Offsets are measured from the beginning of the arguments, **not** from the selector.
+
+### Nested dynamic data
+
+When a dynamic value contains other dynamic values, the rule repeats inside it, with offsets measured from the start of *that* value's own encoding. `listNames(string[])` with `["Ama", "Kofi"]` (selector `36314e48`):
+
+```text
+0x36314e48
+ 0  0000…0020   offset to the array (one head word)
+ 1  0000…0002   array length, 2
+ 2  0000…0040   offset of "Ama" from the start of the elements
+ 3  0000…0080   offset of "Kofi"
+ 4  0000…0003   "Ama": length
+ 5  416d61 000…   "Ama", right-padded
+ 6  0000…0004   "Kofi": length
+ 7  4b6f6669 000…   "Kofi"
+```
+
+The offsets in words 2 and 3 count from just after the length word (word 1), so `0x40` jumps two head words, and `0x80` adds the two words taken by "Ama".
+
+## Strict encoding mode
+
+The encoding above is the *strict* one: offsets are as small as they can be and the data areas neither overlap nor leave gaps. Solidity's encoder always produces strict output. Its decoder does not insist on it and will follow any offset that points at valid data. Other decoders may be stricter, so do not hand-craft encodings that merely happen to decode.
+
+## Events
+
+A log entry has the emitting contract's address, up to four **topics** (32-byte words, searchable), and a data blob. For an event, each parameter is either `indexed` (it goes into a topic, at most 3 for ordinary events and 4 for `anonymous` ones) or not (it goes into the data, encoded exactly like function arguments).
+
+For a non-anonymous event, topic 0 is the Keccak-256 hash of the event signature, built like a function signature. Consider:
+
+```solidity
+event Enrolled(address indexed student, uint32 indexed course, string note);
+```
+
+Emitting `Enrolled(0x…0abc, 7, "welcome")` gives these topics and data (I read them from a test run):
+
+```text
+topic 0: c72e93ee…747e   keccak256("Enrolled(address,uint32,string)")
+topic 1: 0000…0abc       student
+topic 2: 0000…0007       course
+data:    0x20, 0x07, "welcome" right-padded   the encoding of (string) = offset, length, bytes
+```
+
+An anonymous event omits topic 0, so it can use four indexed parameters, and it can no longer be found by its signature.
+
+### Indexed parameters of dynamic type
+
+A topic holds only 32 bytes. For values that fit (every static type) the topic is the usual encoding. For "complex" types (`string`, `bytes`, arrays, structs) the topic is instead the **Keccak-256 hash of a special in-place encoding**. This lets you search for a known string, but you can never decode the original from the topic. For example, an event `Tagged(string indexed label, uint256 n)` emitted with `"lab"` has topic 1 equal to `keccak256("lab")`, which I confirmed.
+
+The in-place encoding is: for `bytes` and `string`, just the contents with no padding and no length; for a struct, the concatenation of its members, each padded to a multiple of 32 bytes (even `bytes` and `string`); for an array, the concatenation of its elements, likewise padded, with no length prefix. Because of this, the encoding of a struct is ambiguous when it contains more than one dynamic array, so always re-check the event data rather than trusting a search by indexed topic alone. If you need both fast search and readability, emit two parameters holding the same value, one indexed and one not.
+
+## Errors
+
+A revert can carry data. A custom error is returned exactly like a function call to a function named after the error: its 4-byte selector, then its arguments. Take
+
+```solidity
+error NotEnoughSeats(uint256 left, uint256 wanted);
+```
+
+The selector is `c4ed54c8`. Reverting with `NotEnoughSeats(4, 10)` returns `0xc4ed54c8` followed by the words `4` and `10`; I ran this and got exactly those 68 bytes. The selectors `0x00000000` and `0xffffffff` are reserved.
+
+<div class="callout"><strong>Watch out.</strong> Never trust error data. A revert reason bubbles up through every external call in a chain, so your contract can receive an error that none of its direct callees defines. Any contract can also fake any error simply by returning bytes shaped like it, even one that is not defined anywhere. Use errors to give useful messages, not as proof of where a failure happened.</div>
+
+## The JSON description
+
+Tools describe a contract's interface as a JSON array of function, event and error entries. A **function** entry has `type` (`function`, `constructor`, `receive` or `fallback`), `name`, `inputs`, `outputs` and `stateMutability` (`pure`, `view`, `nonpayable`, the default when you write nothing, or `payable`). Constructors, `receive` and `fallback` have no `name` or `outputs`, and the last two no `inputs`. An **event** entry has `type: "event"`, a `name`, `inputs` (each with an extra `indexed` flag) and `anonymous`. An **error** entry has `type: "error"`, `name` and `inputs`. Each input has a `name` and the canonical `type`, which is for display only: names are not part of the encoding.
+
+Tuples are written as `type: "tuple"`, followed by any `[]` or `[k]` suffix, with the tuple's members in `components`. Here is the compiler output, trimmed of `internalType` fields, for a contract with a struct argument:
+
+```solidity
+contract Hall {
+    struct Slot { uint16 room; uint8[] weekdays; }
+    event Booked(address indexed who, uint256 n);
+    error Full(uint256 left);
+    function book(Slot[] memory s, uint256 n) external payable returns (bool ok) {
+        ok = n > s.length;
+    }
+}
+```
+
+```json
+[
+  { "type": "error", "name": "Full", "inputs": [{ "name": "left", "type": "uint256" }] },
+  { "type": "event", "name": "Booked", "anonymous": false,
+    "inputs": [{ "name": "who", "type": "address", "indexed": true },
+               { "name": "n", "type": "uint256", "indexed": false }] },
+  { "type": "function", "name": "book", "stateMutability": "payable",
+    "inputs": [
+      { "name": "s", "type": "tuple[]", "components": [
+          { "name": "room", "type": "uint16" },
+          { "name": "weekdays", "type": "uint8[]" } ] },
+      { "name": "n", "type": "uint256" } ],
+    "outputs": [{ "name": "ok", "type": "bool" }] }
+]
+```
+
+In a selector the struct appears as a tuple: the selector of `book` is that of `book((uint16,uint8[])[],uint256)`, which is `64d6f261`.
+
+## The non-standard packed mode
+
+`abi.encodePacked` is not ABI encoding. It squeezes values together: types shorter than 32 bytes are concatenated with no padding or sign extension, and dynamic types are written in place without a length. Array elements are still padded, though they are written in place, and structs and nested arrays are not allowed. For example, `abi.encodePacked(uint8(1), bytes2(0xabcd), int16(-2), "hi")` is `0x01abcdfffe6869`: one byte, two bytes, two bytes (`fffe` is -2) and the characters.
+
+Because the lengths are gone, the output is **ambiguous** as soon as there are two dynamic values: `abi.encodePacked("ab", "c")` and `abi.encodePacked("a", "bc")` are the same bytes (I checked that their hashes are equal). So there is no decode function, and no selector support for calls. If you hash packed data for signatures or authentication, make sure at most one argument is dynamic, or just use `abi.encode`.
+
+## Try it
+
+Write a function that computes the ERC-20 `transfer` selector from its signature string, the way tools do.
+
+<CodeExercise id="selector" {...exercises["selector"]} />
+
+## Check your understanding
+
+<Quiz questions={quiz} />

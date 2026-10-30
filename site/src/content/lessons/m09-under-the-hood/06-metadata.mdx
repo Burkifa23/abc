@@ -1,0 +1,96 @@
+---
+title: "Contract metadata"
+summary: "The JSON fingerprint the compiler writes for every contract, the hash of it hidden at the end of your bytecode, and how wallets and verification services use it."
+covers: ["Contract Metadata", "Contract Metadata > Encoding of the Metadata Hash in the Bytecode", "Contract Metadata > Usage for Automatic Interface Generation and NatSpec", "Contract Metadata > Usage for Source Code Verification"]
+---
+
+import Quiz from "../../../components/Quiz.astro";
+import { quiz, exercises } from "./06-metadata";
+
+On a block explorer you can paste a deployed address and see the Solidity source, with a green tick saying "verified". How can anyone be sure that source produced those exact bytes? The answer is a small JSON file the compiler writes for every contract, the **metadata**, plus a trick that ties the file to the bytecode.
+
+## What the metadata file is
+
+For each contract the compiler produces a metadata JSON that answers two questions:
+
+- *How do I talk to this contract?* It holds the ABI and the NatSpec documentation (the `///` comments you write).
+- *How do I rebuild it?* It holds the compiler version, every compiler setting, and the source files used, or links to them.
+
+You get it with `solc --metadata` (add an output directory to write files) or by requesting `metadata` in the standard JSON output. A contract `Notice` with a single documented function produces something like this (long hashes shortened, the ABI collapsed):
+
+```json
+{
+  "compiler": { "version": "0.8.38+commit.1835d247" },
+  "language": "Solidity",
+  "output": {
+    "abi": [ ... ],
+    "devdoc":  { "kind": "dev",  "title": "Notice board", "version": 1,
+                 "methods": { "set(string)": { "params": { "t": "the new text" } } } },
+    "userdoc": { "kind": "user", "version": 1,
+                 "methods": { "set(string)": { "notice": "Replace the pinned notice" } } }
+  },
+  "settings": {
+    "compilationTarget": { "Notice.sol": "Notice" },
+    "evmVersion": "osaka",
+    "libraries": {},
+    "metadata": { "bytecodeHash": "ipfs" },
+    "optimizer": { "enabled": false, "runs": 200 },
+    "remappings": []
+  },
+  "sources": {
+    "Notice.sol": {
+      "keccak256": "0xdb7ac7cb...",
+      "license": "MIT",
+      "urls": [ "bzz-raw://64ac98...", "dweb:/ipfs/QmUhv..." ]
+    }
+  },
+  "version": 1
+}
+```
+
+The parts, in the order the file lists them: `compiler` (version, plus an optional hash of the compiler binary), `language`, `output` (the ABI, and two NatSpec documents: `devdoc` for developers and `userdoc` for the people who will read confirmation prompts), `settings` (the compiler settings reflected back, plus `compilationTarget`, which says which file and contract this metadata is for) and `sources`. Each source is identified by its `keccak256` hash, its SPDX `license`, and `urls` to fetch it from, or its full `content` if you asked for literal content. Libraries are listed in `settings.libraries` in a slightly different shape (`"File.sol:Lib": "0x..."`) from the standard JSON input. A clean, canonical file has keys sorted alphabetically and no extra whitespace; that is the form that gets hashed.
+
+Two warnings follow from this design. Because the hash of every source file is in the metadata, and the metadata hash is in the bytecode, even a single added space in a source file, or a renamed path, changes the metadata and therefore the bytecode. And the order of entries in the `abi` array is not guaranteed to stay stable across compiler versions (from 0.5.12 it keeps a fixed order).
+
+## The hash hidden in the bytecode
+
+By default the compiler appends, to the end of each contract's **runtime bytecode**, a small CBOR-encoded record. (CBOR is a compact binary relative of JSON.) It holds the IPFS hash of the metadata file (as a CIDv0) and the compiler version. Possible fields are `ipfs`, or `bzzr1` for a Swarm hash if you chose that, plus `solc` for the version, and `experimental` set to `true` when experimental mode was on.
+
+Here is the end of the runtime code of the `Notice` contract above, compiled by 0.8.38 with default settings, broken into its parts:
+
+```text
+a2                      a map with 2 entries
+  64 69706673           key: text of 4 bytes, "ipfs"
+  58 22                 value: byte string of 34 bytes
+     1220 52aa71d5…da02fab   the multihash: 0x12 0x20, then a 32-byte SHA-256 digest
+  64 736f6c63           key: text of 4 bytes, "solc"
+  43 000826             value: byte string of 3 bytes = version 0.8.38
+0033                    the CBOR section is 0x33 = 51 bytes long
+```
+
+The last two bytes always give the length of the CBOR section, so a reader starts from the end of the code, reads the length, steps back that many bytes and hands the block to a CBOR parser. Check the arithmetic: 1 byte for the map header, 5 for the `ipfs` key, 2 for the value header, 34 for the digest, 5 for the `solc` key, 1 for the value header and 3 for the version make 51.
+
+Release builds of `solc` encode the version in three bytes (major, minor, patch). Pre-release builds use a full version string with the commit hash and date instead.
+
+The CBOR map can hold other keys, so do not hunt for the bytes `a2 64 69 70 66 73` and assume the layout. Always decode from the length at the end. The hash can be removed in two ways: set `metadata.bytecodeHash` to `"none"`, or use `--no-cbor-metadata` (JSON field `appendCBOR: false`) to omit the whole CBOR block.
+
+<div class="callout"><strong>Watch out.</strong> Two builds of "the same" contract can differ only in their last 53 bytes, and still be genuinely different builds. If your deployment pipeline compiles on one machine and a verifier compiles on another with a different folder layout, the paths in the metadata differ, so the hashes differ. That is why verification tools ask for the exact compiler settings and file names, not just the code.</div>
+
+## Using the metadata for interfaces and NatSpec
+
+Anything that wants to interact with a contract it has never seen can bootstrap from the address alone. It fetches the contract's code, reads the CBOR section, and extracts the IPFS (or Swarm) hash. With that hash it downloads the metadata file, if someone published it, and parses the JSON. The `output.abi` is enough to generate a rudimentary user interface automatically. A wallet can go further and use `userdoc`: before it asks you to sign a transaction, it can show the `@notice` text for that function in plain language ("Replace the pinned notice"), instead of a block of hex. The rules for writing those comments are in the NatSpec lesson.
+
+## Using the metadata for source verification
+
+The same file lets a stranger check a deployment. If the metadata and sources were published, an auditor can:
+
+1. Read the metadata hash from the deployed bytecode and fetch the file.
+2. Fetch the sources named in `sources`, and check each against its `keccak256`.
+3. Recompile with the exact version and `settings` from the metadata.
+4. Compare the resulting bytecode with the bytecode on-chain.
+
+If they match, three things are proved at once: the metadata is right, because its hash is in the code; the sources are right, because their hashes are in the metadata; and the settings are right, because they too are in the metadata. The metadata acts as a fingerprint of the entire compilation. A service called Sourcify uses this for what it calls "full" (also called "perfect") verification, and also pins the files publicly on IPFS under the metadata hash.
+
+## Check your understanding
+
+<Quiz questions={quiz} />
