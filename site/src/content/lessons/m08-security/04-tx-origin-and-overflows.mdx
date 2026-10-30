@@ -75,7 +75,7 @@ Now a call relayed through `FreeGift` has `msg.sender == address(FreeGift)`, and
 
 ### A related myth: `tx.origin == msg.sender` as a "no contracts" test
 
-A common trick was `require(tx.origin == msg.sender)` to mean "the caller is a plain wallet, not a contract", used to block bots and flash loans. EIP-7702 (live since the Pectra upgrade) breaks this. An ordinary externally owned account can now sign an authorisation that attaches *code* to itself, so an account with code can be both `tx.origin` and `msg.sender` at once. The comparison tells you only that the call came directly from the account that signed the transaction, nothing about whether code is running. Likewise `address.code.length == 0` checks are no longer a proof that a caller is a human. Design for callers that may be contracts instead of trying to exclude them.
+A common trick was `require(tx.origin == msg.sender)` to mean "the caller is a plain wallet, not a contract", used to block bots and flash loans. EIP-7702 (live since the Pectra upgrade) breaks this. An ordinary externally owned account can now sign an authorisation that attaches *code* to itself, so an account with code can be both `tx.origin` and `msg.sender` at once. The comparison tells you only that the call came directly from the account that signed the transaction, nothing about whether code is running. Likewise `code.length == 0` was never proof of a human, since a contract that is still running its constructor has no code yet, and under EIP-7702 a delegated account does have code, so the check wrongly rejects it. Design for callers that may be contracts instead of trying to exclude them.
 
 ## Authorised proxies
 
@@ -97,13 +97,13 @@ When `CallRelay` calls another contract, the other contract sees `CallRelay` as 
 
 Solidity integers resemble the numbers from maths class only when they are small. A `uint8` holds 0 to 255. Adding one to 255 does not give 256.
 
-Since Solidity 0.8, arithmetic is **checked** by default: if the true result does not fit, the transaction reverts with a panic error. Inside an `unchecked { ... }` block the check is switched off and the result **wraps around** (255 + 1 becomes 0). So:
+Since Solidity 0.8, arithmetic is **checked** by default: if the true result does not fit, the transaction reverts with a panic error. Inside an `unchecked { ... }` block the check is switched off and the result **wraps around** (a `uint8` result of 260 becomes 4). So:
 
 ```solidity
-uint8 x = 255;
-uint8 y = 1;
-// x + y reverts in normal code
-// unchecked { x + y } evaluates to 0
+uint8 seats = 250;
+uint8 extra = 10;
+// seats + extra reverts in normal code
+// unchecked { seats + extra } evaluates to 4
 ```
 
 Checked mode removes the silent wrap-around bugs of older Solidity, but it does not make overflow harmless. A revert is still a failure. Imagine a lecture-hall booking contract with a `uint8 bookings` counter that grows with each reservation. At 255 bookings, every further `book()` call reverts, and unless something resets the counter the hall is closed forever. A contract can get stuck in a state it can only reach by running out of range. Choose widths with headroom, bound inputs with an explicit check that gives a clear error, and think about what should happen at the limit instead of leaving it to a panic.

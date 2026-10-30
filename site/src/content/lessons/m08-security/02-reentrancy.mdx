@@ -14,7 +14,7 @@ The students' union runs a bursary pool. Donors deposit ether, the union credits
 
 ## Calling out hands over control
 
-When your contract sends ether to an address, or calls a function in another contract, the recipient's code runs *before your function continues*. If the recipient is an ordinary wallet, nothing happens. If it is a contract, its `receive` or `fallback` function executes, and that code is free to do anything, including calling back into your contract. Your function is paused halfway down, and a second invocation starts at the top while the first has not finished.
+When your contract sends ether to an address, or calls a function in another contract, the recipient's code runs *before your function continues*. If the recipient is an ordinary wallet, nothing happens. If it is a contract, its `receive` or `fallback` function executes, and that code can run arbitrary logic, even calling back into you. Your function is paused halfway down, and a second invocation starts at the top while the first has not finished.
 
 Here is the pool with the mistake in it. Read it slowly:
 
@@ -125,7 +125,7 @@ This function is perfectly tidy by itself. But if `claim()` were still in its or
 
 ### Read-only reentrancy
 
-Even a `view` function can be abused. While `claim()` is mid-call, the pool's books are inconsistent: ether has left but the ledger has not caught up. If another contract asks `credit(student)` or a function that sums balances at that moment, it receives a stale answer and may grant something based on it. The state-changing function that was interrupted is not the victim here. The *reader* is. CEI fixes this at the source, because the books are correct before any call-out. When you rely on another protocol's view functions, remember that they can lie during a callback.
+Even a `view` function can be abused. While `claim()` is mid-call, the pool's books are inconsistent: ether has left but the ledger has not caught up. If another contract asks `credit(student)` or a function that sums balances at that moment, it receives a stale answer and may grant something based on it. The state-changing function that was interrupted is not the victim here. The *reader* is. CEI removes the inconsistent window in this contract, because the books are correct before any call-out. When you rely on another protocol's view functions, remember that they can lie during a callback.
 
 ## A guard as a second line
 

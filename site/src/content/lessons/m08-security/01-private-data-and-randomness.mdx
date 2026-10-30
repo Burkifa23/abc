@@ -9,7 +9,7 @@ import { quiz, exercises } from "./01-private-data-and-randomness";
 
 The Computer Science Society wants to raffle a refurbished laptop at the end-of-year party. A student volunteer offers to write the contract. It stores an exam-style "claim code" that only the winner will be given, and it picks the winner with a clever bit of on-chain mathematics. By the end of this lesson you will be able to explain why both halves of that plan are broken, and what to do instead.
 
-This is the first lesson of a module about writing contracts that survive contact with people who want to cheat. The Solidity documentation opens its security chapter with a blunt warning: it is easy to build software that works as intended, and much harder to be sure that nobody can use it in a way you did not anticipate. A smart contract is a public web service that anyone on Earth may call, often with its source code published, and which may be holding real money. Treat every function as if a stranger with a lot of free time is reading it.
+This is the first lesson of a module about writing contracts that survive contact with people who want to cheat. Writing code that does its job is the easy half. The hard half is being sure no one can bend it to do something you never planned. A smart contract is a public web service that anyone on Earth may call, often with its source code published, and which may be holding real money. Treat every function as if a stranger with a lot of free time is reading it.
 
 ## Everything is public
 

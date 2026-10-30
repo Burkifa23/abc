@@ -17,7 +17,7 @@ The compiler also evolves. Newer releases add warnings for newly understood mist
 
 ## Limit what can be lost
 
-Assume that somewhere in your code, the compiler, or the platform there is a bug you have not found. The amount you can lose is then the amount you let the contract hold. For a new or unaudited contract, cap deposits, cap per-user amounts, or release funds in stages. A cap is cheap insurance: the day something goes wrong, the loss is bounded by a number you chose in advance.
+Assume at least one defect is still hiding, whether in your logic, in the toolchain or in the network itself. The amount you can lose is then the amount you let the contract hold. For a new or unaudited contract, cap deposits, cap per-user amounts, or release funds in stages. A cap is cheap insurance: the day something goes wrong, the loss is bounded by a number you chose in advance.
 
 ## Keep it small and modular
 
@@ -29,7 +29,7 @@ You met this in the reentrancy lesson, and it is repeated here because it is the
 
 ## Include a fail-safe mode
 
-Decentralised does not have to mean helpless. For new code, consider a function that runs sanity checks on the contract's own accounting, such as "has any ether leaked?" or "do the balances still add up?", and switches the contract into a safe state if one fails. In that state, risky features are disabled, and perhaps the contract becomes a bare "give me back my ether" box or hands control to a trusted party.
+Decentralised does not have to mean helpless. For new code, consider a function that runs sanity checks on the contract's own accounting, such as "has any ether leaked?" or "do the balances still add up?", and switches the contract into a safe state if one fails. In that state, risky features are disabled, and perhaps the contract becomes a withdraw-only mode or hands control to a trusted party.
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -88,7 +88,7 @@ Whether a pause button is good is itself a trade-off: it protects users from an 
 
 ## Ask for peer review
 
-The more people look at code, the more bugs surface. Review also tests whether your contract is understandable, which is a quality in its own right. Ask classmates to try to break your lab contracts. Real deployments add paid audits, public contests and bug bounties.
+Fresh readers find what the author is blind to. Review also tests whether your contract is understandable, which is a quality in its own right. Ask classmates to try to break your lab contracts. Real deployments add paid audits, public contests and bug bounties.
 
 ## What the documentation leaves out
 
